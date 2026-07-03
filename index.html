@@ -12,6 +12,15 @@
       rel="stylesheet"
     />
     <title>Synk</title>
+    <script>
+      (function () {
+        var redirect = sessionStorage.redirect;
+        delete sessionStorage.redirect;
+        if (redirect && redirect !== location.href) {
+          history.replaceState(null, null, redirect);
+        }
+      })();
+    </script>
     <script type="module" crossorigin src="/assets/index-CIK35r5s.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-B3Ny-DMa.css">
   </head>
