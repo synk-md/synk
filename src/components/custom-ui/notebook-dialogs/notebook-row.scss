@@ -1,0 +1,255 @@
+/* A single row in the Notebooks dialog list (Manage / Shared notebooks / Shared notes) */
+
+.nb-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+  transition: background-color var(--tt-transition-duration-short, 0.1s) ease;
+
+  &:hover,
+  &:focus-within {
+    background: var(--tt-gray-light-a-100);
+  }
+
+  .dark & {
+    &:hover,
+    &:focus-within {
+      background: var(--tt-gray-dark-a-100);
+    }
+  }
+
+  .nb-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-right: 8px;
+    flex: none;
+
+    .nb-row-icon-btn {
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    // The export panel is positioned fixed outside this row, so once the
+    // pointer moves into it neither :hover nor :focus-within still match
+    // here — keep every action button visible for as long as it's open,
+    // instead of fading mid-interaction.
+    &.nb-row-actions--menu-open .nb-row-icon-btn {
+      opacity: 1;
+    }
+  }
+
+  &:hover .nb-row-icon-btn,
+  &:focus-within .nb-row-icon-btn {
+    opacity: 1;
+  }
+
+  .nb-row-confirm-label {
+    opacity: 1;
+  }
+}
+
+.nb-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  color: inherit;
+
+  &:focus,
+  &:focus-visible {
+    outline: none;
+  }
+}
+
+.nb-row-tile {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--tt-gray-light-a-100);
+  color: var(--tt-gray-light-700);
+
+  .dark & {
+    background: var(--tt-gray-dark-a-100);
+    color: var(--tt-gray-dark-700);
+  }
+}
+
+.nb-row[data-tone="accent"] .nb-row-tile {
+  background: var(--tt-brand-color-100);
+  color: var(--tt-brand-color-600);
+
+  .dark & {
+    background: var(--tt-brand-color-950);
+    color: var(--tt-brand-color-300);
+  }
+}
+
+.nb-row-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.nb-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--tt-color-text-gray);
+}
+
+.nb-row-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tt-gray-light-a-300);
+
+  .dark & {
+    background: var(--tt-gray-dark-a-300);
+  }
+}
+
+.nb-row[data-tone="accent"] .nb-row-dot {
+  background: var(--tt-brand-color-400);
+}
+
+.nb-row[data-tone="good"] .nb-row-dot {
+  background: var(--tt-color-text-green);
+}
+
+.nb-row[data-tone="warn"] .nb-row-dot {
+  background: var(--tt-color-text-yellow);
+}
+
+.nb-row-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+  white-space: nowrap;
+
+  .nb-row-badge-icon {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.nb-row-badge--invite {
+  color: var(--tt-brand-color-500);
+
+  .dark & {
+    color: var(--tt-brand-color-300);
+  }
+}
+
+.nb-row-badge--link {
+  color: var(--tt-color-text-yellow);
+}
+
+.nb-row-direction {
+  flex: none;
+  white-space: nowrap;
+}
+
+.nb-row-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nb-row-perm {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tt-color-text-gray);
+  white-space: nowrap;
+}
+
+.nb-row-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 6px 8px;
+  padding: 6px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 6px;
+  border: 1px solid var(--tt-border-color);
+  background: var(--tt-bg-color);
+  color: inherit;
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--tt-brand-color-200);
+  }
+
+  &.is-error {
+    border-color: var(--tt-color-text-red, #ef4444);
+
+    &:focus {
+      box-shadow: 0 0 0 2px var(--tt-color-text-red, #ef4444);
+    }
+  }
+}
+
+.nb-row-rename-error {
+  position: absolute;
+  top: 100%;
+  left: 8px;
+  z-index: 1;
+  margin-top: 2px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: var(--tt-card-bg-color);
+  color: var(--tt-color-text-red, #ef4444);
+  box-shadow: var(--tt-shadow-elevated-md, 0 6px 18px rgba(0, 0, 0, .2));
+  white-space: nowrap;
+}
+
+.nb-row-icon-btn {
+  flex-shrink: 0;
+
+  &.nb-row-icon-btn--danger {
+    --tt-button-default-icon-color: var(--tt-color-text-red);
+    --tt-button-hover-icon-color: var(--tt-color-text-red);
+  }
+
+  .dark &.nb-row-icon-btn--danger {
+    --tt-button-default-icon-color: var(--tt-color-text-red);
+    --tt-button-hover-icon-color: var(--tt-color-text-red);
+  }
+}
+
+.nb-row-icon-spin {
+  animation: spin 0.8s linear infinite;
+}

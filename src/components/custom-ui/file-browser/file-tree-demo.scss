@@ -1,0 +1,29 @@
+.file-tree-demo {
+	width: 300px;
+	font-family: sans-serif;
+
+	.empty-state {
+		margin-top: 12px;
+		padding: 12px;
+		border: 1px dashed #bbb;
+		border-radius: 8px;
+		text-align: center;
+
+		p {
+			margin: 0 0 8px 0;
+		}
+
+		label {
+			display: inline-block;
+			padding: 6px 10px;
+			border-radius: 6px;
+			border: 1px solid #ddd;
+			cursor: pointer;
+		}
+	}
+
+	.active-file {
+		margin-top: 16px;
+		padding: 8px;
+	}
+}

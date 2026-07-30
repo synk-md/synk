@@ -1,0 +1,51 @@
+.fe-toolbar {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+}
+
+.fe-sort-menu {
+  min-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--tt-dropdown-menu-border-color);
+  border-radius: 8px;
+  background: var(--tt-dropdown-menu-bg-color);
+  box-shadow: var(--tt-shadow-elevated-md);
+  color: var(--tt-dropdown-menu-text-color);
+}
+
+.fe-sort-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.2;
+  cursor: pointer;
+  outline: none;
+}
+
+.fe-sort-menu-item[data-highlighted] {
+  background: var(--tt-gray-light-a-50);
+}
+
+.fe-import-menu-item .tiptap-button-icon {
+  flex: 0 0 15px;
+  width: 15px;
+  height: 15px;
+}
+
+.dark .fe-sort-menu-item[data-highlighted] {
+  background: var(--tt-gray-dark-a-50);
+}
+
+.fe-sort-menu-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+}

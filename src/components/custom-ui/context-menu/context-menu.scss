@@ -1,0 +1,45 @@
+:root {
+  --tt-context-z: 9999;
+  --tt-context-offset-x: 6px;
+  --tt-context-offset-y: 6px;
+  --tt-icon-size: 16px;
+  --tt-card-padding: 5px;
+}
+
+.tt-menu-list:empty {
+  display: none;
+}
+
+.tt-menu-list .tiptap-button {
+  transition: none;
+}
+
+#tt-context-menu:has(.tt-menu-list:empty) {
+  display: none;
+}
+
+/* container positioned at the click point (top/left set via CSS vars at runtime) */
+#tt-context-menu {
+  position: fixed;
+  top: var(--tt-context-top, 0);
+  left: var(--tt-context-left, 0);
+  transform: translate(var(--tt-context-offset-x), var(--tt-context-offset-y));
+  z-index: var(--tt-context-z);
+  pointer-events: auto;
+}
+
+.tt-card-body {
+  padding: var(--tt-card-padding);
+}
+
+// #tt-context-menu .tt-menu-list { 
+//   overflow: hidden;
+// }
+
+/* separators if you want to style them */
+.tt-separator[data-orientation="horizontal"] { 
+  width: calc(100% + var(--tt-card-padding) * 2);
+  margin-left: calc(var(--tt-card-padding) * -1);
+  margin-right: calc(var(--tt-card-padding) * -1);
+  overflow: hidden;
+}

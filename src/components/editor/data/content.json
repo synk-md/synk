@@ -1,0 +1,835 @@
+{
+    "type": "doc",
+    "content": [
+        {
+            "type": "heading",
+            "attrs": {
+                "textAlign": "left",
+                "level": 1
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "🔥 WYSIWYG Editor"
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "textAlign": null
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Welcome to the "
+                },
+                {
+                    "type": "text",
+                    "marks": [
+                        {
+                            "type": "highlight",
+                            "attrs": {
+                                "color": "var(--tt-color-highlight-yellow)"
+                            }
+                        }
+                    ],
+                    "text": "WYSIWYG"
+                },
+                {
+                    "type": "text",
+                    "text": " rich-text editor built with "
+                },
+                {
+                    "type": "text",
+                    "marks": [
+                        {
+                            "type": "bold"
+                        }
+                    ],
+                    "text": "React"
+                },
+                {
+                    "type": "text",
+                    "text": ", "
+                },
+                {
+                    "type": "text",
+                    "marks": [
+                        {
+                            "type": "bold"
+                        }
+                    ],
+                    "text": "TypeScript"
+                },
+                {
+                    "type": "text",
+                    "text": ", "
+                },
+                {
+                    "type": "text",
+                    "marks": [
+                        {
+                            "type": "bold"
+                        }
+                    ],
+                    "text": "Vite"
+                },
+                {
+                    "type": "text",
+                    "text": " and "
+                },
+                {
+                    "type": "text",
+                    "marks": [
+                        {
+                            "type": "bold"
+                        }
+                    ],
+                    "text": "Tiptap"
+                },
+                {
+                    "type": "text",
+                    "text": "."
+                }
+            ]
+        },
+        {
+            "type": "heading",
+            "attrs": {
+                "textAlign": null,
+                "level": 2
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Features"
+                }
+            ]
+        },
+        {
+            "type": "blockquote",
+            "content": [
+                {
+                    "type": "paragraph",
+                    "attrs": {
+                        "textAlign": null
+                    },
+                    "content": [
+                        {
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "italic"
+                                }
+                            ],
+                            "text": "A fully responsive rich text editor with built-in support for common formatting and layout tools. Type markdown "
+                        },
+                        {
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "code"
+                                }
+                            ],
+                            "text": "**"
+                        },
+                        {
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "italic"
+                                }
+                            ],
+                            "text": " or use keyboard shortcuts "
+                        },
+                        {
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "code"
+                                }
+                            ],
+                            "text": "⌘+B"
+                        },
+                        {
+                            "type": "text",
+                            "text": " for "
+                        },
+                        {
+                            "type": "text",
+                            "marks": [
+                                {
+                                    "type": "strike"
+                                }
+                            ],
+                            "text": "most"
+                        },
+                        {
+                            "type": "text",
+                            "text": " all common markdown marks. 🪄"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "textAlign": "left"
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Add images, customize alignment, and apply "
+                },
+                {
+                    "type": "text",
+                    "marks": [
+                        {
+                            "type": "highlight",
+                            "attrs": {
+                                "color": "var(--tt-color-highlight-blue)"
+                            }
+                        }
+                    ],
+                    "text": "advanced formatting"
+                },
+                {
+                    "type": "text",
+                    "text": " to make your writing more engaging and professional."
+                }
+            ]
+        },
+        {
+            "type": "bulletList",
+            "content": [
+                {
+                    "type": "listItem",
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": "left"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "Superscript"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": " (x"
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "superscript"
+                                        }
+                                    ],
+                                    "text": "2"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": ") and "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "Subscript"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": " (H"
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "subscript"
+                                        }
+                                    ],
+                                    "text": "2"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "O) for precision. "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "Typographic conversion"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": ": automatically convert to "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "code"
+                                        }
+                                    ],
+                                    "text": "->"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": " an arrow "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "→"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "heading",
+            "attrs": {
+                "textAlign": null,
+                "level": 1
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Schedule"
+                }
+            ]
+        },
+        {
+            "type": "heading",
+            "attrs": {
+                "textAlign": "left",
+                "level": 2
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Month 1"
+                }
+            ]
+        },
+        {
+            "type": "taskList",
+            "content": [
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": true
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": "left"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Research "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "TipTap"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": " open-source code, "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "ProseMirror"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": " and "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "CRDT"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": true
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": "left"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Set up development environment with "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "React"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": ", "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "TypeScript"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": ", and "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "TipTap"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": true
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": "left"
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Begin implementation of a basic "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "local-first"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": " note editor prototype."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "heading",
+            "attrs": {
+                "textAlign": null,
+                "level": 2
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Month 2"
+                }
+            ]
+        },
+        {
+            "type": "taskList",
+            "content": [
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Implement folder/document file tree with "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "markdown"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": " import/export."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Add persistent local storage for "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "CRDT"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": " data using "
+                                },
+                                {
+                                    "type": "text",
+                                    "marks": [
+                                        {
+                                            "type": "bold"
+                                        }
+                                    ],
+                                    "text": "y-indexeddb"
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": true
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Expand editor functionality to include rich text formatting."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Fully working offline editing."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "heading",
+            "attrs": {
+                "textAlign": null,
+                "level": 2
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Month 3"
+                }
+            ]
+        },
+        {
+            "type": "taskList",
+            "content": [
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Develop and deploy a WebSocket-based relay server."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Enable real-time document synchronization across users using Yjs."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": true
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Add user presence indicators and collaborative cursors."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Test synchronization, especially after disconnections or offline edits."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "heading",
+            "attrs": {
+                "textAlign": null,
+                "level": 2
+            },
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Month 4"
+                }
+            ]
+        },
+        {
+            "type": "taskList",
+            "content": [
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Add support for linking between notes."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Refine the UI and navigation."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Bug fixing and code cleanup."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "type": "taskItem",
+                    "attrs": {
+                        "checked": false
+                    },
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "attrs": {
+                                "textAlign": null
+                            },
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Complete documentation."
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "paragraph",
+            "attrs": {
+                "textAlign": null
+            }
+        }
+    ]
+}

@@ -1,0 +1,93 @@
+
+:root {
+  --panel-bg: var(--tt-sidebar-bg-color);
+  --sidepanel-transition: 140ms cubic-bezier(.22,.9,.35,1);
+}
+
+.side-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  overflow: hidden;
+  width: 0;
+  min-width: 0;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--panel-bg, var(--tt-toolbar-bg-color, #000));
+  border-right: 1px solid var(--ribbon-border);
+  transition: width var(--sidepanel-transition);
+}
+
+.side-panel.is-open {
+  width: var(--sidepanel-width); /* open */
+  flex: 0 0 var(--sidepanel-width);
+}
+
+.side-panel--left {
+  border-right: 1px solid var(--ribbon-border);
+}
+
+.side-panel--right {
+  border-left: 1px solid var(--ribbon-border);
+}
+
+.side-panel__inner,
+.side-panel__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Draggable bar on the right side */
+.side-panel__resize-handle {
+  width: 6px;
+  cursor: ew-resize;
+  background: transparent;
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+}
+
+/* attach handle to correct side */
+.side-panel--left .side-panel__resize-handle {
+  right: 0;
+}
+
+.side-panel--right .side-panel__resize-handle {
+  left: 0;
+}
+
+.side-panel__resize-handle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-width: 640px) {
+  .side-panel {
+    position: fixed;
+    inset: 0;
+    width: 100vw;
+    height: 100vh;
+    max-width: 100%;
+    transform: translateX(-100%);
+    transition: transform var(--sidepanel-transition);
+    z-index: 100;
+    border-right: none;
+    background: var(--panel-bg, var(--tt-toolbar-bg-color, #fff));
+    will-change: transform;
+  }
+
+  /* open state slides into place */
+  .side-panel.is-open {
+    width: 100vw;
+    height: 100vh;
+    transform: translateX(0);
+  }
+
+  .side-panel__resize-handle {
+    display: none; // disable on mobile
+  }
+}

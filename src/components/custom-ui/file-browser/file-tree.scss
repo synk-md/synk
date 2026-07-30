@@ -1,0 +1,293 @@
+:root {
+  --fe-text: var(--tt-gray-light-900);
+  --fe-row-bg: var(--tt-sidebar-bg-color);          /* light row background */
+  --fe-row-bg-hover: rgba(0, 0, 0, 0.05);           /* light hover (transparent) */
+  --fe-selected-bg: var(--tt-brand-color-100);      /* light selected */
+  --fe-input-bg: var(--tt-gray-light-100);          /* inputs */
+  --fe-input-border: var(--tt-border-color);
+  --fe-input-shadow: var(--tt-shadow-elevated-md);
+  --fe-button-bg: var(--tt-gray-light-200);
+  --fe-button-bg-hover: var(--tt-gray-light-300);
+  --fe-accent: var(--black);
+}
+
+.file-tree {
+  --root-indent: 12px;  /* extra indent for root level */
+  --fe-indent: 16px;     /* width/height of chevron column */
+  --fe-gap: 2px;         /* space between chevron and label */
+  --fe-connector: var(--tt-border-color);
+}
+
+.dark {
+  --fe-text: var(--tt-gray-dark-800);
+  --fe-row-bg: var(--tt-sidebar-bg-color);          /* dark row background */
+  --fe-row-bg-hover: rgba(255, 255, 255, 0.06);     /* dark hover (transparent) */
+  --fe-selected-bg: rgba(122, 82, 255, 0.25);       /* dark selected (brand tint) */
+  --fe-input-bg: var(--tt-gray-dark-100);
+  --fe-input-border: var(--tt-border-color);
+  --fe-input-shadow: var(--tt-shadow-elevated-md);
+  --fe-button-bg: var(--tt-gray-dark-200);
+  --fe-button-bg-hover: var(--tt-gray-dark-300);
+  --fe-accent:  var(--white);
+}
+
+.content-explorer-container {
+  color: var(--fe-text);
+}
+
+.chevron {
+  width: var(--fe-indent);
+  height: var(--fe-indent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fe-gap);
+}
+
+/* Chevron inherits accent */
+.chevron:before {
+  content: '';
+  display: inline-block;
+  border-bottom: 1px solid var(--fe-accent);
+  border-right: 1px solid var(--fe-accent);
+  height: 8px;
+  width: 8px;
+  margin-bottom: 1px;
+}
+.chevron.right:before { transform: rotate(-45deg); }
+.chevron.bottom:before {
+  margin-bottom: 5px;
+  margin-left: 0px;
+  transform: rotate(45deg);
+}
+
+/* Prevent native text selection on rows */
+.file-tree,
+.file,
+.folder {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Folder row */
+.folder {
+  margin-top: 6px;
+  width: 100%;
+  background-color: var(--fe-row-bg);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 2px;
+  cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Optional row hover */
+.file:hover,
+.folder:hover {
+  background-color: var(--fe-row-bg-hover);
+}
+
+/* Input container */
+.content-inputContainer {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 15px;
+}
+
+.content-inputContainer > span { margin-top: 5px; }
+
+/* Inputs (shared) */
+.content-inputContainer_input,
+.content-inputContainer_input > input,
+.file > .editable_text > .editable_text__input > input[type="text"],
+.dash-input-row > input[type="text"],
+.folder > .editable_text > .editable_text__input > input[type="text"] {
+  font-size: 16px;
+  width: 100%;
+  background-color: var(--fe-input-bg);
+  box-shadow: var(--fe-input-shadow);
+  border: 1px solid var(--fe-input-border);
+  color: var(--fe-accent);
+  text-indent: 10px;
+}
+
+/* Specific folder input height */
+.folder > .editable_text > .editable_text__input > input[type="text"] {
+  height: 15pt;
+}
+
+/* File row */
+.file {
+  position: relative;
+  width: 100%;
+  padding-left: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 2px 8px 2px 2px;
+  cursor: pointer;
+}
+
+.file-icon-slot,
+.file-icon {
+  flex-shrink: 0;
+  width: var(--fe-indent);
+  height: var(--fe-indent);
+}
+
+.file-icon-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.file-icon {
+  width: 14px;
+  height: 14px;
+  opacity: 0.65;
+}
+
+.file .editable_text {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+/* Selection state */
+.selected,
+.selected:hover {
+  background-color: var(--fe-selected-bg);
+}
+
+/* Armed for keyboard delete (double-clicked) */
+.is-focused {
+  outline: 1px solid var(--tt-brand-color-500);
+  outline-offset: -1px;
+}
+
+/* Marked for cut (Ctrl+X), awaiting paste */
+.is-cut {
+  opacity: 0.5;
+}
+
+/* If you still have delete buttons revealed on hover, keep these */
+.deleteButton { display: none; }
+.file:hover .deleteButton {
+  display: block;
+  position: absolute;
+  right: 22px;
+  overflow: hidden;
+}
+.folder:hover .deleteButton {
+  display: inline-block;
+  right: 22px;
+  overflow: hidden;
+}
+
+.folder-children {
+  position: relative;
+  padding-left: var(--fe-indent);
+}
+
+.folder-children::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  margin-left: calc(var(--root-indent) - 3px);
+  border-left: 1px solid var(--fe-connector);
+  z-index: 2;
+}
+
+.tree-row {
+  width: auto;
+  margin-inline-start: calc(0px - (var(--subtree-offset, 0px) + (var(--fe-indent) * var(--depth, 0))) + var(--root-indent));
+  padding-inline-start: calc(var(--subtree-offset, 0px) + (var(--fe-indent) * var(--depth, 0)));
+}
+
+.tree-row.file[draggable="true"] {
+  cursor: pointer;
+}
+
+.tree-row.is-dragging {
+  opacity: 0.5;
+}
+
+.tree-row.is-drop-target {
+  outline: 2px solid var(--fe-accent);
+  outline-offset: -2px;
+  background-color: var(--fe-row-bg-hover);
+}
+
+.file-tree.is-drop-target {
+  outline: 2px dashed var(--fe-accent);
+  outline-offset: -4px;
+  background-color: var(--fe-row-bg-hover);
+}
+
+/* A little extra left padding makes room for the indicator's bulge without
+   overlapping the name — the sidebar itself clips at the row's own left
+   edge (overflow: hidden), so the indicator can't hang outside the row. */
+.tree-row.file.is-unread {
+  padding-left: 7px;
+}
+
+/* Flat edge flush against the row's left border, rounded bulge growing
+   inward — a Discord-style unread pill rather than an inline dot. */
+.note-unread-indicator {
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 8px;
+  border-radius: 0 999px 999px 0;
+  background-color: var(--fe-accent);
+  pointer-events: none;
+  transition: height 120ms ease;
+}
+
+.tree-row.file:hover .note-unread-indicator {
+  height: 15px;
+}
+
+.note-presence-avatars {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.note-presence-avatar {
+  width: 21px;
+  height: 21px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border: 1.5px solid var(--fe-row-bg, var(--tt-bg-color, #fff));
+  line-height: 1;
+
+  & + & {
+    margin-left: -5px;
+  }
+}
+
+/* Fills the rest of the panel so dropping below the last item still
+   counts as a drop on the notebook root, instead of landing nowhere. */
+.file-tree {
+  flex: 1 1 auto;
+  min-height: 0;
+}

@@ -1,0 +1,3 @@
+[submodule "vendor/tiptap"]
+	path = vendor/tiptap
+	url = git@github.com:sdalv1k/tiptap.git

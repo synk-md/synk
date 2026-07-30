@@ -1,0 +1,139 @@
+/* Modal for creating a notebook — stacks on top of the Manage notebooks dialog */
+
+.new-notebook-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background: rgba(15, 15, 16, 0.45);
+}
+
+.new-notebook-dialog {
+  width: 460px;
+  max-width: 100%;
+  padding: 20px 22px;
+  border-radius: 16px;
+  background: var(--tt-card-bg-color);
+  box-shadow: var(--tt-shadow-elevated-md, 0 20px 60px rgba(0, 0, 0, .25));
+  border: 1px solid var(--tt-card-border-color);
+}
+
+.nnd-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.nnd-heading {
+  min-width: 0;
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--tt-gray-light-900);
+
+    .dark & {
+      color: var(--tt-gray-dark-900);
+    }
+  }
+}
+
+.nnd-field-label {
+  display: block;
+  font-family: var(--tt-font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--tt-color-text-gray);
+  margin-bottom: 6px;
+}
+
+.nnd-input {
+  width: 100%;
+  padding: 16px 14px;
+  font-size: 15px;
+  border-radius: 10px;
+  border: 1px solid var(--tt-border-color);
+  background: var(--tt-bg-color);
+  color: inherit;
+  margin-bottom: 24px;
+
+  &::placeholder {
+    color: var(--tt-color-text-gray);
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &.is-error {
+    border-color: var(--tt-color-text-red, #ef4444);
+    margin-bottom: 8px;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.nnd-error {
+  display: block;
+  margin: -2px 0 16px;
+  font-size: 13px;
+  color: var(--tt-color-text-red, #ef4444);
+}
+
+.nnd-actions {
+  display: flex;
+  gap: 10px;
+
+  .tiptap-button {
+    flex: 1 1 0;
+    height: 2.75rem;
+    border-radius: var(--tt-radius-lg, 0.75rem);
+    font-size: 0.9375rem;
+    font-weight: 500;
+
+    .tiptap-button-text {
+      flex-grow: 0;
+      text-align: center;
+    }
+  }
+
+  .tiptap-button[data-style="ghost"] {
+    border: 1px solid var(--tt-border-color);
+  }
+
+  .nnd-create-btn {
+    --tt-button-default-text-color: var(--tt-gray-light-a-700);
+
+    .dark & {
+      --tt-button-default-text-color: var(--tt-gray-dark-a-400);
+    }
+
+    &:disabled {
+      cursor: not-allowed;
+    }
+  }
+
+  .nnd-create-btn.is-active {
+    --tt-button-default-bg-color: var(--tt-brand-color-50);
+    --tt-button-hover-bg-color: var(--tt-brand-color-100);
+    --tt-button-default-text-color: var(--tt-brand-color-700);
+    --tt-button-hover-text-color: var(--tt-brand-color-700);
+
+    .dark & {
+      --tt-button-default-bg-color: var(--tt-brand-color-300);
+      --tt-button-hover-bg-color: var(--tt-brand-color-250);
+      --tt-button-default-text-color: var(--black);
+      --tt-button-hover-text-color: var(--black);
+    }
+  }
+}

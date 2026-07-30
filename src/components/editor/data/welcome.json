@@ -1,0 +1,65 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "heading",
+      "attrs": {
+        "textAlign": "left",
+        "id": "c6f90a22-cbb1-4b6f-a292-e54f90e803be",
+        "data-toc-id": "c6f90a22-cbb1-4b6f-a292-e54f90e803be",
+        "level": 1
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Welcome"
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "textAlign": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "This is you new "
+        },
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "italic"
+            }
+          ],
+          "text": "notebook."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "textAlign": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Try creating a new note of something."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "textAlign": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "When you’re ready, delete this note and make the notebook your own."
+        }
+      ]
+    }
+  ]
+}

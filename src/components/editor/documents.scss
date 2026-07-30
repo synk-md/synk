@@ -1,0 +1,19 @@
+/* Documents.scss */
+
+.app {
+  max-width: 100%;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+
+.editor {
+  flex: 1;
+  padding: 1rem;
+  width: 100%;
+  max-width: 100%;
+  overflow-wrap: break-word; // prevent long words/links from overflowing
+  box-sizing: border-box;
+}
