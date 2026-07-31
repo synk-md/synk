@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](./LICENSE)
 [![Status](https://img.shields.io/badge/status-alpha-orange.svg)](#-status-alpha)
 
-[Live demo](https://app.synk.md) · [Roadmap](./ROADMAP.md)
+[Live demo](https://app.synk.md) · [Roadmap](https://synk.md/roadmap/) 
 
 </div>
 
@@ -33,8 +33,6 @@ Synk sits in the gap. You edit locally with no spinners and no account, your dat
 It's built for people who want to work together and keep control of their data.
 
 ## Screenshot
-
-<!-- Replace with a real screenshot or, better, a short GIF of two windows editing the same note live. A demo GIF is the single most persuasive thing you can put here. -->
 
 ![Synk editor](./public/screenshot.png)
 
