@@ -44,8 +44,6 @@
     "markdown-it": "^14.2.0",
     "markdown-it-task-lists": "^2.1.1",
     "nanoid": "^5.1.5",
-    "prosemirror-markdown": "^1.13.2",
-    "prosemirror-model": "^1.25.3",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-hotkeys-hook": "^5.1.0",

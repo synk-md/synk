@@ -4,8 +4,8 @@ import MarkdownIt from 'markdown-it'
 import {
   MarkdownSerializer,
   defaultMarkdownSerializer,
-} from 'prosemirror-markdown'
-import { DOMParser as PMDOMParser } from 'prosemirror-model'
+} from '@tiptap/pm/markdown'
+import { DOMParser as PMDOMParser } from '@tiptap/pm/model'
 import markdownItTaskLists from 'markdown-it-task-lists'
 
 declare module '@tiptap/core' {
