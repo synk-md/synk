@@ -124,7 +124,7 @@ Then open the URL printed in your terminal. To collaborate across different mach
 
 ### Configuring the signaling server
 
-Synk connects to a signaling server to establish peer connections. A sensible public default is included, so it works out of the box. To point Synk at your own server, set an environment variable:
+Synk connects to a signaling server to establish peer connections. More info can be found at [y-webrtc](https://github.com/yjs/y-webrtc). To point Synk at your own server, set an environment variable:
 
 ```bash
 # .env
