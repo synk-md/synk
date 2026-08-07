@@ -1,6 +1,14 @@
 import * as Y from "yjs";
 import { customAlphabet } from "nanoid";
 import { IndexeddbPersistence } from "y-indexeddb";
+import {
+  buildTreeFromFlat,
+  diffFlatTrees,
+  flattenTree,
+  type FlatNodeRecord,
+  type TreeNode,
+} from "@/components/custom-ui/file-browser/tree";
+
 
 const docs = new Map<string, { doc: Y.Doc, idb: IndexeddbPersistence }>()
 
@@ -98,7 +106,12 @@ export function createNotebookSettingsDoc(notebookId: string) {
   return { doc, idb, settings }
 }
 
-const indexDocs = new Map<string, { doc: Y.Doc, idb: IndexeddbPersistence, tree: Y.Map<any>, meta: Y.Map<any> }>()
+const indexDocs = new Map<string, {
+  doc: Y.Doc
+  idb: IndexeddbPersistence
+  nodes: Y.Map<FlatNodeRecord>
+  meta: Y.Map<any>
+}>()
 
 // Creates or loads a Y.Doc for the notebook's index (e.g. file tree).
 // `meta` carries the notebook's own link-sharing state (see notebook-meta.ts),
@@ -107,18 +120,59 @@ const indexDocs = new Map<string, { doc: Y.Doc, idb: IndexeddbPersistence, tree:
 // e.g. the share dialog toggling link access — is immediately visible to any
 // other caller already holding this doc, such as a live editor session's
 // useNotebookFileSystem, without waiting for a remount or a round trip.
+//
+// `nodes` holds one entry per tree node (keyed by node id, see
+// FlatNodeRecord) rather than the whole tree as a single value. That's what
+// lets two peers' concurrent edits to *different* notes merge independently
+// instead of one write replacing the other's entire tree - see
+// readNotebookIndexTree/writeNotebookIndexTree below.
 export function createNotebookIndexDoc(notebookId: string) {
   const key = keyForIndex(notebookId)
   let entry = indexDocs.get(key)
   if (!entry) {
     const doc = new Y.Doc()
     const idb = new IndexeddbPersistence(key, doc)
-    const tree = doc.getMap('tree')  // or getArray('root')
+    const nodes = doc.getMap<FlatNodeRecord>('nodes')
     const meta = doc.getMap<any>('meta')
-    entry = { doc, idb, tree, meta }
+    entry = { doc, idb, nodes, meta }
     indexDocs.set(key, entry)
   }
   return entry
+}
+
+type NotebookIndexHandle = ReturnType<typeof createNotebookIndexDoc>
+
+// Reads the notebook's file tree out of `nodes`. Call only after
+// `idb.whenSynced` has resolved, so it reflects whatever was actually
+// persisted for this browser.
+export function readNotebookIndexTree(
+  indexHandle: NotebookIndexHandle,
+): { root: TreeNode | undefined; flat: Map<string, FlatNodeRecord> } {
+  const flat = new Map<string, FlatNodeRecord>()
+  indexHandle.nodes.forEach((record, id) => flat.set(id, record))
+  return { root: buildTreeFromFlat(flat), flat }
+}
+
+// Persists `nextRoot` by diffing it against `prevFlat` (the flat snapshot
+// last known to match `nodes`) and writing only the node(s) that actually
+// changed, instead of replacing the whole tree. Returns the new flat
+// snapshot to use as the base for the next diff.
+export function writeNotebookIndexTree(
+  indexHandle: NotebookIndexHandle,
+  prevFlat: Map<string, FlatNodeRecord>,
+  nextRoot: TreeNode,
+  origin: unknown,
+): { flat: Map<string, FlatNodeRecord> } {
+  const { nodes, doc } = indexHandle
+  const nextFlat = flattenTree(nextRoot)
+  const { upserts, deletes } = diffFlatTrees(prevFlat, nextFlat)
+  if (upserts.length || deletes.length) {
+    doc.transact(() => {
+      for (const [id, record] of upserts) nodes.set(id, record)
+      for (const id of deletes) nodes.delete(id)
+    }, origin)
+  }
+  return { flat: nextFlat }
 }
 
 // Evicts a notebook's cached index doc, e.g. when the notebook itself is

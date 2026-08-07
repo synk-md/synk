@@ -1,9 +1,15 @@
 import * as React from "react"
 import { WebrtcProvider } from "y-webrtc"
 
-import type { Notebook, TreeNode } from "./tree"
+import type { FlatNodeRecord, Notebook, TreeNode } from "./tree"
 import { useFileSystem } from "./use-file-system"
-import { createNotebookIndexDoc, keyForIndex, SIGNALING_SERVERS } from "@/lib/yjs-utils"
+import {
+  createNotebookIndexDoc,
+  keyForIndex,
+  readNotebookIndexTree,
+  writeNotebookIndexTree,
+  SIGNALING_SERVERS,
+} from "@/lib/yjs-utils"
 import type { LinkAccess } from "@/lib/note-meta"
 import { getNotebookLinkAccess, setNotebookLinkAccess } from "@/lib/notebook-meta"
 
@@ -20,9 +26,9 @@ export type NotebookFileSystemApi = ReturnType<typeof useFileSystem> & {
 // How long a share page waits for a peer to deliver the real tree before
 // treating "nothing in my own IndexedDB" as authoritative. Guards against a
 // guest's very first local edit (made before the real tree has arrived)
-// overwriting the owner's actual notebook — Yjs's `tree.set("root", ...)`
-// is a last-write-wins blob for the whole tree, not a structural merge, so
-// racing it against an in-flight sync is destructive, not just stale.
+// being persisted as if an empty notebook were the true state, which would
+// otherwise briefly present (and risk building on top of) an empty tree
+// instead of the owner's real one.
 const TREE_SYNC_GRACE_MS = 5000
 
 // Tags every Yjs transaction this hook writes to a notebook's tree doc
@@ -79,6 +85,14 @@ export function useNotebookFileSystem(
     setTreeReadyState(ready)
   }, [])
 
+  // The flat (id -> node record) snapshot last known to match what's
+  // persisted in `indexHandle.nodes`, i.e. the base the next local edit is
+  // diffed against. Diffing against the true persisted state (rather than,
+  // say, the previous in-memory tree) is what keeps a local edit from
+  // rewriting nodes a peer changed concurrently — only the node(s) this
+  // edit actually touched get written.
+  const lastFlatRef = React.useRef<Map<string, FlatNodeRecord>>(new Map())
+
   const handleRootChange = React.useCallback(
     (nextRoot: TreeNode) => {
       if (!activeNotebookId) return
@@ -91,9 +105,13 @@ export function useNotebookFileSystem(
       updateNotebookRoot(activeNotebookId, nextRoot)
       const indexHandle = indexDocRef.current
       if (indexHandle) {
-        indexHandle.doc.transact(() => {
-          indexHandle.tree.set("root", nextRoot)
-        }, LOCAL_WRITE_ORIGIN)
+        const { flat } = writeNotebookIndexTree(
+          indexHandle,
+          lastFlatRef.current,
+          nextRoot,
+          LOCAL_WRITE_ORIGIN,
+        )
+        lastFlatRef.current = flat
       }
     },
     [activeNotebookId, updateNotebookRoot],
@@ -107,13 +125,15 @@ export function useNotebookFileSystem(
 
     const indexHandle = createNotebookIndexDoc(activeNotebookId)
     indexDocRef.current = indexHandle
+    lastFlatRef.current = new Map()
     let disposed = false
     let graceTimer: ReturnType<typeof setTimeout> | undefined
     setLinkAccessState(optimisticLinkAccess)
     setTreeReady(seedIfEmpty)
 
-    const applyRootFromDoc = (root: TreeNode | undefined) => {
+    const applyRootFromDoc = (root: TreeNode | undefined, flat: Map<string, FlatNodeRecord>) => {
       if (!root) return
+      lastFlatRef.current = flat
       setRoot(root)
       updateNotebookRoot(activeNotebookId, root)
       clearTimeout(graceTimer)
@@ -126,11 +146,11 @@ export function useNotebookFileSystem(
       // it's already reflected in local state from the edit that caused it,
       // so re-applying it here is at best redundant and at worst a race.
       if (transaction.origin === LOCAL_WRITE_ORIGIN) return
-      const updated = indexHandle.tree.get("root") as TreeNode | undefined
-      applyRootFromDoc(updated)
+      const { root, flat } = readNotebookIndexTree(indexHandle)
+      applyRootFromDoc(root, flat)
     }
 
-    indexHandle.tree.observe(observer)
+    indexHandle.nodes.observe(observer)
 
     // Only adopt a read once the key has actually been set (by this browser's
     // own IndexedDB history or a peer) — an unset key just means "not known
@@ -150,11 +170,19 @@ export function useNotebookFileSystem(
         await indexHandle.idb.whenSynced
       } catch {}
       if (disposed) return
-      const stored = indexHandle.tree.get("root") as TreeNode | undefined
+      const { root: stored, flat } = readNotebookIndexTree(indexHandle)
       if (stored) {
-        applyRootFromDoc(stored)
+        applyRootFromDoc(stored, flat)
       } else if (seedIfEmpty) {
-        if (initialNotebookRoot) indexHandle.tree.set("root", initialNotebookRoot)
+        if (initialNotebookRoot) {
+          const { flat: seededFlat } = writeNotebookIndexTree(
+            indexHandle,
+            new Map(),
+            initialNotebookRoot,
+            LOCAL_WRITE_ORIGIN,
+          )
+          lastFlatRef.current = seededFlat
+        }
         setTreeReady(true)
       } else {
         // Nothing in this browser's own IndexedDB, and we're not allowed to
@@ -170,7 +198,7 @@ export function useNotebookFileSystem(
     return () => {
       disposed = true
       clearTimeout(graceTimer)
-      indexHandle.tree.unobserve(observer)
+      indexHandle.nodes.unobserve(observer)
       indexHandle.meta.unobserve(applyMetaFromDoc)
       // Not destroyed: createNotebookIndexDoc caches this doc per notebookId
       // so other holders (e.g. the share dialog) keep working after unmount.

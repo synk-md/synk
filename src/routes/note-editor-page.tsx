@@ -6,6 +6,7 @@ import { useNotebooks } from "@/hooks/use-notebooks"
 import { useNotebookFileSystem } from "@/components/custom-ui/file-browser/use-notebook-filesystem"
 import { findNode, isNoteNode } from "@/components/custom-ui/file-browser/tree"
 import type { TreeNode } from "@/components/custom-ui/file-browser/tree"
+import { useBackgroundNoteSync } from "@/hooks/use-background-note-sync"
 
 function findFirstNoteId(root: TreeNode | null): string | undefined {
   if (!root) return undefined
@@ -57,6 +58,14 @@ export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; no
   const fileSystem = useNotebookFileSystem(activeNotebook, updateNotebookRoot)
   const rootNodeId = activeNotebook?.root.id ?? null
   const hasNotebookContext = Boolean(activeNotebook)
+
+  // Without this, a collaborator's edits to a note the owner doesn't have
+  // open only reach the owner's IndexedDB if the owner happens to open that
+  // exact note while the collaborator is simultaneously online - P2P sync
+  // has no one to relay through otherwise. This watches peers' awareness for
+  // notes they have open and background-syncs those into IndexedDB so the
+  // content isn't stuck stale/dirty until both sides view it at once.
+  useBackgroundNoteSync(notebookId ?? "", effectiveNoteId ?? null, fileSystem.indexProvider ?? null)
 
   React.useEffect(() => {
     // No notebook id at all: always 404

@@ -7,6 +7,7 @@ import { useFileSystem } from "@/components/custom-ui/file-browser/use-file-syst
 import type { Notebook, TreeNode } from "@/components/custom-ui/file-browser/tree"
 import { findNode } from "@/components/custom-ui/file-browser/tree"
 import { NotebooksContext, type NotebooksCtx } from "@/hooks/use-notebooks"
+import { useBackgroundNoteSync } from "@/hooks/use-background-note-sync"
 
 export function SharedNotePage() {
   const { notebookId, noteId } = useParams<{ notebookId: string; noteId: string }>()
@@ -69,6 +70,11 @@ export function SharedNotePage() {
   const activeRoot = sharedTreeContainsNote && sharedRoot ? sharedRoot : singleNoteRoot
   const activeNotebook = sharedNotebook ? { ...sharedNotebook, root: activeRoot } : null
   const allowFileCreation = sharedTreeContainsNote
+
+  // See note-editor-page.tsx: without this, another collaborator's edits to
+  // a note this viewer doesn't have open only arrive once both happen to
+  // view it at the same time.
+  useBackgroundNoteSync(notebookId ?? "", noteId ?? null, notebookFileSystem.indexProvider ?? null)
 
   // 2) Only mirror titles into local state while we're in "single note" mode,
   //    and only rename in the shared FS when the note is actually there.

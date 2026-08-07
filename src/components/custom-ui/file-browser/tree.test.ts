@@ -19,6 +19,9 @@ import {
   findAssetNode,
   ensureAssetNode,
   upsertChildren,
+  flattenTree,
+  buildTreeFromFlat,
+  diffFlatTrees,
   type TreeNode,
 } from "./tree"
 
@@ -449,5 +452,82 @@ describe("upsertChildren", () => {
   it("is a no-op when the node isn't found", () => {
     const tree = folder("root", [])
     expect(upsertChildren(tree, "missing", [note("a")])).toBe(tree)
+  })
+})
+
+describe("flattenTree / buildTreeFromFlat", () => {
+  it("round-trips a nested tree through the flat id -> record shape", () => {
+    const tree = folder("root", [
+      note("a", { modifiedAt: 5 }),
+      folder("sub", [note("b"), asset("img", "sha256:1")]),
+    ])
+
+    const flat = flattenTree(tree)
+
+    expect(flat.get("root")?.parentId).toBeNull()
+    expect(flat.get("a")?.parentId).toBe("root")
+    expect(flat.get("sub")?.parentId).toBe("root")
+    expect(flat.get("b")?.parentId).toBe("sub")
+    expect(flat.get("img")?.assetId).toBe("sha256:1")
+
+    expect(buildTreeFromFlat(flat)).toEqual(tree)
+  })
+
+  it("finds the root by parentId null regardless of what the root's own id is", () => {
+    const tree = folder("shared-root-xyz", [note("a")])
+    expect(buildTreeFromFlat(flattenTree(tree))).toEqual(tree)
+  })
+
+  it("returns undefined for an empty flat map", () => {
+    expect(buildTreeFromFlat(new Map())).toBeUndefined()
+  })
+
+  it("skips a node whose parent record is missing (dangling reference)", () => {
+    const flat = flattenTree(folder("root", [note("a")]))
+    flat.delete("a")
+    // Add a leftover child record pointing at a parent that no longer
+    // resolves to anything reachable from the root - shouldn't happen in
+    // practice, but must not crash or resurrect a phantom node.
+    flat.set("orphan", { parentId: "nonexistent", name: "orphan", isFolder: false })
+    expect(buildTreeFromFlat(flat)).toEqual(folder("root", []))
+  })
+})
+
+describe("diffFlatTrees", () => {
+  it("reports newly added and removed nodes", () => {
+    const prev = flattenTree(folder("root", [note("a")]))
+    const next = flattenTree(folder("root", [note("b")]))
+
+    const { upserts, deletes } = diffFlatTrees(prev, next)
+
+    expect(upserts.map(([id]) => id).sort()).toEqual(["b"])
+    expect(deletes).toEqual(["a"])
+  })
+
+  it("only reports nodes whose fields actually changed", () => {
+    const prev = flattenTree(folder("root", [note("a"), note("b")]))
+    const next = flattenTree(folder("root", [{ ...note("a"), name: "renamed" }, note("b")]))
+
+    const { upserts, deletes } = diffFlatTrees(prev, next)
+
+    expect(upserts.map(([id]) => id)).toEqual(["a"])
+    expect(deletes).toEqual([])
+  })
+
+  it("reports a move as a single upsert of the moved node's parentId", () => {
+    const prev = flattenTree(folder("root", [note("a"), folder("dest", [])]))
+    const next = flattenTree(folder("root", [folder("dest", [note("a")])]))
+
+    const { upserts, deletes } = diffFlatTrees(prev, next)
+
+    expect(upserts).toEqual([["a", expect.objectContaining({ parentId: "dest" })]])
+    expect(deletes).toEqual([])
+  })
+
+  it("reports nothing for two structurally identical trees", () => {
+    const tree = folder("root", [note("a"), folder("sub", [note("b")])])
+    const { upserts, deletes } = diffFlatTrees(flattenTree(tree), flattenTree(clone(tree)))
+    expect(upserts).toEqual([])
+    expect(deletes).toEqual([])
   })
 })

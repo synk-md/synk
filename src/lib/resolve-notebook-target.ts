@@ -1,5 +1,5 @@
 import { isNoteNode, type TreeNode } from "@/components/custom-ui/file-browser/tree"
-import { createNotebookIndexDoc, createNotebookSettingsDoc } from "@/lib/yjs-utils"
+import { createNotebookIndexDoc, createNotebookSettingsDoc, readNotebookIndexTree } from "@/lib/yjs-utils"
 
 function findFirstNoteId(node?: TreeNode | null): string | null {
   if (!node) return null
@@ -41,7 +41,7 @@ export async function resolveNotebookTargetNote(
     try {
       await indexHandle.idb.whenSynced
     } catch {}
-    const storedRoot = indexHandle.tree.get("root") as TreeNode | undefined
+    const { root: storedRoot } = readNotebookIndexTree(indexHandle)
     const firstStored = findFirstNoteId(storedRoot)
     if (firstStored) return firstStored
   } catch (error) {

@@ -2,8 +2,18 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest"
 import { act, renderHook, waitFor } from "@testing-library/react"
 import * as Y from "yjs"
 import { useNotebookFileSystem } from "./use-notebook-filesystem"
-import { createNotebookIndexDoc } from "@/lib/yjs-utils"
-import type { Notebook, TreeNode } from "./tree"
+import { createNotebookIndexDoc, readNotebookIndexTree } from "@/lib/yjs-utils"
+import { flattenTree, type Notebook, type TreeNode } from "./tree"
+
+// The index doc's Yjs storage is one node per Yjs map entry (see
+// yjs-utils.ts), not a single tree blob — seed/inspect it through this
+// helper rather than writing a whole tree into one key directly.
+function seedIndexNodes(indexHandle: ReturnType<typeof createNotebookIndexDoc>, root: TreeNode) {
+  const flat = flattenTree(root)
+  indexHandle.doc.transact(() => {
+    for (const [id, record] of flat) indexHandle.nodes.set(id, record)
+  })
+}
 
 // Mirrors use-background-note-sync.test.ts: a stand-in for y-webrtc's
 // WebrtcProvider that records construction and exposes disconnect/destroy
@@ -80,7 +90,7 @@ describe("useNotebookFileSystem: seeding and adopting the persisted tree", () =>
     // treeReady defaults to true immediately (safe-by-default for a fresh,
     // unshared notebook - see seedIfEmpty's doc comment), so it doesn't
     // signal that the async seed write has landed; wait on that directly.
-    await waitFor(() => expect(indexHandle.tree.get("root")).toEqual(nb.root))
+    await waitFor(() => expect(readNotebookIndexTree(indexHandle).root).toEqual(nb.root))
     expect(result.current.tree).toEqual(nb.root)
   })
 
@@ -89,7 +99,7 @@ describe("useNotebookFileSystem: seeding and adopting the persisted tree", () =>
     const persistedRoot = folder("root", [note("persisted-note")])
     // Priming through the same cached doc the hook itself will read from.
     const primed = createNotebookIndexDoc(id)
-    primed.tree.set("root", persistedRoot)
+    seedIndexNodes(primed, persistedRoot)
 
     const nb = notebook(id, folder("root", [note("notebook-own-note")]))
     const updateNotebookRoot = vi.fn()
@@ -107,12 +117,49 @@ describe("useNotebookFileSystem: seeding and adopting the persisted tree", () =>
     const { result } = renderHook(() => useNotebookFileSystem(nb, updateNotebookRoot))
     await waitFor(() => expect(result.current.treeReady).toBe(true))
 
-    const peerRoot = folder("root", [note("from-peer")])
+    const peerRoot = folder("root", [note("a"), note("from-peer")])
     act(() => {
-      createNotebookIndexDoc(id).tree.set("root", peerRoot)
+      seedIndexNodes(createNotebookIndexDoc(id), peerRoot)
     })
 
     expect(result.current.tree).toEqual(peerRoot)
+  })
+
+  // Regression test for the actual bug this rework fixes: the index used to
+  // be a single Yjs map key holding the whole tree as one JSON blob, so a
+  // peer's concurrent write didn't merge - it replaced the local tree
+  // outright, silently deleting whatever notes only existed on the losing
+  // side (e.g. new notes created while offline, wiped out the moment the
+  // notebook reconnected and synced with a peer). Now each node is its own
+  // map entry, so a peer adding one note and the local session adding a
+  // different one both survive.
+  it("merges a peer's concurrently-added node with a local one instead of one replacing the other", async () => {
+    const id = uniqueNotebookId()
+    const nb = notebook(id, folder("root", [note("a")]))
+    const updateNotebookRoot = vi.fn()
+    const { result } = renderHook(() => useNotebookFileSystem(nb, updateNotebookRoot))
+    const indexHandle = createNotebookIndexDoc(id)
+    await waitFor(() => expect(readNotebookIndexTree(indexHandle).root).toEqual(nb.root))
+
+    // Local session creates a new note (e.g. made while offline).
+    act(() => {
+      result.current.createNode("root", { id: "local-new", name: "local-new", isFolder: false })
+    })
+    await waitFor(() => {
+      expect(readNotebookIndexTree(indexHandle).flat.has("local-new")).toBe(true)
+    })
+
+    // A peer, unaware of the local addition, concurrently added its own
+    // note under the same folder - simulated by writing directly to the
+    // shared nodes map rather than through this hook's diffing path.
+    act(() => {
+      indexHandle.nodes.set("peer-new", { parentId: "root", name: "peer-new", isFolder: false })
+    })
+
+    await waitFor(() => {
+      const ids = (result.current.tree.children ?? []).map((c) => c.id)
+      expect(ids).toEqual(expect.arrayContaining(["a", "local-new", "peer-new"]))
+    })
   })
 
   it("with seedIfEmpty=false, waits for the grace window before treating an empty index as authoritative", async () => {
@@ -150,7 +197,7 @@ describe("useNotebookFileSystem: seeding and adopting the persisted tree", () =>
 
     const peerRoot = folder("root", [note("from-peer-early")])
     act(() => {
-      createNotebookIndexDoc(id).tree.set("root", peerRoot)
+      seedIndexNodes(createNotebookIndexDoc(id), peerRoot)
     })
 
     expect(result.current.treeReady).toBe(true)
@@ -266,13 +313,13 @@ describe("useNotebookFileSystem: persisting local edits", () => {
     const { result } = renderHook(() => useNotebookFileSystem(nb, updateNotebookRoot))
     const indexHandle = createNotebookIndexDoc(id)
 
-    await waitFor(() => expect(indexHandle.tree.get("root")).toEqual(nb.root))
+    await waitFor(() => expect(readNotebookIndexTree(indexHandle).root).toEqual(nb.root))
 
     act(() => result.current.rename("a", "renamed-a"))
     act(() => result.current.rename("b", "renamed-b"))
 
     await waitFor(() => {
-      const persisted = indexHandle.tree.get("root") as TreeNode
+      const persisted = readNotebookIndexTree(indexHandle).root as TreeNode
       expect(persisted.children!.map((c) => c.name)).toEqual(["renamed-a", "renamed-b"])
     })
     expect(updateNotebookRoot).toHaveBeenCalled()
@@ -296,13 +343,13 @@ describe("useNotebookFileSystem: persisting local edits", () => {
     const { result } = renderHook(() => useNotebookFileSystem(nb, updateNotebookRoot))
     const indexHandle = createNotebookIndexDoc(id)
 
-    await waitFor(() => expect(indexHandle.tree.get("root")).toEqual(nb.root))
+    await waitFor(() => expect(readNotebookIndexTree(indexHandle).root).toEqual(nb.root))
     updateNotebookRoot.mockClear()
 
     act(() => result.current.rename("a", "renamed"))
 
     await waitFor(() => {
-      expect((indexHandle.tree.get("root") as TreeNode).children![0].name).toBe("renamed")
+      expect((readNotebookIndexTree(indexHandle).root as TreeNode).children![0].name).toBe("renamed")
     })
     expect(updateNotebookRoot).toHaveBeenCalledWith(id, expect.objectContaining({
       children: [expect.objectContaining({ id: "a", name: "renamed" })],

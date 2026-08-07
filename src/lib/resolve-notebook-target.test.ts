@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { TreeNode } from "@/components/custom-ui/file-browser/tree"
+import { flattenTree, type TreeNode } from "@/components/custom-ui/file-browser/tree"
 import { createNotebookSettingsDoc, createNotebookIndexDoc, evictNotebookIndexDoc } from "@/lib/yjs-utils"
 import { findFirstNoteId, resolveNotebookTargetNote } from "./resolve-notebook-target"
 
@@ -13,6 +13,16 @@ function asset(id: string): TreeNode {
 
 function folder(id: string, children: TreeNode[]): TreeNode {
   return { id, name: id, isFolder: true, children }
+}
+
+// The index doc's Yjs storage is one node per Yjs map entry (see
+// yjs-utils.ts), not a single tree blob - seed it through this helper
+// rather than writing a whole tree into one key directly.
+function seedIndexNodes(indexHandle: ReturnType<typeof createNotebookIndexDoc>, root: TreeNode) {
+  const flat = flattenTree(root)
+  indexHandle.doc.transact(() => {
+    for (const [id, record] of flat) indexHandle.nodes.set(id, record)
+  })
 }
 
 async function tick() {
@@ -56,7 +66,7 @@ describe("resolveNotebookTargetNote", () => {
     const notebookId = "nb-index-fallback"
     const indexHandle = createNotebookIndexDoc(notebookId)
     await indexHandle.idb.whenSynced
-    indexHandle.tree.set("root", folder("root", [note("stored-note")]))
+    seedIndexNodes(indexHandle, folder("root", [note("stored-note")]))
     await tick()
 
     const result = await resolveNotebookTargetNote(notebookId, null)

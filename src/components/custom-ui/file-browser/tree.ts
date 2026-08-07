@@ -357,3 +357,132 @@ export function upsertChildren(
   if (!node) return tree
   return updateAtPath(tree, path, (n) => ({ ...n, children: kids }))
 }
+
+// A single node's own fields plus a parent reference, in place of nesting -
+// the shape a tree is converted to/from so it can be persisted as one Yjs
+// map entry per node (see yjs-utils.ts) instead of one blob for the whole
+// tree. That's what lets concurrent edits to different notes merge
+// independently instead of one replacing the other wholesale.
+export type FlatNodeRecord = {
+  parentId: string | null
+  name: string
+  isFolder: boolean
+  expanded?: boolean
+  isUserFolder?: boolean
+  assetId?: string
+  linkAccess?: LinkAccess
+  isShared?: boolean
+  createdAt?: number
+  modifiedAt?: number
+  hiddenRoot?: boolean
+}
+
+// Flattens a tree into an id -> record map. Nodes without a string id
+// (shouldn't occur in a real notebook tree) are skipped, along with their
+// subtree.
+export function flattenTree(root: TreeNode): Map<string, FlatNodeRecord> {
+  const out = new Map<string, FlatNodeRecord>()
+  function walk(node: TreeNode, parentId: string | null) {
+    if (typeof node.id !== "string") return
+    const record: FlatNodeRecord = { parentId, name: node.name, isFolder: node.isFolder }
+    if (node.expanded !== undefined) record.expanded = node.expanded
+    if (node.isUserFolder !== undefined) record.isUserFolder = node.isUserFolder
+    if (node.assetId !== undefined) record.assetId = node.assetId
+    if (node.linkAccess !== undefined) record.linkAccess = node.linkAccess
+    if (node.isShared !== undefined) record.isShared = node.isShared
+    if (node.createdAt !== undefined) record.createdAt = node.createdAt
+    if (node.modifiedAt !== undefined) record.modifiedAt = node.modifiedAt
+    if (node.hiddenRoot !== undefined) record.hiddenRoot = node.hiddenRoot
+    out.set(node.id, record)
+    for (const child of node.children ?? []) walk(child, node.id)
+  }
+  walk(root, null)
+  return out
+}
+
+// Inverse of flattenTree. The root is whichever record has parentId null
+// (there should be exactly one, the node flattenTree started from) - no
+// caller needs to know its id ahead of time. Folders always get a
+// `children` array (possibly empty); leaves never do. Children are ordered
+// by id for a stable (if arbitrary) order - actual display order is always
+// applied separately by the file tree's sort order (see
+// childrenBySortOrder in file-tree.tsx), so this doesn't need to preserve
+// insertion order.
+export function buildTreeFromFlat(flat: Map<string, FlatNodeRecord>): TreeNode | undefined {
+  let rootId: string | undefined
+  const childrenByParent = new Map<string, string[]>()
+  for (const [id, record] of flat) {
+    if (record.parentId === null) {
+      rootId = id
+      continue
+    }
+    const siblings = childrenByParent.get(record.parentId)
+    if (siblings) siblings.push(id)
+    else childrenByParent.set(record.parentId, [id])
+  }
+  if (rootId === undefined) return undefined
+  for (const siblings of childrenByParent.values()) siblings.sort()
+
+  function build(id: string): TreeNode | undefined {
+    const record = flat.get(id)
+    if (!record) return undefined
+    const node: TreeNode = { id, name: record.name, isFolder: record.isFolder }
+    if (record.expanded !== undefined) node.expanded = record.expanded
+    if (record.isUserFolder !== undefined) node.isUserFolder = record.isUserFolder
+    if (record.assetId !== undefined) node.assetId = record.assetId
+    if (record.linkAccess !== undefined) node.linkAccess = record.linkAccess
+    if (record.isShared !== undefined) node.isShared = record.isShared
+    if (record.createdAt !== undefined) node.createdAt = record.createdAt
+    if (record.modifiedAt !== undefined) node.modifiedAt = record.modifiedAt
+    if (record.hiddenRoot !== undefined) node.hiddenRoot = record.hiddenRoot
+    if (record.isFolder) {
+      node.children = (childrenByParent.get(id) ?? [])
+        .map(build)
+        .filter((n): n is TreeNode => n !== undefined)
+    }
+    return node
+  }
+
+  return build(rootId)
+}
+
+function flatRecordsEqual(a: FlatNodeRecord, b: FlatNodeRecord): boolean {
+  return (
+    a.parentId === b.parentId &&
+    a.name === b.name &&
+    a.isFolder === b.isFolder &&
+    a.expanded === b.expanded &&
+    a.isUserFolder === b.isUserFolder &&
+    a.assetId === b.assetId &&
+    a.linkAccess === b.linkAccess &&
+    a.isShared === b.isShared &&
+    a.createdAt === b.createdAt &&
+    a.modifiedAt === b.modifiedAt &&
+    a.hiddenRoot === b.hiddenRoot
+  )
+}
+
+export type FlatTreeDiff = {
+  upserts: Array<[string, FlatNodeRecord]>
+  deletes: string[]
+}
+
+// Diffs two flattened trees down to the individual nodes that actually
+// changed (added, edited, or removed), so persisting an edit only touches
+// the Yjs entry for the node(s) it affects instead of rewriting the whole
+// tree - see yjs-utils.ts's writeNotebookIndexTree.
+export function diffFlatTrees(
+  prev: Map<string, FlatNodeRecord>,
+  next: Map<string, FlatNodeRecord>,
+): FlatTreeDiff {
+  const upserts: Array<[string, FlatNodeRecord]> = []
+  const deletes: string[] = []
+  for (const [id, record] of next) {
+    const before = prev.get(id)
+    if (!before || !flatRecordsEqual(before, record)) upserts.push([id, record])
+  }
+  for (const id of prev.keys()) {
+    if (!next.has(id)) deletes.push(id)
+  }
+  return { upserts, deletes }
+}
