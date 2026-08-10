@@ -25,7 +25,7 @@ type QuickPickProps = {
 // Subsequence fuzzy match: every character of `query` must appear in `name`,
 // in order. Lower score (total gap between matched characters) is a better
 // match; null means no match at all.
-function fuzzyScore(name: string, query: string): number | null {
+export function fuzzyScore(name: string, query: string): number | null {
   if (!query) return 0
 
   const lowerName = name.toLowerCase()

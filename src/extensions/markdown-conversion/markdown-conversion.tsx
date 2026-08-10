@@ -59,6 +59,13 @@ const imageHandler = (state: any, node: any) => {
   state.write(`![${alt}](asset:${assetId}${title})`)
 }
 
+const noteLinkHandler = (state: any, node: any) => {
+  const noteId = node.attrs?.noteId
+  if (!noteId) return
+  const label = state.esc(node.attrs?.label || "Untitled")
+  state.write(`[${label}](note:${noteId})`)
+}
+
 /** Serialize a single task item line: "- [ ] text" or "- [x] text" */
 function writeTaskItem(state: any, node: any) {
   const checked =
@@ -81,6 +88,7 @@ function writeTaskItem(state: any, node: any) {
 const nodeHandlers = {
   ...defaultMarkdownSerializer.nodes,
   image: imageHandler,
+  noteLink: noteLinkHandler,
 
   // Tiptap uses camelCase node names; provide aliases to default handlers:
   bulletList: defaultMarkdownSerializer.nodes.bullet_list,

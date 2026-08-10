@@ -13,6 +13,7 @@ import Collaboration from "@tiptap/extension-collaboration"
 
 import { AssetImage } from "@/components/tiptap-node/image-node/image-node-extension"
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
+import { NoteLink } from "@/components/tiptap-node/note-link-node/note-link-node-extension"
 import { markdownToProseMirrorDoc } from "@/extensions/markdown-conversion/markdown-conversion"
 import { getOrCreateYDoc } from "@/lib/yjs-utils"
 
@@ -72,6 +73,7 @@ export async function importNoteContent(
       TaskItem.configure({ nested: true }),
       Highlight.configure({ multicolor: true }),
       AssetImage,
+      NoteLink,
       Typography,
       Superscript,
       Subscript,

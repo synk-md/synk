@@ -1,0 +1,82 @@
+.tiptap.ProseMirror {
+  // A shade lighter than `--link-text-color` (paragraph-node.scss), which
+  // drives the external `a[href]` color at brand-500/400 light/dark.
+  --note-link-color: var(--tt-brand-color-400);
+  --note-link-broken-color: var(--tt-gray-light-a-500);
+
+  .dark & {
+    --note-link-color: var(--tt-brand-color-300);
+    --note-link-broken-color: var(--tt-gray-dark-a-500);
+  }
+
+  .note-link-wrapper {
+    display: inline;
+  }
+
+  .note-link {
+    color: var(--note-link-color);
+    text-decoration: none;
+    cursor: pointer;
+
+    &.is-selected {
+      outline: 2px solid var(--note-link-color);
+      outline-offset: 1px;
+      border-radius: 2px;
+    }
+
+    &.is-broken {
+      color: var(--note-link-broken-color);
+      cursor: default;
+    }
+  }
+
+  .note-link-broken-icon {
+    width: 0.9em;
+    height: 0.9em;
+    vertical-align: -0.1em;
+    margin-right: 0.15em;
+  }
+}
+
+.note-link-suggestion-popup {
+  z-index: 70;
+}
+
+// Same card chrome as `.quick-pick` (the note quick-switcher), just sized
+// to its content instead of a fixed modal width — the `qp-list`/`qp-item`/
+// `qp-item-name`/`qp-item-path` classes below are QuickPick's own, reused
+// as-is via quick-pick.scss.
+.note-link-suggestion-card {
+  width: max-content;
+  min-width: 22rem;
+  max-width: 32rem;
+  max-height: 16rem;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background: var(--tt-card-bg-color);
+  box-shadow: var(--tt-shadow-elevated-md, 0 20px 60px rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--tt-card-border-color);
+
+  .qp-list {
+    overflow-y: auto;
+  }
+
+  // Stack the folder path under the note name instead of QuickPick's
+  // default same-line layout — scoped to this popup only.
+  .qp-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.125rem;
+  }
+
+  .qp-item-name {
+    max-width: 100%;
+  }
+
+  .qp-item-path {
+    flex: none;
+    max-width: 100%;
+  }
+}

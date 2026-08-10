@@ -28,11 +28,13 @@ import {
 // --- Tiptap Node ---
 import { AssetImage, SELECTION_AWARENESS_FIELD } from "@/components/tiptap-node/image-node/image-node-extension"
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
+import { NoteLink, type NoteLinkApi } from "@/components/tiptap-node/note-link-node/note-link-node-extension"
 import "@/components/tiptap-node/blockquote-node/blockquote-node.scss"
 import "@/components/tiptap-node/code-block-node/code-block-node.scss"
 import "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node.scss"
 import "@/components/tiptap-node/list-node/list-node.scss"
 import "@/components/tiptap-node/image-node/image-node.scss"
+import "@/components/tiptap-node/note-link-node/note-link-node.scss"
 import "@/components/tiptap-node/heading-node/heading-node.scss"
 import "@/components/tiptap-node/paragraph-node/paragraph-node.scss"
 
@@ -384,6 +386,17 @@ export function SimpleEditor({
   const providerRef = React.useRef<WebrtcProvider | null>(null)
   const imageTransferRef = React.useRef<P2PImageAssetTransfer | null>(null)
   const imageRefIndexRef = React.useRef<NoteImageRefIndex | null>(null)
+  // Read fresh by the NoteLink node view/suggestion on every lookup instead
+  // of being an extension option, so a note being renamed or created
+  // elsewhere in the notebook doesn't force `extensions` to be recreated
+  // (which would remount this editor). Kept current below, after
+  // `handleSelectNote` exists.
+  const noteLinkApiRef = React.useRef<NoteLinkApi | null>(null)
+  // `.configure()` deep-merges plain option objects, which would clone a
+  // ref passed directly and disconnect it from `noteLinkApiRef` above — so
+  // NoteLink is configured with this stable getter instead, which always
+  // reads the ref's latest value via closure at call time.
+  const getNoteLinkApi = React.useCallback(() => noteLinkApiRef.current, [])
   // Read inside the provider effect's cleanup to tell "switching to another
   // public note" (keep the signaling socket warm) apart from "collaboration
   // is actually turning off" (fully disconnect). Updated during render so the
@@ -855,6 +868,7 @@ export function SimpleEditor({
         upload: uploadAndRegisterImage,
         awareness: collaborationActive && providerReady ? providerRef.current?.awareness : null,
       }),
+      NoteLink.configure({ api: getNoteLinkApi }),
       Typography,
       Superscript,
       Subscript,
@@ -915,7 +929,7 @@ export function SimpleEditor({
     }
 
     return base;
-  }, [note?.doc, providerReady, providerGeneration, currentUser, collaborationActive, resolveImageAsset, uploadAndRegisterImage]);
+  }, [note?.doc, providerReady, providerGeneration, currentUser, collaborationActive, resolveImageAsset, uploadAndRegisterImage, getNoteLinkApi]);
 
   
   const editor = useEditor({
@@ -1079,6 +1093,8 @@ export function SimpleEditor({
     },
     [navigateToNote, fs.tree],
   )
+
+  noteLinkApiRef.current = { tree: fs.tree, onNavigate: handleSelectNote }
 
   const handleOpenNoteInNewTab = React.useCallback(
     (id: NodeId) => {
