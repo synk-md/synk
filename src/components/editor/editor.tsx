@@ -926,7 +926,7 @@ export function SimpleEditor({
     // to mount is safe.
     immediatelyRender: false,
     shouldRerenderOnTransaction: false,
-    editorProps: { attributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", "aria-label": "Main content area, start typing to enter text.", class: "simple-editor" } },
+    editorProps: { attributes: { autocomplete: "off", autocorrect: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "Main content area, start typing to enter text.", class: "simple-editor" } },
     extensions,
     onCreate: () => setEditorReady(true),
     onUpdate: touchActiveNoteModifiedAt,
@@ -1673,7 +1673,7 @@ export function SimpleEditor({
                         value={titleDraft}
                         placeholder="Untitled"
                         aria-label="Note title"
-                        spellCheck
+                        spellCheck={false}
                         readOnly={!isEditable}
                         onChange={(event) => setTitleDraft(event.target.value)}
                         onBlur={commitTitle}
