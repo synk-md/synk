@@ -92,27 +92,23 @@
 .shared-note-bar__sync {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   font-size: 12px;
-  font-weight: 500;
-  padding: 2px 10px;
-  border-radius: 999px;
+  font-weight: 400;
+  padding: 0 4px;
   color: var(--share-subtext, var(--gray-500, #6b7280));
-  background: rgba(0, 0, 0, 0.07);
+  opacity: 0.75;
   white-space: nowrap;
 
-  .dark & {
-    background: #454c8580;
+  .presence-dot {
+    width: 6px;
+    height: 6px;
+    margin-right: 4px;
   }
 }
 
-.shared-note-bar__sync--live {
-  color: var(--tt-brand-color-300);
-}
-
 .shared-note-bar__sync-time {
-  opacity: 0.65;
-  font-weight: 400;
+  opacity: 0.8;
 }
 
 .shared-note-bar__permission {
