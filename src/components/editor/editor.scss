@@ -40,12 +40,17 @@ body,
 }
 
 ::-webkit-scrollbar {
-  width: 0.25rem;
+  width: 0.5rem;
+  height: 0.5rem;
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--tt-scrollbar-color) transparent;
+// Chromium ignores ::-webkit-scrollbar sizing when the standard properties are set,
+// so only use them as a fallback (e.g. Firefox).
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--tt-scrollbar-color) transparent;
+  }
 }
 
 ::-webkit-scrollbar-thumb {

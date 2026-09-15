@@ -19,6 +19,10 @@
   transition: width var(--sidepanel-transition);
 }
 
+.side-panel:not(.is-open) {
+  border: 0; /* collapsed panel shouldn't leave a strip beside the editor scrollbar */
+}
+
 .side-panel.is-open {
   width: var(--sidepanel-width); /* open */
   flex: 0 0 var(--sidepanel-width);
