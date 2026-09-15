@@ -15,6 +15,7 @@ import { getHierarchicalIndexes, TableOfContents, type TableOfContentDataItem } 
 
 // --- Custom Extensions ---
 import { MarkdownConversion } from '@/extensions/markdown-conversion'
+import { LinkClick } from '@/extensions/link-click'
 
 // --- UI Primitives ---
 import { Button } from "@/components/tiptap-ui-primitive/button"
@@ -883,6 +884,7 @@ export function SimpleEditor({
       Subscript,
       Selection,
       MarkdownConversion,
+      LinkClick,
       TableOfContents.configure({
         getIndex: getHierarchicalIndexes,
         onUpdate(content) {

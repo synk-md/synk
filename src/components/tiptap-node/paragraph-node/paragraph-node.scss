@@ -146,6 +146,11 @@
     color: var(--link-text-color);
     text-decoration: underline;
   }
+
+  // Ctrl/⌘+click opens the link (see extensions/link-click).
+  &.is-link-modifier-held a[href] {
+    cursor: pointer;
+  }
 }
 
 /* =====================
