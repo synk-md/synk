@@ -45,6 +45,22 @@ export interface LinkHandlerProps {
   onSetLink?: () => void
 }
 
+// Lets code outside the toolbar (e.g. the editor's context menu "Edit link"
+// action) open the link editor, whose open state otherwise lives inside
+// whichever LinkPopover / mobile link view is currently mounted.
+const openRequestListeners = new Set<() => void>()
+
+export function requestLinkPopoverOpen() {
+  openRequestListeners.forEach((listener) => listener())
+}
+
+export function onLinkPopoverOpenRequest(listener: () => void): () => void {
+  openRequestListeners.add(listener)
+  return () => {
+    openRequestListeners.delete(listener)
+  }
+}
+
 /**
  * Checks if a link can be set in the current editor state
  */

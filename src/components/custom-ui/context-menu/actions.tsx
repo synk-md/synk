@@ -14,12 +14,14 @@ import { ExternalLinkIcon } from "@/components/tiptap-icons/external-link-icon";
 import { AlignLeftIcon } from "@/components/tiptap-icons/align-left-icon";
 import { AlignCenterIcon } from "@/components/tiptap-icons/align-center-icon";
 import { AlignRightIcon } from "@/components/tiptap-icons/align-right-icon";
-import { RiMarkdownLine, RiBracesLine, RiFileTextLine } from "@remixicon/react";
+import { RiMarkdownLine, RiBracesLine, RiFileTextLine, RiPencilLine } from "@remixicon/react";
 
 import { Separator } from "@/components/tiptap-ui-primitive/separator"
 import { isMac } from "@/lib/tiptap-utils"
 import { downloadFile } from "@/lib/download-file"
 import { getMarkdownContent } from "@/extensions/markdown-conversion"
+import { requestLinkPopoverOpen } from "@/components/tiptap-ui/link-popover"
+import { noteTitleFor, type NoteLinkOptions } from "@/components/tiptap-node/note-link-node/note-link-node-extension"
 
 import "./context-menu.scss";
 
@@ -97,6 +99,18 @@ async function insertImageFromClipboardBlob(ctx: MenuContext, blob: Blob): Promi
   return true;
 }
 
+// The context menu resolves a right-clicked atom from its NodeView DOM, so
+// `ctx.node`/`ctx.nodePos` are exactly the clicked note link.
+function getNoteLink(ctx: MenuContext) {
+  if (ctx.node?.type.name !== "noteLink" || ctx.nodePos == null) return null;
+  return { node: ctx.node, pos: ctx.nodePos };
+}
+
+function getNoteLinkApi(ctx: MenuContext) {
+  const extension = ctx.editor.extensionManager.extensions.find((e) => e.name === "noteLink");
+  return (extension?.options as NoteLinkOptions | undefined)?.api() ?? null;
+}
+
 export const Actions = {
   placeholder(): MenuItem {
     return {
@@ -143,10 +157,21 @@ export const Actions = {
       id: "link-set",
       label: "Add external link",
       icon: <LinkIcon className="tiptap-button-icon" />,
-      run: async ({ editor }) => {
-        editor.chain().focus().extendMarkRange("link").toggleLink().run();
-      },
+      // The popover applies the link to the current selection (or inserts the
+      // URL as linked text at the caret) once a URL is entered.
+      run: () => requestLinkPopoverOpen(),
       isEnabled: ({ editor }) => editor.can().setLink?.({ href: "https://example.com" }),
+      isVisible: ({ editor }) => !editor.isActive("link"),
+    };
+  },
+  linkEdit(): MenuItem {
+    return {
+      id: "link-edit",
+      label: "Edit link",
+      icon: <RiPencilLine className="tiptap-button-icon" />,
+      run: () => requestLinkPopoverOpen(),
+      isEnabled: ({ editor }) => editor.isEditable,
+      isVisible: ({ editor }) => editor.isActive("link"),
     };
   },
   linkUnset(): MenuItem {
@@ -156,6 +181,60 @@ export const Actions = {
       icon: <BanIcon className="tiptap-button-icon" />,
       run: ({ editor }) => editor.chain().focus().unsetLink().run() as any,
       isVisible: ({ editor }) => editor.isActive("link"),
+    };
+  },
+  noteLinkOpen(): MenuItem {
+    return {
+      id: "note-link-open",
+      label: "Open note",
+      icon: <ExternalLinkIcon className="tiptap-button-icon" />,
+      isEnabled: (ctx) => {
+        const noteId = getNoteLink(ctx)?.node.attrs.noteId as string | null;
+        return !!noteTitleFor(getNoteLinkApi(ctx)?.tree ?? null, noteId);
+      },
+      run: (ctx) => {
+        const noteId = getNoteLink(ctx)?.node.attrs.noteId as string | null;
+        if (noteId) getNoteLinkApi(ctx)?.onNavigate(noteId);
+      },
+    };
+  },
+  noteLinkEdit(): MenuItem {
+    return {
+      id: "note-link-edit",
+      label: "Edit link",
+      icon: <RiPencilLine className="tiptap-button-icon" />,
+      isEnabled: (ctx) => ctx.editor.isEditable && !!ctx.editNoteLink && !!getNoteLink(ctx),
+      run: (ctx) => {
+        const link = getNoteLink(ctx);
+        if (link) ctx.editNoteLink?.(link.pos);
+      },
+    };
+  },
+  noteLinkUnset(): MenuItem {
+    return {
+      id: "note-link-unset",
+      label: "Remove link",
+      icon: <BanIcon className="tiptap-button-icon" />,
+      isEnabled: (ctx) => ctx.editor.isEditable && !!getNoteLink(ctx),
+      // Keeps the note's title in place as plain text, like removing an
+      // external link keeps its text.
+      run: (ctx) => {
+        const link = getNoteLink(ctx);
+        if (!link) return;
+        const { node, pos } = link;
+        const title =
+          noteTitleFor(getNoteLinkApi(ctx)?.tree ?? null, node.attrs.noteId) ??
+          (node.attrs.label as string | null) ??
+          "Untitled";
+        ctx.editor
+          .chain()
+          .focus()
+          .command(({ tr, state }) => {
+            tr.replaceWith(pos, pos + node.nodeSize, state.schema.text(title));
+            return true;
+          })
+          .run();
+      },
     };
   },
   inlineCode(): MenuItem {

@@ -24,6 +24,9 @@ export type MenuContext = {
   // App-level hook: returns the active note's display title, e.g. for naming
   // a downloaded file.
   getActiveTitle?: () => string;
+
+  // App-level hook: opens a note picker to retarget the note link node at the given doc position.
+  editNoteLink?: (pos: number) => void;
 };
 
 export type RunResult = void | Promise<void>;

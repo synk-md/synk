@@ -28,7 +28,7 @@ import {
 // --- Tiptap Node ---
 import { AssetImage, SELECTION_AWARENESS_FIELD } from "@/components/tiptap-node/image-node/image-node-extension"
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
-import { NoteLink, type NoteLinkApi } from "@/components/tiptap-node/note-link-node/note-link-node-extension"
+import { NoteLink, noteTitleFor, type NoteLinkApi } from "@/components/tiptap-node/note-link-node/note-link-node-extension"
 import { Table } from "@/components/tiptap-node/table-node/table-node-extension"
 import "@/components/tiptap-node/blockquote-node/blockquote-node.scss"
 import "@/components/tiptap-node/code-block-node/code-block-node.scss"
@@ -56,6 +56,7 @@ import {
   LinkPopover,
   LinkContent,
   LinkButton,
+  onLinkPopoverOpenRequest,
 } from "@/components/tiptap-ui/link-popover"
 import { MarkButton } from "@/components/tiptap-ui/mark-button"
 import { TextAlignButton } from "@/components/tiptap-ui/text-align-button"
@@ -85,7 +86,7 @@ import { SharedNoteBar, SyncStatusIndicator, ViewOnlyBanner, EditingIdentityBubb
 import { ContextMenu } from "@/components/custom-ui/context-menu"
 import { resolveSpec, type MenuRoute } from "@/components/custom-ui/context-menu/menu-router";
 import { whenAnyPathIncludes, whenDomMatches, whenToolbar, whenEditor, whenEditorPanel, whenTabbar } from "@/components/custom-ui/context-menu/predicates";
-import { headingSpec, imageSpec, tableSpec, defaultSpec, editorSpec, textSpec, toolbarSpec, toolbarMoreSpec, tabbarSpec } from "@/components/custom-ui/context-menu/specs";
+import { headingSpec, imageSpec, noteLinkSpec, tableSpec, defaultSpec, editorSpec, textSpec, toolbarSpec, toolbarMoreSpec, tabbarSpec } from "@/components/custom-ui/context-menu/specs";
 
 // --- Collaboration ---
 import Collaboration from '@tiptap/extension-collaboration'
@@ -189,7 +190,7 @@ const MainToolbarContent = ({
         ) : (
           <ColorHighlightPopoverButton onClick={onHighlighterClick} />
         )}
-        {!isMobile ? <LinkPopover /> : <LinkButton onClick={onLinkClick} />}
+        {!isMobile ? <LinkPopover autoOpenOnLinkActive={false} /> : <LinkButton onClick={onLinkClick} />}
       </ToolbarGroup>
 
       <ToolbarSeparator />
@@ -444,6 +445,9 @@ export function SimpleEditor({
   const [newTabIds, setNewTabIds] = React.useState<string[]>([])
   const [activeNewTabId, setActiveNewTabId] = React.useState<string | null>(null)
   const [isQuickSwitcherOpen, setIsQuickSwitcherOpen] = React.useState(false)
+  // Doc position of the note link being retargeted via the context menu's
+  // "Edit link" action; non-null while its note picker is open.
+  const [editingNoteLinkPos, setEditingNoteLinkPos] = React.useState<number | null>(null)
   const [moveToNoteIds, setMoveToNoteIds] = React.useState<NodeId[] | null>(null)
 
   const [editorReady, setEditorReady] = React.useState(false)
@@ -1382,6 +1386,7 @@ export function SimpleEditor({
     // DOM-based (not posAtCoords-based) so it can't drift to a neighboring
     // image when the click lands on a resize handle near the node's edge.
     { id: "image", when: whenDomMatches(".asset-image-node"), spec: imageSpec, priority: 90 },
+    { id: "note-link", when: whenDomMatches(".note-link-wrapper"), spec: noteLinkSpec, priority: 95 },
     { id: "table", when: whenAnyPathIncludes("table"), spec: tableSpec, priority: 70 },
     { id: "editor-panel", when: whenEditorPanel, spec: editorSpec, priority: 1 },
   ];
@@ -1435,6 +1440,32 @@ export function SimpleEditor({
       setMobileView("main")
     }
   }, [isMobile, mobileView])
+
+  // On desktop the toolbar's LinkPopover handles this request itself; on
+  // mobile the link editor is a toolbar view instead of a popover.
+  React.useEffect(() => {
+    if (!isMobile) return
+    return onLinkPopoverOpenRequest(() => setMobileView("link"))
+  }, [isMobile])
+
+  const handleRetargetNoteLink = React.useCallback(
+    (noteId: string) => {
+      const pos = editingNoteLinkPos
+      setEditingNoteLinkPos(null)
+      if (!editor || pos == null) return
+      const node = editor.state.doc.nodeAt(pos)
+      if (node?.type.name !== "noteLink") return
+      editor
+        .chain()
+        .focus()
+        .command(({ tr }) => {
+          tr.setNodeMarkup(pos, undefined, { ...node.attrs, noteId, label: noteTitleFor(fs.tree, noteId) })
+          return true
+        })
+        .run()
+    },
+    [editor, editingNoteLinkPos, fs.tree],
+  )
 
   return (
     <div ref={wrapperRef} className="workspace">
@@ -1727,7 +1758,7 @@ export function SimpleEditor({
                     editor={editor}
                     container={wrapperRef.current}
                     spec={spec}
-                    extraContext={{ openAssetInTab: handleOpenImageAssetInTab, getActiveTitle: () => activeTitle }}
+                    extraContext={{ openAssetInTab: handleOpenImageAssetInTab, getActiveTitle: () => activeTitle, editNoteLink: setEditingNoteLinkPos }}
                   />
                 )}
               </div>
@@ -1763,6 +1794,14 @@ export function SimpleEditor({
           handleSelectNote(id)
         }}
         onClose={() => setIsQuickSwitcherOpen(false)}
+      />
+
+      <NoteQuickSwitcher
+        open={editingNoteLinkPos !== null}
+        tree={fs.tree}
+        onSelect={handleRetargetNoteLink}
+        onClose={() => setEditingNoteLinkPos(null)}
+        placeholder="Link to note…"
       />
 
       <MoveToPicker

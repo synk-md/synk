@@ -12,9 +12,10 @@ type NoteQuickSwitcherProps = {
   tree: TreeNode
   onSelect: (noteId: string) => void
   onClose: () => void
+  placeholder?: string
 }
 
-export function NoteQuickSwitcher({ open, tree, onSelect, onClose }: NoteQuickSwitcherProps) {
+export function NoteQuickSwitcher({ open, tree, onSelect, onClose, placeholder = "Find a note by name…" }: NoteQuickSwitcherProps) {
   const entries = React.useMemo(() => collectNoteEntries(tree), [tree])
 
   return (
@@ -23,7 +24,7 @@ export function NoteQuickSwitcher({ open, tree, onSelect, onClose }: NoteQuickSw
       entries={entries}
       onSelect={onSelect}
       onClose={onClose}
-      placeholder="Find a note by name…"
+      placeholder={placeholder}
       ariaLabel="Find note"
       emptyMessage="No notes found."
       icon={<RiSearchLine />}

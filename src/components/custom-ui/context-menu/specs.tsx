@@ -103,6 +103,15 @@ export const tableSpec: MenuSpec = (ctx) => {
   ];
 };
 
+export const noteLinkSpec: MenuSpec = (_ctx) => [
+  Clipboard.cut(),
+  Clipboard.copy(),
+  { ...Clipboard.paste(), separatorAfter: true },
+  Actions.noteLinkOpen(),
+  Actions.noteLinkEdit(),
+  Actions.noteLinkUnset(),
+];
+
 export const linkSpec: MenuSpec = () => [
   { id: "link-title", label: "Link", separatorAfter: true },
   Actions.linkSet(),
@@ -151,6 +160,8 @@ export const textSpec: MenuSpec = (_ctx) => [
   Actions.separator(),
 
   Actions.linkSet(),
+  Actions.linkEdit(),
+  Actions.linkUnset(),
 
   // {
   //   id: "convert",

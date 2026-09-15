@@ -13,7 +13,7 @@ import { TrashIcon } from "@/components/tiptap-icons/trash-icon"
 
 // --- Tiptap UI ---
 import type { UseLinkPopoverConfig } from "@/components/tiptap-ui/link-popover"
-import { useLinkPopover } from "@/components/tiptap-ui/link-popover"
+import { onLinkPopoverOpenRequest, useLinkPopover } from "@/components/tiptap-ui/link-popover"
 
 // --- UI Primitives ---
 import type { ButtonProps } from "@/components/tiptap-ui-primitive/button"
@@ -259,6 +259,11 @@ export const LinkPopover = React.forwardRef<
         setIsOpen(!isOpen)
       },
       [onClick, isOpen]
+    )
+
+    React.useEffect(
+      () => onLinkPopoverOpenRequest(() => handleOnOpenChange(true)),
+      [handleOnOpenChange]
     )
 
     React.useEffect(() => {
