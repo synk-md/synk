@@ -73,8 +73,8 @@
   .side-panel {
     position: fixed;
     inset: 0;
-    width: 100vw;
-    height: 100vh;
+    width: calc(100vw / var(--app-zoom, 1));
+    height: calc(100vh / var(--app-zoom, 1));
     max-width: 100%;
     transform: translateX(-100%);
     transition: transform var(--sidepanel-transition);
@@ -86,8 +86,8 @@
 
   /* open state slides into place */
   .side-panel.is-open {
-    width: 100vw;
-    height: 100vh;
+    width: calc(100vw / var(--app-zoom, 1));
+    height: calc(100vh / var(--app-zoom, 1));
     transform: translateX(0);
   }
 

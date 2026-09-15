@@ -140,7 +140,7 @@
 .share-modal {
   width: 480px;
   max-width: 100%;
-  max-height: calc(100vh - 80px);
+  max-height: calc(100vh / var(--app-zoom, 1) - 80px);
   display: flex;
   flex-direction: column;
   border-radius: 16px;

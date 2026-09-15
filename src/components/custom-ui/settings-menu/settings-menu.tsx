@@ -6,6 +6,7 @@ import { useTheme, useColorTheme, colorThemes, type Theme } from "@/components/c
 import { useToolbarVisible, setToolbarVisible, useInlineTitleVisible, setInlineTitleVisible } from "@/components/custom-ui/ui-store/ui-store"
 import { useEditorSettings, setEditorSettings } from "@/components/custom-ui/ui-store/editor-settings-store"
 import { useTextColors, setTextColor } from "@/components/custom-ui/ui-store/text-colors-store"
+import { useZoom, zoomLevels, type ZoomLevel } from "@/components/custom-ui/ui-store/zoom-store"
 import "./settings-menu.scss"
 
 const categories = [
@@ -30,6 +31,7 @@ export function SettingsMenu({ name, onNameChange }: { name: string; onNameChang
   const toolbarVisible = useToolbarVisible()
   const titleVisible = useInlineTitleVisible()
   const editorSettings = useEditorSettings()
+  const [zoom, setZoom] = useZoom()
 
   React.useEffect(() => {
     if (open) dialog.current?.showModal()
@@ -72,15 +74,17 @@ export function SettingsMenu({ name, onNameChange }: { name: string; onNameChang
           <span className="theme-option-name">{option.name}<span aria-hidden="true">{colorTheme === option.id ? "✓" : ""}</span></span>
         </button>)}
       </div> },
-    { id: "heading-color", category: "appearance", label: "Title and subtitle color", description: "Note titles and all headings (H1–H6).", keywords: "text font subheading h1 h2 h3 h4 h5 h6",
+    { id: "heading-color", category: "appearance", label: "Title and subtitle color", description: "Note titles and all headings (H1-H6).", keywords: "text font subheading h1 h2 h3 h4 h5 h6",
       control: colorControl },
+    { id: "zoom", category: "interface", label: "Zoom", description: "Scale the whole interface on this device.", keywords: "scale size magnify ui",
+      control: <select id="zoom" value={zoom} onChange={event => setZoom(Number(event.target.value) as ZoomLevel)}>{zoomLevels.map(level => <option key={level} value={level}>{level}%</option>)}</select> },
     { id: "toolbar", category: "interface", label: "Formatting toolbar", description: "Show formatting tools above your note. Keyboard shortcuts stay available.",
       control: toggle("toolbar", toolbarVisible, setToolbarVisible) },
     { id: "inline-title", category: "interface", label: "Note title", description: "Show an editable title at the top of each note.", keywords: "inline heading",
       control: toggle("inline-title", titleVisible, setInlineTitleVisible) },
     { id: "font-size", category: "editor", label: "Text size", description: "Adjust the reading and writing size on this device.", keywords: "font zoom",
       control: <select id="font-size" value={editorSettings.fontSize} onChange={event => setEditorSettings({ fontSize: Number(event.target.value) })}>{[14, 16, 18, 20].map(size => <option key={size} value={size}>{size} px</option>)}</select> },
-    { id: "spellcheck", category: "editor", label: "Spell check", description: "Use your browser’s spell checker while writing.", keywords: "spelling language",
+    { id: "spellcheck", category: "editor", label: "Spell check", description: "Use your browser's spell checker while writing.", keywords: "spelling language",
       control: toggle("spellcheck", editorSettings.spellcheck, spellcheck => setEditorSettings({ spellcheck })) },
   ]
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)

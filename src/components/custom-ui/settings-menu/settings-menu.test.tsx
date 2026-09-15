@@ -4,12 +4,13 @@ import { setTextColor } from "@/components/custom-ui/ui-store/text-colors-store"
 import { SettingsMenu } from "./settings-menu"
 import { getTheme, setTheme, getColorTheme, setColorTheme } from "@/components/custom-ui/ui-store/theme-store"
 import { getToolbarVisible, setToolbarVisible } from "@/components/custom-ui/ui-store/ui-store"
+import { getZoom, setZoom } from "@/components/custom-ui/ui-store/zoom-store"
 
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.open = true }
   HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new Event("close")) }
 })
-afterEach(() => { cleanup(); setTextColor(null); setTheme("system"); setColorTheme("classic"); setToolbarVisible(true) })
+afterEach(() => { cleanup(); setTextColor(null); setTheme("system"); setColorTheme("classic"); setToolbarVisible(true); setZoom(100) })
 function openSettings() {
   const onNameChange = vi.fn()
   render(<SettingsMenu name="River" onNameChange={onNameChange} />)
@@ -41,6 +42,17 @@ describe("Settings menu", () => {
     fireEvent.click(screen.getByRole("switch", { name: "Formatting toolbar" }))
     expect(getToolbarVisible()).toBe(false)
     expect(localStorage.getItem("tt:toolbarVisible")).toBe("0")
+  })
+
+  it("zooms the whole interface and restores the default", () => {
+    openSettings()
+    fireEvent.click(screen.getByRole("button", { name: "Interface" }))
+    fireEvent.change(screen.getByLabelText("Zoom"), { target: { value: "125" } })
+    expect(getZoom()).toBe(125)
+    expect(localStorage.getItem("tt:zoom")).toBe("125")
+    expect(document.documentElement.style.getPropertyValue("--app-zoom")).toBe("1.25")
+    fireEvent.change(screen.getByLabelText("Zoom"), { target: { value: "100" } })
+    expect(document.documentElement.style.getPropertyValue("--app-zoom")).toBe("1")
   })
 
   it("applies a color palette across the app and preserves it when changing color mode", () => {

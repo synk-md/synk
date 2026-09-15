@@ -16,9 +16,9 @@
   border: 1px solid var(--tt-card-border-color);
   border-radius: 16px;
   padding: 0;
-  width: min(1040px, calc(100vw - 32px));
+  width: min(1040px, calc(100vw / var(--app-zoom, 1) - 32px));
   max-width: none;
-  max-height: calc(100dvh - 32px);
+  max-height: calc(100dvh / var(--app-zoom, 1) - 32px);
   box-shadow: 0 24px 80px #0004;
   .dark & { color: var(--tt-gray-dark-900); }
   &::backdrop { background: #10121b80; backdrop-filter: blur(3px); }
@@ -30,7 +30,7 @@
   input, select { min-width: 0; padding: 8px 10px; border: 1px solid var(--tt-card-border-color); border-radius: 7px; background: var(--tt-bg-color); font-size: 13px; }
   select { width: 132px; flex-shrink: 0; }
 }
-.settings-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: min(720px, calc(100dvh - 34px)); }
+.settings-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: min(720px, calc(100dvh / var(--app-zoom, 1) - 34px)); }
 .settings-header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--tt-card-border-color); h2 { margin: 0; font-size: 18px; font-weight: 600; } }
 .settings-close { display: flex; padding: 6px; border: 0; background: transparent; border-radius: 6px; }
 .settings-sidebar { display: flex; flex-direction: column; padding: 20px 12px; border-right: 1px solid var(--tt-card-border-color); background: var(--tt-sidebar-bg-color); nav { display: grid; gap: 4px; } nav button { display: flex; align-items: center; gap: 10px; text-align: left; padding: 10px 12px; border: 0; background: transparent; border-radius: 7px; font-size: 13px; } nav button:hover { background: var(--tt-gray-light-a-100); } nav button[aria-current] { background: rgba(128, 128, 128, .18); font-weight: 600; } }
@@ -44,7 +44,8 @@
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; border-top: 1px solid var(--tt-card-border-color); }
 .settings-row-copy { label { display: block; font-size: 14px; font-weight: 500; } p { margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: var(--tt-color-text-gray); } }
 .settings-category-label { display: block; color: var(--tt-color-text-gray); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 7px; }
-.settings-switch { flex-shrink: 0; width: 34px; height: 20px; padding: 3px; border: 0; border-radius: 20px; background: var(--tt-gray-light-400); span { display: block; height: 14px; width: 14px; border-radius: 50%; background: white; transition: transform .15s; } &[aria-checked="true"] { background: var(--tt-brand-color-500); span { transform: translateX(14px); } } }
+.settings-switch { flex-shrink: 0; width: 34px; height: 20px; padding: 3px; border: 0; border-radius: 20px; background: var(--tt-gray-light-400); .dark & { background: var(--tt-gray-dark-400); } span { display: block; height: 14px; width: 14px; border-radius: 50%; background: white; transition: transform .15s; } &[aria-checked="true"] { background: var(--tt-brand-color-400); span { transform: translateX(14px); } } }
+.settings-dialog .settings-switch:focus, .settings-dialog .settings-switch:focus-visible { outline: none; }
 .settings-name { display: flex; flex-wrap: wrap; gap: 6px; width: 180px; flex-shrink: 0; input { width: 100%; } }
 .settings-name button, .settings-empty button { border: 1px solid var(--tt-card-border-color); border-radius: 6px; background: var(--tt-bg-color); padding: 6px 12px; font-size: 12px; }
 .settings-empty { text-align: center; padding: 48px 0; color: var(--tt-color-text-gray); h4 { color: inherit; margin: 16px 0 8px; } p { font-size: 13px; } }
