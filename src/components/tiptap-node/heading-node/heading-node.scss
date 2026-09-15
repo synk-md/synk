@@ -36,3 +36,8 @@
     margin-top: 2em;
   }
 }
+
+.tiptap.ProseMirror {
+  h1 { color: var(--custom-title-color, inherit); }
+  h2, h3, h4, h5, h6 { color: var(--custom-subtitle-color, inherit); }
+}

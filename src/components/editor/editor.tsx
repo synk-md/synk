@@ -111,6 +111,8 @@ import { useFileCommands } from "@/components/custom-ui/file-browser/use-file-co
 
 // --- Components ---
 import { ThemeToggle } from "./theme-toggle"
+import { SettingsMenu } from "@/components/custom-ui/settings-menu/settings-menu"
+import { useEditorSettings } from "@/components/custom-ui/ui-store/editor-settings-store"
 
 // --- Lib ---
 import { handleImageUpload } from "@/lib/tiptap-utils"
@@ -480,6 +482,7 @@ export function SimpleEditor({
     return title?.trim() || "Untitled"
   }, [activeTitleNoteId, fs.tree, title])
   const [titleDraft, setTitleDraft] = React.useState(activeTitle)
+  const editorSettings = useEditorSettings()
   const toolbarVisible = useToolbarVisible();
   const inlineTitleVisible = useInlineTitleVisible();
 
@@ -1431,6 +1434,17 @@ export function SimpleEditor({
     indexProvider.awareness.setLocalStateField("user", currentUser)
   }, [fileSystem.indexProvider, collaborationActive, currentUser])
 
+  React.useEffect(() => {
+    if (!editor || editor.isDestroyed) return
+    editor.setOptions({ editorProps: { attributes: {
+      autocomplete: "off", autocorrect: "off", autocapitalize: "off",
+      spellcheck: String(editorSettings.spellcheck),
+      "aria-label": "Main content area, start typing to enter text.",
+      class: "simple-editor",
+      style: `--editor-font-size: ${editorSettings.fontSize}px`,
+    } } })
+  }, [editor, editorSettings])
+
   const rect = useCursorVisibility({
     editor,
     ready: editorReady,
@@ -1498,6 +1512,7 @@ export function SimpleEditor({
                 </Button>
               </div>
             )}
+            <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} />
           </div>
 
           {!showFileBrowser && (
@@ -1521,6 +1536,7 @@ export function SimpleEditor({
               />
             </div>
           </div>
+          <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} />
         </div>
       )}
       <div className="editor-wrapper">

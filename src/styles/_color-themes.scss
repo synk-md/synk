@@ -1,0 +1,83 @@
+@use "sass:color";
+@use "sass:map";
+
+// Each palette supplies both a light and a dark workspace. Shared tokens also
+// reach portaled menus/dialogs and components that use the underlying gray scale.
+$palettes: (
+  "sandstone": (light: #faf6ee, sidebar: #eee5d6, ink: #3e3429, dark: #211d18, dark-sidebar: #2c261f, dark-ink: #eee4d5, accent: #986632, dark-accent: #d5aa73),
+  "forest": (light: #f3f7f1, sidebar: #e1ebde, ink: #293d30, dark: #17221c, dark-sidebar: #202f25, dark-ink: #e0ecdf, accent: #3d7550, dark-accent: #92c6a0),
+  "rose": (light: #fcf4f4, sidebar: #f0e1e4, ink: #493339, dark: #281c22, dark-sidebar: #35262e, dark-ink: #f0e1e6, accent: #a04e67, dark-accent: #db9eb1),
+  "ocean": (light: #f1f7fa, sidebar: #deebf0, ink: #293e4b, dark: #16232c, dark-sidebar: #20323e, dark-ink: #dceaf1, accent: #316e8c, dark-accent: #8cbfd7),
+);
+
+@mixin palette-tokens($bg, $sidebar, $ink, $accent, $mode) {
+  @each $step, $weight in (50: 2%, 100: 6%, 200: 12%, 300: 22%, 400: 40%, 500: 54%, 600: 68%, 700: 80%, 800: 92%, 900: 100%) {
+    --tt-gray-#{$mode}-#{$step}: #{color.mix($ink, $bg, $weight)};
+  }
+  @each $step, $alpha in (50: .04, 100: .07, 200: .12, 300: .22, 400: .4, 500: .55, 600: .7, 700: .8, 800: .9, 900: .98) {
+    --tt-gray-#{$mode}-a-#{$step}: #{color.change($ink, $alpha: $alpha)};
+  }
+  --tt-gray-#{$mode}-100: #{$sidebar};
+  --tt-gray-dark-25: #{$bg};
+  --tt-bg-color: #{$bg};
+  --tt-sidebar-bg-color: #{$sidebar};
+  --tt-card-bg-color: #{color.mix($sidebar, $bg, 25%)};
+  --tt-toolbar-bg-color: #{$bg};
+  --tt-toolbar-border-color: #{color.change($ink, $alpha: .12)};
+  --tt-color-text-gray: #{color.mix($ink, $bg, 68%)};
+  --tt-border-color: #{color.change($ink, $alpha: .16)};
+  --tt-card-border-color: #{color.change($ink, $alpha: .12)};
+  --tt-border-color-tint: #{color.change($ink, $alpha: .08)};
+  --tt-scrollbar-color: #{color.change($ink, $alpha: .22)};
+  --tt-selection-color: #{color.change($accent, $alpha: .22)};
+  --tt-accent-tint-color: #{color.mix($accent, $bg, 14%)};
+  --tt-cursor-color: #{$accent};
+  --app-theme-ink: #{$ink};
+  --app-theme-accent: #{$accent};
+  @each $step, $weight in (50: 8%, 100: 15%, 200: 30%, 250: 40%, 300: 60%, 400: 85%, 500: 100%) {
+    --tt-brand-color-#{$step}: #{color.mix($accent, $bg, $weight)};
+  }
+  @each $step, $weight in (600: 10%, 700: 20%, 800: 30%, 900: 40%, 950: 50%) {
+    --tt-brand-color-#{$step}: #{color.mix($ink, $accent, $weight)};
+  }
+}
+
+@each $name, $palette in $palettes {
+  :root[data-color-theme="#{$name}"], .theme-preview[data-color-theme="#{$name}"] {
+    @include palette-tokens(map.get($palette, light), map.get($palette, sidebar), map.get($palette, ink), map.get($palette, accent), "light");
+  }
+  :root.dark[data-color-theme="#{$name}"], .dark .theme-preview[data-color-theme="#{$name}"] {
+    @include palette-tokens(map.get($palette, dark), map.get($palette, dark-sidebar), map.get($palette, dark-ink), map.get($palette, dark-accent), "dark");
+  }
+}
+
+// These screens have their own local palette rather than the shared UI tokens.
+:root[data-color-theme]:not([data-color-theme="classic"]) {
+  color: var(--app-theme-ink);
+  background: var(--tt-bg-color);
+
+  .first-run {
+    --bg: var(--tt-bg-color);
+    --surface: var(--tt-card-bg-color);
+    --surface2: var(--tt-sidebar-bg-color);
+    --ink: var(--app-theme-ink);
+    --muted: var(--tt-color-text-gray);
+    --line: var(--tt-border-color);
+    --accent: var(--app-theme-accent);
+    --accent-grad: var(--tt-accent-tint-color);
+    --accent-tint: var(--tt-accent-tint-color);
+    --accent-ink: var(--app-theme-ink);
+    --ripple: var(--app-theme-accent);
+  }
+  .not-found, .not-found__card { background: var(--tt-card-bg-color); color: var(--app-theme-ink); }
+  .not-found__description, .not-found__eyebrow, .not-found__code { color: var(--tt-color-text-gray); }
+  .not-found__button { background: var(--tt-accent-tint-color); color: var(--app-theme-ink); }
+  .file-tree { --fe-selected-bg: var(--tt-selection-color); }
+  .tiptap-dropdown-menu { --tt-dropdown-menu-bg-color: var(--tt-card-bg-color); }
+  .tiptap-popover { --tt-popover-bg-color: var(--tt-card-bg-color); }
+  .tiptap-card { --tiptap-card-bg-color: var(--tt-card-bg-color); }
+  .editing-identity-bubble { background: var(--tt-card-bg-color); }
+  .editing-identity-bubble__text { color: var(--tt-color-text-gray); strong { color: var(--app-theme-ink); } }
+  .editing-identity-bubble__rename { color: var(--app-theme-accent); }
+
+}
