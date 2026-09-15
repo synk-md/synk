@@ -29,6 +29,7 @@
     "@tiptap/extension-list": "link:vendor/tiptap/packages/extension-list",
     "@tiptap/extension-subscript": "link:vendor/tiptap/packages/extension-subscript",
     "@tiptap/extension-superscript": "link:vendor/tiptap/packages/extension-superscript",
+    "@tiptap/extension-table": "link:vendor/tiptap/packages/extension-table",
     "@tiptap/extension-table-of-contents": "link:vendor/tiptap/packages/extension-table-of-contents",
     "@tiptap/extension-text-align": "link:vendor/tiptap/packages/extension-text-align",
     "@tiptap/extension-typography": "link:vendor/tiptap/packages/extension-typography",

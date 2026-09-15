@@ -1,7 +1,17 @@
 import { FormatIcon } from "@/components/tiptap-icons/format-icon";
 import { ToolbarIcon } from "@/components/tiptap-icons/toolbar-icon";
 
-import { RiDownloadLine } from "@remixicon/react";
+import {
+  RiDeleteBin6Line,
+  RiDownloadLine,
+  RiInsertColumnLeft,
+  RiInsertColumnRight,
+  RiInsertRowBottom,
+  RiInsertRowTop,
+  RiMergeCellsHorizontal,
+  RiSplitCellsHorizontal,
+  RiTable2,
+} from "@remixicon/react";
 
 import type { MenuItem, MenuSpec } from "./menu-types";
 import { Actions, Clipboard, Download } from "./actions";
@@ -38,6 +48,60 @@ export const imageSpec: MenuSpec = (_ctx) => [
   Actions.separator(),
   { ...Actions.deleteNode(), id: "delete-image", label: "Delete image", dangerous: true },
 ];
+
+export const tableSpec: MenuSpec = (ctx) => {
+  const { editor } = ctx;
+  const icon = (Icon: typeof RiTable2) => <Icon className="tiptap-button-icon" />;
+  const cmd = (id: string, label: string, Icon: typeof RiTable2, command: string, extra: Partial<MenuItem> = {}): MenuItem => ({
+    id,
+    label,
+    icon: icon(Icon),
+    // `editor.can()` checks against the current (cell) selection, so e.g.
+    // "Merge cells" is only enabled with multiple cells selected.
+    isEnabled: () => editor.isEditable && (editor.can() as any)[command](),
+    run: () => { (editor.chain().focus() as any)[command]().run(); },
+    ...extra,
+  });
+
+  return [
+    Clipboard.cut(),
+    Clipboard.copy(),
+    { ...Clipboard.paste(), separatorAfter: true },
+    {
+      id: "table-rows",
+      label: "Rows",
+      icon: icon(RiInsertRowBottom),
+      children: [
+        cmd("row-before", "Insert row above", RiInsertRowTop, "addRowBefore"),
+        cmd("row-after", "Insert row below", RiInsertRowBottom, "addRowAfter"),
+        cmd("toggle-header-row", "Toggle header row", RiTable2, "toggleHeaderRow", { separatorBefore: true }),
+        cmd("row-delete", "Delete row", RiDeleteBin6Line, "deleteRow", { dangerous: true, separatorBefore: true }),
+      ],
+    },
+    {
+      id: "table-columns",
+      label: "Columns",
+      icon: icon(RiInsertColumnRight),
+      children: [
+        cmd("col-before", "Insert column left", RiInsertColumnLeft, "addColumnBefore"),
+        cmd("col-after", "Insert column right", RiInsertColumnRight, "addColumnAfter"),
+        cmd("toggle-header-col", "Toggle header column", RiTable2, "toggleHeaderColumn", { separatorBefore: true }),
+        cmd("col-delete", "Delete column", RiDeleteBin6Line, "deleteColumn", { dangerous: true, separatorBefore: true }),
+      ],
+    },
+    {
+      id: "table-cells",
+      label: "Cells",
+      icon: icon(RiMergeCellsHorizontal),
+      children: [
+        cmd("merge-cells", "Merge cells", RiMergeCellsHorizontal, "mergeCells"),
+        cmd("split-cell", "Split cell", RiSplitCellsHorizontal, "splitCell"),
+      ],
+      separatorAfter: true,
+    },
+    cmd("delete-table", "Delete table", RiDeleteBin6Line, "deleteTable", { dangerous: true }),
+  ];
+};
 
 export const linkSpec: MenuSpec = () => [
   { id: "link-title", label: "Link", separatorAfter: true },

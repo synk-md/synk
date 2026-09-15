@@ -17,6 +17,7 @@ import * as Y from "yjs"
 import { AssetImage } from "@/components/tiptap-node/image-node/image-node-extension"
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
 import { NoteLink } from "@/components/tiptap-node/note-link-node/note-link-node-extension"
+import { Table } from "@/components/tiptap-node/table-node/table-node-extension"
 import { getMarkdownContent } from "@/extensions/markdown-conversion"
 import { getOrCreateYDoc } from "@/lib/yjs-utils"
 
@@ -47,6 +48,7 @@ async function renderNoteContent(doc: Y.Doc, format: NoteExportFormat): Promise<
       Highlight.configure({ multicolor: true }),
       AssetImage,
       NoteLink,
+      Table,
       Typography,
       Superscript,
       Subscript,

@@ -66,6 +66,66 @@ const noteLinkHandler = (state: any, node: any) => {
   state.write(`[${label}](note:${noteId})`)
 }
 
+/**
+ * Render one table cell as a single line of inline Markdown. GFM table cells
+ * can't hold block content, so multiple paragraphs / hard breaks become
+ * <br> and non-textblock children (lists, code blocks…) fall back to text.
+ */
+function renderTableCell(state: any, cell: any): string {
+  const parts: string[] = []
+  cell.forEach((child: any) => {
+    if (child.isTextblock) {
+      // Render into a scratch buffer, without the enclosing block's line
+      // prefix (e.g. "> " inside a blockquote) — the row adds that itself.
+      const { out, delim } = state
+      state.out = ''
+      state.delim = ''
+      state.renderInline(child)
+      parts.push(state.out)
+      state.out = out
+      state.delim = delim
+    } else {
+      parts.push(state.esc(child.textContent))
+    }
+  })
+  return parts
+    .join('<br>')
+    .replace(/\\\n/g, '<br>')
+    .replace(/\n/g, ' ')
+    .replace(/\|/g, '\\|')
+    .trim()
+}
+
+/** Serialize a table as a GFM pipe table. The first row is always the header row. */
+function tableHandler(state: any, node: any) {
+  // Flush the pending block separation now — otherwise the first cell's
+  // renderInline would flush it into its scratch buffer and it'd be lost.
+  state.flushClose()
+
+  const rows: string[][] = []
+  node.forEach((row: any) => {
+    const cells: string[] = []
+    row.forEach((cell: any) => {
+      cells.push(renderTableCell(state, cell))
+      // Merged cells have no GFM equivalent; pad so column counts line up.
+      for (let i = 1; i < (cell.attrs?.colspan ?? 1); i++) cells.push('')
+    })
+    rows.push(cells)
+  })
+  if (rows.length === 0) return
+
+  const cols = Math.max(...rows.map((r) => r.length))
+  const line = (cells: string[]) =>
+    '| ' + Array.from({ length: cols }, (_, i) => cells[i] ?? '').join(' | ') + ' |'
+
+  const lines = [rows[0], Array(cols).fill('---'), ...rows.slice(1)]
+  lines.forEach((cells, i) => {
+    if (i > 0) state.ensureNewLine()
+    state.write(line(cells))
+  })
+  state.closeBlock(node)
+}
+
 /** Serialize a single task item line: "- [ ] text" or "- [x] text" */
 function writeTaskItem(state: any, node: any) {
   const checked =
@@ -89,6 +149,7 @@ const nodeHandlers = {
   ...defaultMarkdownSerializer.nodes,
   image: imageHandler,
   noteLink: noteLinkHandler,
+  table: tableHandler,
 
   // Tiptap uses camelCase node names; provide aliases to default handlers:
   bulletList: defaultMarkdownSerializer.nodes.bullet_list,

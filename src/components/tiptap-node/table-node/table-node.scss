@@ -1,0 +1,85 @@
+.tiptap.ProseMirror {
+  --tt-table-border: var(--tt-gray-light-a-200);
+  --tt-table-header-bg: var(--tt-gray-light-a-50);
+
+  .dark & {
+    --tt-table-border: var(--tt-gray-dark-a-200);
+    --tt-table-header-bg: var(--tt-gray-dark-a-50);
+  }
+}
+
+/* =====================
+     TABLE
+     ===================== */
+.tiptap.ProseMirror {
+  .tableWrapper {
+    position: relative;
+    margin: 1.5em 0;
+    overflow-x: auto;
+  }
+
+  // Scratch area the table node view lays cell copies out in, unwrapped, to
+  // measure how wide each column's content wants to be.
+  .table-measure {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    overflow: hidden;
+    visibility: hidden;
+    pointer-events: none;
+
+    table {
+      width: max-content;
+      table-layout: auto;
+      white-space: pre;
+    }
+  }
+
+  table {
+    border-collapse: collapse;
+    // Always spans the text column; column widths are set as percentages by
+    // the table node view from measured content (see table-node-extension.ts).
+    table-layout: fixed;
+    width: 100%;
+    margin: 0;
+    overflow: hidden;
+
+    td,
+    th {
+      position: relative;
+      box-sizing: border-box;
+      min-width: 1em;
+      padding: 0.375rem 0.5rem;
+      border: 1px solid var(--tt-table-border);
+      vertical-align: top;
+      overflow-wrap: break-word;
+      text-align: left;
+
+      > * {
+        margin-top: 0;
+        margin-bottom: 0;
+      }
+
+      > * + * {
+        margin-top: 0.5em;
+      }
+    }
+
+    th {
+      font-weight: 600;
+      background-color: var(--tt-table-header-bg);
+    }
+
+    // Cell selection (drag across cells, or merge/split targets)
+    .selectedCell::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--tt-selection-color);
+      pointer-events: none;
+      z-index: 2;
+    }
+  }
+}

@@ -65,6 +65,9 @@ importers:
       '@tiptap/extension-superscript':
         specifier: link:vendor/tiptap/packages/extension-superscript
         version: link:vendor/tiptap/packages/extension-superscript
+      '@tiptap/extension-table':
+        specifier: link:vendor/tiptap/packages/extension-table
+        version: link:vendor/tiptap/packages/extension-table
       '@tiptap/extension-table-of-contents':
         specifier: link:vendor/tiptap/packages/extension-table-of-contents
         version: link:vendor/tiptap/packages/extension-table-of-contents

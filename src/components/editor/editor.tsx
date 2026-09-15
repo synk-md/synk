@@ -29,6 +29,7 @@ import {
 import { AssetImage, SELECTION_AWARENESS_FIELD } from "@/components/tiptap-node/image-node/image-node-extension"
 import { HorizontalRule } from "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node-extension"
 import { NoteLink, type NoteLinkApi } from "@/components/tiptap-node/note-link-node/note-link-node-extension"
+import { Table } from "@/components/tiptap-node/table-node/table-node-extension"
 import "@/components/tiptap-node/blockquote-node/blockquote-node.scss"
 import "@/components/tiptap-node/code-block-node/code-block-node.scss"
 import "@/components/tiptap-node/horizontal-rule-node/horizontal-rule-node.scss"
@@ -37,6 +38,7 @@ import "@/components/tiptap-node/image-node/image-node.scss"
 import "@/components/tiptap-node/note-link-node/note-link-node.scss"
 import "@/components/tiptap-node/heading-node/heading-node.scss"
 import "@/components/tiptap-node/paragraph-node/paragraph-node.scss"
+import "@/components/tiptap-node/table-node/table-node.scss"
 
 // --- Tiptap UI ---
 import { HeadingDropdownMenu } from "@/components/tiptap-ui/heading-dropdown-menu"
@@ -44,6 +46,7 @@ import { ImageUploadButton, type ImageUploadFn } from "@/components/tiptap-ui/im
 import { ListDropdownMenu } from "@/components/tiptap-ui/list-dropdown-menu"
 import { BlockquoteButton } from "@/components/tiptap-ui/blockquote-button"
 import { CodeBlockButton } from "@/components/tiptap-ui/code-block-button"
+import { TableButton } from "@/components/tiptap-ui/table-button"
 import {
   ColorHighlightPopover,
   ColorHighlightPopoverContent,
@@ -82,7 +85,7 @@ import { SharedNoteBar, SyncStatusIndicator, ViewOnlyBanner, EditingIdentityBubb
 import { ContextMenu } from "@/components/custom-ui/context-menu"
 import { resolveSpec, type MenuRoute } from "@/components/custom-ui/context-menu/menu-router";
 import { whenAnyPathIncludes, whenDomMatches, whenToolbar, whenEditor, whenEditorPanel, whenTabbar } from "@/components/custom-ui/context-menu/predicates";
-import { headingSpec, imageSpec, defaultSpec, editorSpec, textSpec, toolbarSpec, toolbarMoreSpec, tabbarSpec } from "@/components/custom-ui/context-menu/specs";
+import { headingSpec, imageSpec, tableSpec, defaultSpec, editorSpec, textSpec, toolbarSpec, toolbarMoreSpec, tabbarSpec } from "@/components/custom-ui/context-menu/specs";
 
 // --- Collaboration ---
 import Collaboration from '@tiptap/extension-collaboration'
@@ -209,6 +212,7 @@ const MainToolbarContent = ({
 
       <ToolbarGroup>
         <ImageUploadButton text="Add" upload={uploadImage} />
+        <TableButton />
       </ToolbarGroup>
 
       <ToolbarSeparator />
@@ -869,6 +873,7 @@ export function SimpleEditor({
         awareness: collaborationActive && providerReady ? providerRef.current?.awareness : null,
       }),
       NoteLink.configure({ api: getNoteLinkApi }),
+      Table,
       Typography,
       Superscript,
       Subscript,
@@ -1377,6 +1382,7 @@ export function SimpleEditor({
     // DOM-based (not posAtCoords-based) so it can't drift to a neighboring
     // image when the click lands on a resize handle near the node's edge.
     { id: "image", when: whenDomMatches(".asset-image-node"), spec: imageSpec, priority: 90 },
+    { id: "table", when: whenAnyPathIncludes("table"), spec: tableSpec, priority: 70 },
     { id: "editor-panel", when: whenEditorPanel, spec: editorSpec, priority: 1 },
   ];
 
