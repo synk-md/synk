@@ -4,7 +4,7 @@ import { RiSettings3Line, RiCloseLine, RiSearchLine, RiUserLine, RiPaletteLine, 
 import { Button } from "@/components/tiptap-ui-primitive/button"
 import { useTheme, useColorTheme, colorThemes, type Theme } from "@/components/custom-ui/ui-store/theme-store"
 import { useToolbarVisible, setToolbarVisible, useInlineTitleVisible, setInlineTitleVisible } from "@/components/custom-ui/ui-store/ui-store"
-import { useEditorSettings, setEditorSettings, lineWidths, type LineWidth } from "@/components/custom-ui/ui-store/editor-settings-store"
+import { useEditorSettings, setEditorSettings, lineWidths, editorFonts, editorFontGroups, type LineWidth, type EditorFont } from "@/components/custom-ui/ui-store/editor-settings-store"
 import { useTextColors, setTextColor } from "@/components/custom-ui/ui-store/text-colors-store"
 import { useZoom, zoomLevels, type ZoomLevel } from "@/components/custom-ui/ui-store/zoom-store"
 import "./settings-menu.scss"
@@ -82,6 +82,8 @@ export function SettingsMenu({ name, onNameChange }: { name: string; onNameChang
       control: toggle("toolbar", toolbarVisible, setToolbarVisible) },
     { id: "inline-title", category: "interface", label: "Note title", description: "Show an editable title at the top of each note.", keywords: "inline heading",
       control: toggle("inline-title", titleVisible, setInlineTitleVisible) },
+    { id: "editor-font", category: "editor", label: "Font", description: "The typeface for note titles and text.", keywords: "typeface serif sans mono monospace family",
+      control: <select id="editor-font" value={editorSettings.font} onChange={event => setEditorSettings({ font: event.target.value as EditorFont })}>{editorFontGroups.map(group => <optgroup key={group} label={group}>{editorFonts.filter(item => item.group === group).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</optgroup>)}</select> },
     { id: "font-size", category: "editor", label: "Text size", description: "Adjust the reading and writing size on this device.", keywords: "font zoom",
       control: <select id="font-size" value={editorSettings.fontSize} onChange={event => setEditorSettings({ fontSize: Number(event.target.value) })}>{[14, 16, 18, 20].map(size => <option key={size} value={size}>{size} px</option>)}</select> },
     { id: "line-width", category: "editor", label: "Line length", description: "Set how wide the note text can grow.", keywords: "width readable column wide narrow full",

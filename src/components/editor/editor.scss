@@ -63,7 +63,7 @@ body,
 }
 
 .tiptap.ProseMirror {
-  font-family: "DM Sans", sans-serif;
+  font-family: var(--editor-font-family, "DM Sans", sans-serif);
 }
 
 .gray-text {
@@ -99,7 +99,7 @@ body,
   outline: 0;
   background: transparent;
   color: var(--custom-title-color, inherit);
-  font-family: "DM Sans", sans-serif;
+  font-family: var(--editor-font-family, "DM Sans", sans-serif);
   font-size: 2rem;
   font-weight: 700;
   line-height: 1.2;

@@ -11,7 +11,7 @@ beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.open = true }
   HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new Event("close")) }
 })
-afterEach(() => { cleanup(); setTextColor(null); setTheme("system"); setColorTheme("classic"); setToolbarVisible(true); setZoom(100); setEditorSettings({ lineWidth: "medium" }) })
+afterEach(() => { cleanup(); setTextColor(null); setTheme("system"); setColorTheme("classic"); setToolbarVisible(true); setZoom(100); setEditorSettings({ lineWidth: "medium", font: "dm-sans" }) })
 function openSettings() {
   const onNameChange = vi.fn()
   render(<SettingsMenu name="River" onNameChange={onNameChange} />)
@@ -54,6 +54,15 @@ describe("Settings menu", () => {
     expect(document.documentElement.style.getPropertyValue("--app-zoom")).toBe("1.25")
     fireEvent.change(screen.getByLabelText("Zoom"), { target: { value: "100" } })
     expect(document.documentElement.style.getPropertyValue("--app-zoom")).toBe("1")
+  })
+
+  it("changes and saves the note font", () => {
+    openSettings()
+    fireEvent.click(screen.getByRole("button", { name: "Editor" }))
+    fireEvent.change(screen.getByLabelText("Font"), { target: { value: "literata" } })
+    expect(screen.getByLabelText("Font")).toHaveValue("literata")
+    expect(JSON.parse(localStorage.getItem("tt:editorSettings")!).font).toBe("literata")
+    expect(document.head.querySelector('link[data-editor-font="literata"]')).toHaveAttribute("href", expect.stringContaining("family=Literata"))
   })
 
   it("changes and saves the line length", () => {
