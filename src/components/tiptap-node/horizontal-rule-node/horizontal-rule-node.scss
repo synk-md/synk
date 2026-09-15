@@ -13,13 +13,20 @@
   hr {
     border: none;
     height: 1px;
+    margin: 0;
     background-color: var(--horizontal-rule-color);
   }
 
   [data-type="horizontalRule"] {
-    margin-top: 2.25em;
-    margin-bottom: 2.25em;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 2.5rem;
+    padding-bottom: 2.5rem;
+
+    // The rule's padding provides the spacing, so drop the next block's top margin
+    + *,
+    + p:not(:first-child) {
+      margin-top: 0;
+    }
   }
 }

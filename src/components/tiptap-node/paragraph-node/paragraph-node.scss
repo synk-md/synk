@@ -34,6 +34,10 @@
   caret-color: var(--tt-cursor-color);
 
   // Paragraph spacing
+  p {
+    margin-bottom: 0;
+  }
+
   p:not(:first-child) {
     font-size: 1rem;
     line-height: 1.6;
