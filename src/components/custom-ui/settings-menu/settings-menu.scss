@@ -45,7 +45,10 @@
 .settings-row-copy { label { display: block; font-size: 14px; font-weight: 500; } p { margin: 6px 0 0; font-size: 12px; line-height: 1.6; color: var(--tt-color-text-gray); } }
 .settings-category-label { display: block; color: var(--tt-color-text-gray); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 7px; }
 .settings-switch { flex-shrink: 0; width: 34px; height: 20px; padding: 3px; border: 0; border-radius: 20px; background: var(--tt-gray-light-400); .dark & { background: var(--tt-gray-dark-400); } span { display: block; height: 14px; width: 14px; border-radius: 50%; background: white; transition: transform .15s; } &[aria-checked="true"] { background: var(--tt-brand-color-400); span { transform: translateX(14px); } } }
-.settings-dialog .settings-switch:focus, .settings-dialog .settings-switch:focus-visible { outline: none; }
+.settings-dialog .settings-switch:focus, .settings-dialog .settings-switch:focus-visible,
+.settings-dialog select:focus, .settings-dialog select:focus-visible,
+.settings-dialog .settings-name input:focus, .settings-dialog .settings-name input:focus-visible { outline: none; box-shadow: none; }
+.settings-dialog .settings-name input:focus { border-color: var(--tt-color-text-gray); }
 .settings-name { display: flex; flex-wrap: wrap; gap: 6px; width: 180px; flex-shrink: 0; input { width: 100%; } }
 .settings-name button, .settings-empty button { border: 1px solid var(--tt-card-border-color); border-radius: 6px; background: var(--tt-bg-color); padding: 6px 12px; font-size: 12px; }
 .settings-empty { text-align: center; padding: 48px 0; color: var(--tt-color-text-gray); h4 { color: inherit; margin: 16px 0 8px; } p { font-size: 13px; } }
