@@ -5,12 +5,13 @@ import { SettingsMenu } from "./settings-menu"
 import { getTheme, setTheme, getColorTheme, setColorTheme } from "@/components/custom-ui/ui-store/theme-store"
 import { getToolbarVisible, setToolbarVisible } from "@/components/custom-ui/ui-store/ui-store"
 import { getZoom, setZoom } from "@/components/custom-ui/ui-store/zoom-store"
+import { setEditorSettings } from "@/components/custom-ui/ui-store/editor-settings-store"
 
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.open = true }
   HTMLDialogElement.prototype.close = function () { this.open = false; this.dispatchEvent(new Event("close")) }
 })
-afterEach(() => { cleanup(); setTextColor(null); setTheme("system"); setColorTheme("classic"); setToolbarVisible(true); setZoom(100) })
+afterEach(() => { cleanup(); setTextColor(null); setTheme("system"); setColorTheme("classic"); setToolbarVisible(true); setZoom(100); setEditorSettings({ lineWidth: "medium" }) })
 function openSettings() {
   const onNameChange = vi.fn()
   render(<SettingsMenu name="River" onNameChange={onNameChange} />)
@@ -53,6 +54,14 @@ describe("Settings menu", () => {
     expect(document.documentElement.style.getPropertyValue("--app-zoom")).toBe("1.25")
     fireEvent.change(screen.getByLabelText("Zoom"), { target: { value: "100" } })
     expect(document.documentElement.style.getPropertyValue("--app-zoom")).toBe("1")
+  })
+
+  it("changes and saves the line length", () => {
+    openSettings()
+    fireEvent.click(screen.getByRole("button", { name: "Editor" }))
+    fireEvent.change(screen.getByLabelText("Line length"), { target: { value: "wide" } })
+    expect(screen.getByLabelText("Line length")).toHaveValue("wide")
+    expect(JSON.parse(localStorage.getItem("tt:editorSettings")!).lineWidth).toBe("wide")
   })
 
   it("applies a color palette across the app and preserves it when changing color mode", () => {

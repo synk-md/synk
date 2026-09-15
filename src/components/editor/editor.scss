@@ -81,7 +81,7 @@ body,
 
 .simple-editor-content {
   min-width: 0;
-  max-width: 720px;
+  max-width: var(--editor-line-width, 720px);
   width: 0;
   margin: 0 auto;
   height: 100%;

@@ -4,7 +4,7 @@ import { RiSettings3Line, RiCloseLine, RiSearchLine, RiUserLine, RiPaletteLine, 
 import { Button } from "@/components/tiptap-ui-primitive/button"
 import { useTheme, useColorTheme, colorThemes, type Theme } from "@/components/custom-ui/ui-store/theme-store"
 import { useToolbarVisible, setToolbarVisible, useInlineTitleVisible, setInlineTitleVisible } from "@/components/custom-ui/ui-store/ui-store"
-import { useEditorSettings, setEditorSettings } from "@/components/custom-ui/ui-store/editor-settings-store"
+import { useEditorSettings, setEditorSettings, lineWidths, type LineWidth } from "@/components/custom-ui/ui-store/editor-settings-store"
 import { useTextColors, setTextColor } from "@/components/custom-ui/ui-store/text-colors-store"
 import { useZoom, zoomLevels, type ZoomLevel } from "@/components/custom-ui/ui-store/zoom-store"
 import "./settings-menu.scss"
@@ -84,6 +84,8 @@ export function SettingsMenu({ name, onNameChange }: { name: string; onNameChang
       control: toggle("inline-title", titleVisible, setInlineTitleVisible) },
     { id: "font-size", category: "editor", label: "Text size", description: "Adjust the reading and writing size on this device.", keywords: "font zoom",
       control: <select id="font-size" value={editorSettings.fontSize} onChange={event => setEditorSettings({ fontSize: Number(event.target.value) })}>{[14, 16, 18, 20].map(size => <option key={size} value={size}>{size} px</option>)}</select> },
+    { id: "line-width", category: "editor", label: "Line length", description: "Set how wide the note text can grow.", keywords: "width readable column wide narrow full",
+      control: <select id="line-width" value={editorSettings.lineWidth} onChange={event => setEditorSettings({ lineWidth: event.target.value as LineWidth })}>{lineWidths.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select> },
     { id: "spellcheck", category: "editor", label: "Spell check", description: "Use your browser's spell checker while writing.", keywords: "spelling language",
       control: toggle("spellcheck", editorSettings.spellcheck, spellcheck => setEditorSettings({ spellcheck })) },
   ]

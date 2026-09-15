@@ -112,7 +112,7 @@ import { useFileCommands } from "@/components/custom-ui/file-browser/use-file-co
 // --- Components ---
 import { ThemeToggle } from "./theme-toggle"
 import { SettingsMenu } from "@/components/custom-ui/settings-menu/settings-menu"
-import { useEditorSettings } from "@/components/custom-ui/ui-store/editor-settings-store"
+import { useEditorSettings, lineWidths } from "@/components/custom-ui/ui-store/editor-settings-store"
 
 // --- Lib ---
 import { handleImageUpload } from "@/lib/tiptap-utils"
@@ -1736,7 +1736,7 @@ export function SimpleEditor({
                     onClose={() => setPreviewNodeId(null)}
                   />
                 ) : hasActiveNote ? (
-                  <div className="simple-editor-content">
+                  <div className="simple-editor-content" style={{ "--editor-line-width": lineWidths.find(item => item.id === editorSettings.lineWidth)!.width } as React.CSSProperties}>
                     {inlineTitleVisible && (
                       <input
                         ref={titleInputRef}
