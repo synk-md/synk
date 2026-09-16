@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
 
 declare module 'markdown-it-task-lists' {
   import type MarkdownIt from 'markdown-it'

@@ -29,6 +29,16 @@ function apply(themeToApply: Theme) {
   document.documentElement.classList.toggle("dark", dark);
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
   document.documentElement.dataset.colorTheme = colorTheme;
+  syncThemeColorMeta();
+}
+
+// Keeps the browser/OS chrome (mobile status bar, installed-app title bar) in
+// step with whichever palette is active, rather than a single hardcoded color.
+function syncThemeColorMeta() {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+  if (!meta) return;
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--tt-bg-color").trim();
+  if (bg) meta.content = bg;
 }
 
 export function bootTheme() {
