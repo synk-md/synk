@@ -34,6 +34,30 @@ export function isImportableNoteFile(file: File) {
     || file.type === "application/json"
 }
 
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+  avif: "image/avif",
+  bmp: "image/bmp",
+  ico: "image/x-icon",
+  tif: "image/tiff",
+  tiff: "image/tiff",
+  heic: "image/heic",
+  heif: "image/heif",
+}
+
+export function imageMimeType(file: File): string | undefined {
+  return file.type.startsWith("image/") ? file.type : IMAGE_MIME_TYPES[extensionOf(file.name)]
+}
+
+export function isImportableFolderFile(file: File) {
+  return extensionOf(file.name) === "md" || Boolean(imageMimeType(file))
+}
+
 export function plainTextToDoc(raw: string) {
   const lines = raw.length ? raw.split("\n") : [""]
   return {

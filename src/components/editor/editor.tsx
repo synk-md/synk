@@ -119,12 +119,12 @@ import { useEditorSettings, lineWidths, editorFonts } from "@/components/custom-
 import { handleImageUpload } from "@/lib/tiptap-utils"
 import { getOrCreateYDoc, SIGNALING_SERVERS } from "@/lib/yjs-utils"
 import { setNoteTitle, getNoteLinkAccess, setNoteLinkAccess, getNoteOwnerName, setNoteOwnerName, isNoteLinkAccessInherited, setNoteLinkAccessInherited, type LinkAccess } from "@/lib/note-meta"
-import { getImageAsset } from "@/lib/image-assets"
+import { getImageAsset, storeImageAsset } from "@/lib/image-assets"
 import { getOrCreateGuestIdentity, setGuestName } from "@/lib/guest-identity"
 import { P2PImageAssetTransfer } from "@/lib/p2p-image-assets"
 import { downloadFile } from "@/lib/download-file"
 import { exportNoteContent, fileExtensionForFormat, mimeTypeForFormat, type NoteExportFormat } from "@/lib/note-export"
-import { importNoteContent, type NoteImportItem } from "@/lib/note-import"
+import { imageMimeType, importNoteContent, type NoteImportItem } from "@/lib/note-import"
 import { NoteImageRefIndex } from "@/lib/note-image-refs"
 
 // --- Styles ---
@@ -1201,13 +1201,19 @@ export function SimpleEditor({
             targetParentId = await ensureImportFolder(targetParentId, segment, cachePath)
           }
 
-          const raw = await file.text()
           const title = file.name.replace(/\.[^./\\]+$/, "") || "Untitled"
-          const newNoteId = await createNote(title, targetParentId)
-          await importNoteContent(notebookId, newNoteId as string, file.name, raw, {
-            title,
-            createdAt: Date.now(),
-          })
+          const mimeType = imageMimeType(file)
+          if (mimeType) {
+            const { assetId } = await storeImageAsset(file.slice(0, file.size, mimeType))
+            fs.createNode(targetParentId, { name: title, isFolder: false, assetId })
+          } else {
+            const raw = await file.text()
+            const newNoteId = await createNote(title, targetParentId)
+            await importNoteContent(notebookId, newNoteId as string, file.name, raw, {
+              title,
+              createdAt: Date.now(),
+            })
+          }
         } catch (e) {
           console.error(`Failed to import note from ${file.name}:`, e)
         }
@@ -1219,7 +1225,7 @@ export function SimpleEditor({
         }
       }
     },
-    [canCreateNodes, createFolder, createNote, fs.tree, notebookId, rootId],
+    [canCreateNodes, createFolder, createNote, fs.createNode, fs.tree, notebookId, rootId],
   )
 
   const handleOpenMoveTo = React.useCallback((ids: NodeId[]) => {

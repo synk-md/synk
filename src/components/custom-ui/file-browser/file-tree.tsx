@@ -4,7 +4,7 @@ import { MenuSurface, type MenuSpec, type MenuItem } from "@/components/custom-u
 import { findNode, isNoteNode, type TreeNode, type NodeId, type FileTreeSortOrder } from "./tree"
 import { FileNode } from "./file-node"
 import type { NoteExportFormat } from "@/lib/note-export"
-import { isImportableNoteFile, type NoteImportItem } from "@/lib/note-import"
+import { isImportableFolderFile, isImportableNoteFile, type NoteImportItem } from "@/lib/note-import"
 import type { NotePresenceMap } from "@/hooks/use-note-presence"
 
 import { RiEditLine } from '@remixicon/react'
@@ -171,7 +171,8 @@ async function importItemsFromEntry(entry: SynkFileSystemEntry, parentPath = "")
 
   if (entry.isFile) {
     const file = await fileFromEntry(entry as SynkFileSystemFileEntry)
-    return isImportableNoteFile(file) ? [{ file, path }] : []
+    const accepted = parentPath ? isImportableFolderFile(file) : isImportableNoteFile(file)
+    return accepted ? [{ file, path }] : []
   }
 
   if (!entry.isDirectory) return []
@@ -195,7 +196,7 @@ async function noteImportItemsFromDataTransfer(dataTransfer: DataTransfer): Prom
   }
 
   return Array.from(dataTransfer.files)
-    .filter(isImportableNoteFile)
+    .filter((file) => file.webkitRelativePath ? isImportableFolderFile(file) : isImportableNoteFile(file))
     .map((file) => ({ file, path: file.webkitRelativePath || file.name }))
 }
 

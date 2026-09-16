@@ -9,7 +9,7 @@ import {
 } from "@/components/tiptap-ui-primitive/dropdown-menu"
 import { ToolbarGroup } from "@/components/tiptap-ui-primitive/toolbar"
 import type { FileTreeSortOrder } from "@/components/custom-ui/file-browser/tree"
-import { isImportableNoteFile, type NoteImportItem } from "@/lib/note-import"
+import { isImportableFolderFile, isImportableNoteFile, type NoteImportItem } from "@/lib/note-import"
 import {
   RiCheckLine,
   RiCollapseVerticalLine,
@@ -100,12 +100,12 @@ export function FileExplorerToolbar({
           ref={folderInputRef}
           type="file"
           multiple
-          accept=".md,.markdown,.txt,.json,text/markdown,text/plain,application/json"
+          accept=".md,image/*"
           hidden
           {...({ webkitdirectory: "", directory: "" } as Record<string, string>)}
           onChange={(e) => {
             const files = Array.from(e.target.files ?? [])
-              .filter(isImportableNoteFile)
+              .filter(isImportableFolderFile)
               .map((file) => ({
                 file,
                 path: file.webkitRelativePath || file.name,
