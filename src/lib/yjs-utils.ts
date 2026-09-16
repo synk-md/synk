@@ -1,6 +1,8 @@
 import * as Y from "yjs";
 import { customAlphabet } from "nanoid";
 import { IndexeddbPersistence } from "y-indexeddb";
+import { getNoteLinkIndex, trackNoteLinks, deleteNoteLinkIndex } from "./note-link-index";
+import { collectNoteLinks } from "./note-graph";
 import {
   buildTreeFromFlat,
   diffFlatTrees,
@@ -44,8 +46,49 @@ export function getOrCreateYDoc(notebookId: string, noteId: string) {
     const idb = new IndexeddbPersistence(key, doc)
     entry = { doc, idb }
     docs.set(key, entry)
+    trackNoteLinks(notebookId, noteId, doc, idb.whenSynced)
   }
   return entry
+}
+
+const linkBackfills = new Map<string, Promise<void>>()
+
+/** One-time backfill for legacy notes. Read one document at a time and release
+ * temporary documents instead of populating the editor's long-lived cache. */
+export async function ensureNoteLinks(notebookId: string, noteIds: string[], signal?: AbortSignal) {
+  const previous = linkBackfills.get(notebookId) ?? Promise.resolve()
+  const task = previous.catch(() => {}).then(async () => {
+    const index = getNoteLinkIndex(notebookId)
+    await index.idb.whenSynced
+    const pending = new Map<string, string[]>()
+    try {
+      for (const noteId of noteIds) {
+        if (signal?.aborted) return
+        if (index.links.has(noteId) || pending.has(noteId)) continue
+        const cached = docs.get(keyFor(notebookId, noteId))
+        const doc = cached?.doc ?? new Y.Doc()
+        const idb = cached?.idb ?? new IndexeddbPersistence(keyFor(notebookId, noteId), doc)
+        try {
+          await idb.whenSynced
+          if (signal?.aborted) return
+          if (!index.links.has(noteId)) pending.set(noteId, collectNoteLinks(doc))
+        } finally {
+          if (!cached) { await idb.destroy(); doc.destroy() }
+        }
+      }
+    } finally {
+      // Publish a backfill as one change, avoiding N graph rebuilds on startup.
+      // Also preserve completed work if the graph closes during migration.
+      index.doc.transact(() => {
+        for (const [noteId, targets] of pending) {
+          // A live editor's newer index entry always wins over a backfill.
+          if (!index.links.has(noteId)) index.links.set(noteId, targets)
+        }
+      })
+    }
+  })
+  linkBackfills.set(notebookId, task)
+  try { await task } finally { if (linkBackfills.get(notebookId) === task) linkBackfills.delete(notebookId) }
 }
 
 // Deletes a single IndexedDB database by name, used for both per-note docs
@@ -85,6 +128,9 @@ async function deleteIndexedDbDatabase(dbName: string) {
 
 // Deletes a note's Y.Doc from IndexedDB.
 export async function deleteNoteFromIndexedDB(notebookId: string, noteId: string) {
+  const index = getNoteLinkIndex(notebookId)
+  await index.idb.whenSynced
+  index.links.delete(noteId)
   return deleteIndexedDbDatabase(keyFor(notebookId, noteId));
 }
 
@@ -92,6 +138,7 @@ export async function deleteNoteFromIndexedDB(notebookId: string, noteId: string
 // call deleteNoteFromIndexedDB per note first).
 export async function deleteNotebookMetaFromIndexedDB(notebookId: string) {
   await Promise.all([
+    deleteNoteLinkIndex(notebookId),
     deleteIndexedDbDatabase(keyForSettings(notebookId)),
     deleteIndexedDbDatabase(keyForIndex(notebookId)),
   ]);

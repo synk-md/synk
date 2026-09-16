@@ -98,7 +98,8 @@ import { WebrtcProvider } from "y-webrtc"
 import { ArrowLeftIcon } from "@/components/tiptap-icons/arrow-left-icon"
 import { HighlighterIcon } from "@/components/tiptap-icons/highlighter-icon"
 import { LinkIcon } from "@/components/tiptap-icons/link-icon"
-import { RiHome4Line, RiListUnordered, RiSearchLine } from "@remixicon/react"
+import { RiHome4Line, RiListUnordered, RiSearchLine, RiNodeTree } from "@remixicon/react"
+import { NoteGraph } from "@/components/custom-ui/note-graph/note-graph"
 
 // --- Hooks ---
 import { useIsMobile } from "@/hooks/use-mobile"
@@ -436,6 +437,7 @@ export function SimpleEditor({
 
   const [isLeftSidePanelOpen, setIsLeftSidePanelOpen] = React.useState(true)
   const [isRightSidePanelOpen, setIsRightSidePanelOpen] = React.useState(false)
+  const [rightPanelView, setRightPanelView] = React.useState<"outline" | "graph">("outline")
 
   const [items, setItems] = React.useState<TableOfContentDataItem[]>([])
   const [selectedNoteId, setSelectedNoteId] = React.useState<NodeId | undefined | null>(noteId);
@@ -1791,13 +1793,19 @@ export function SimpleEditor({
             side="right"
           >
             <div className="side-panel-header toc-panel-header">
-              <div className="toc-panel-title">
-                <RiListUnordered className="tiptap-button-icon" />
-                <span>Outline</span>
+              <div className="note-panel-switch" role="group" aria-label="Right panel view">
+                <button type="button" aria-pressed={rightPanelView === "outline"} onClick={() => setRightPanelView("outline")}>
+                  <RiListUnordered /><span>Outline</span>
+                </button>
+                <button type="button" aria-pressed={rightPanelView === "graph"} onClick={() => setRightPanelView("graph")}>
+                  <RiNodeTree /><span>Graph</span>
+                </button>
               </div>
             </div>
-            <div className="toc-panel-body">
-              <MemorizedToC editor={editor} items={items} />
+            <div className={`toc-panel-body${rightPanelView === "graph" ? " toc-panel-body--graph" : ""}`}>
+              {rightPanelView === "outline" ? <MemorizedToC editor={editor} items={items} /> : isRightSidePanelOpen && (
+                <NoteGraph key={notebookId} notebookId={notebookId} tree={fs.tree} currentNoteId={activeTabId} onNavigate={handleSelectNote} />
+              )}
             </div>
           </SidePanel>
         </div>
