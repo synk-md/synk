@@ -1,0 +1,45 @@
+.update-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem 0.625rem 1rem;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--share-text, #111827);
+  background: var(--tt-gray-light-50, #eaeaeb);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+
+  .dark & {
+    background: var(--collab-avatar-bg-muted, #111827);
+    color: #f3f4f6;
+  }
+}
+
+.update-toast__reload {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 6px;
+  padding: 0.375rem 0.625rem;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  color: #ffffff;
+  background: var(--tt-brand-color, #2563eb);
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    opacity: 0.9;
+  }
+}

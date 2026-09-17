@@ -12,8 +12,8 @@ export default defineConfig({
     VitePWA({
       // 'prompt' rather than 'autoUpdate': an autoUpdate reloads the tab as
       // soon as a new build is found, which would yank the page out from under
-      // someone mid-edit. Here the new service worker installs and waits until
-      // every tab is closed.
+      // someone mid-edit. Here the new service worker installs and waits for
+      // the user to accept the in-app update toast (see main.tsx).
       registerType: 'prompt',
       includeAssets: ['logo.svg', 'apple-touch-icon.png'],
       manifest: {
