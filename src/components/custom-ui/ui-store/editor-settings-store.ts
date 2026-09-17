@@ -44,14 +44,57 @@ function loadFont(id: EditorFont) {
   link.dataset.editorFont = id
   document.head.appendChild(link)
 }
-type EditorSettings = { spellcheck: boolean; fontSize: number; lineWidth: LineWidth; font: EditorFont }
+export const spellcheckLanguages = [
+  { id: "auto", name: "Browser default" },
+  { id: "en-US", name: "English (US)" },
+  { id: "en-GB", name: "English (UK)" },
+  { id: "en-AU", name: "English (Australia)" },
+  { id: "en-CA", name: "English (Canada)" },
+  { id: "es", name: "Spanish" },
+  { id: "es-MX", name: "Spanish (Mexico)" },
+  { id: "fr", name: "French" },
+  { id: "fr-CA", name: "French (Canada)" },
+  { id: "de", name: "German" },
+  { id: "it", name: "Italian" },
+  { id: "pt-BR", name: "Portuguese (Brazil)" },
+  { id: "pt-PT", name: "Portuguese (Portugal)" },
+  { id: "nl", name: "Dutch" },
+  { id: "sv", name: "Swedish" },
+  { id: "nb", name: "Norwegian" },
+  { id: "da", name: "Danish" },
+  { id: "fi", name: "Finnish" },
+  { id: "is", name: "Icelandic" },
+  { id: "pl", name: "Polish" },
+  { id: "cs", name: "Czech" },
+  { id: "sk", name: "Slovak" },
+  { id: "hu", name: "Hungarian" },
+  { id: "ro", name: "Romanian" },
+  { id: "bg", name: "Bulgarian" },
+  { id: "el", name: "Greek" },
+  { id: "ru", name: "Russian" },
+  { id: "uk", name: "Ukrainian" },
+  { id: "tr", name: "Turkish" },
+  { id: "he", name: "Hebrew" },
+  { id: "ar", name: "Arabic" },
+  { id: "hi", name: "Hindi" },
+  { id: "id", name: "Indonesian" },
+  { id: "vi", name: "Vietnamese" },
+  { id: "th", name: "Thai" },
+  { id: "zh-CN", name: "Chinese (Simplified)" },
+  { id: "zh-TW", name: "Chinese (Traditional)" },
+  { id: "ja", name: "Japanese" },
+  { id: "ko", name: "Korean" },
+] as const
+export type SpellcheckLanguage = typeof spellcheckLanguages[number]["id"]
+type EditorSettings = { spellcheck: boolean; spellcheckLanguage: SpellcheckLanguage; fontSize: number; lineWidth: LineWidth; font: EditorFont }
 const KEY = "tt:editorSettings"
-const defaults: EditorSettings = { spellcheck: false, fontSize: 16, lineWidth: "medium", font: "dm-sans" }
+const defaults: EditorSettings = { spellcheck: false, spellcheckLanguage: "auto", fontSize: 16, lineWidth: "medium", font: "dm-sans" }
 function read(): EditorSettings {
   try {
     const saved = JSON.parse(localStorage.getItem(KEY) ?? "{}")
     return {
       spellcheck: typeof saved?.spellcheck === "boolean" ? saved.spellcheck : defaults.spellcheck,
+      spellcheckLanguage: spellcheckLanguages.find(item => item.id === saved?.spellcheckLanguage)?.id ?? defaults.spellcheckLanguage,
       fontSize: [14, 16, 18, 20].includes(saved?.fontSize) ? saved.fontSize : defaults.fontSize,
       lineWidth: lineWidths.find(item => item.id === saved?.lineWidth)?.id ?? defaults.lineWidth,
       font: editorFonts.find(item => item.id === saved?.font)?.id ?? defaults.font,

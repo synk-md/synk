@@ -1480,6 +1480,7 @@ export function SimpleEditor({
     editor.setOptions({ editorProps: { attributes: {
       autocomplete: "off", autocorrect: "off", autocapitalize: "off",
       spellcheck: String(editorSettings.spellcheck),
+      ...(editorSettings.spellcheckLanguage !== "auto" ? { lang: editorSettings.spellcheckLanguage } : {}),
       "aria-label": "Main content area, start typing to enter text.",
       class: "simple-editor",
       style: `--editor-font-size: ${editorSettings.fontSize}px`,

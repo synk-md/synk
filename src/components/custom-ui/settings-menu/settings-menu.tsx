@@ -4,7 +4,7 @@ import { RiSettings3Line, RiCloseLine, RiSearchLine, RiUserLine, RiPaletteLine, 
 import { Button } from "@/components/tiptap-ui-primitive/button"
 import { useTheme, useColorTheme, colorThemes, type Theme } from "@/components/custom-ui/ui-store/theme-store"
 import { useToolbarVisible, setToolbarVisible, useInlineTitleVisible, setInlineTitleVisible } from "@/components/custom-ui/ui-store/ui-store"
-import { useEditorSettings, setEditorSettings, lineWidths, editorFonts, editorFontGroups, type LineWidth, type EditorFont } from "@/components/custom-ui/ui-store/editor-settings-store"
+import { useEditorSettings, setEditorSettings, lineWidths, editorFonts, editorFontGroups, spellcheckLanguages, type LineWidth, type EditorFont, type SpellcheckLanguage } from "@/components/custom-ui/ui-store/editor-settings-store"
 import { useTextColors, setTextColor } from "@/components/custom-ui/ui-store/text-colors-store"
 import { useZoom, zoomLevels, type ZoomLevel } from "@/components/custom-ui/ui-store/zoom-store"
 import "./settings-menu.scss"
@@ -90,6 +90,11 @@ export function SettingsMenu({ name, onNameChange }: { name: string; onNameChang
       control: <select id="line-width" value={editorSettings.lineWidth} onChange={event => setEditorSettings({ lineWidth: event.target.value as LineWidth })}>{lineWidths.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select> },
     { id: "spellcheck", category: "editor", label: "Spell check", description: "Use your browser's spell checker while writing.", keywords: "spelling language",
       control: toggle("spellcheck", editorSettings.spellcheck, spellcheck => setEditorSettings({ spellcheck })) },
+    { id: "spellcheck-language", category: "editor", label: "Spell check language", description: "The language your browser checks spelling against.", keywords: "spelling locale",
+      control: <select id="spellcheck-language" value={editorSettings.spellcheckLanguage}
+        onChange={event => setEditorSettings({ spellcheckLanguage: event.target.value as SpellcheckLanguage })}>
+        {spellcheckLanguages.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+      </select> },
   ]
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const searching = words.length > 0

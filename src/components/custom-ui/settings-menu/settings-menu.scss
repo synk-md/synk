@@ -29,7 +29,7 @@
   :focus-visible { outline: 2px solid var(--tt-brand-color-500); outline-offset: 3px; }
   input, select { min-width: 0; padding: 8px 10px; border: 1px solid var(--tt-card-border-color); border-radius: 7px; background: var(--tt-bg-color); font-size: 13px; }
   select { width: 132px; flex-shrink: 0; }
-  select#editor-font { width: 200px; }
+  select#editor-font, select#spellcheck-language { width: 200px; }
 }
 .settings-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: min(720px, calc(100dvh / var(--app-zoom, 1) - 34px)); }
 .settings-header { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--tt-card-border-color); h2 { margin: 0; font-size: 18px; font-weight: 600; } }
