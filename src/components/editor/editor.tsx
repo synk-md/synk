@@ -1350,10 +1350,10 @@ export function SimpleEditor({
       providerRef.current?.destroy()
       providerRef.current = null
       editor?.destroy()
-
-      if (note?.doc) {
-        note.doc.destroy()
-      }
+      // note.doc is a shared, cached Y.Doc (see getOrCreateYDoc) that other
+      // parts of the app keep watching (e.g. the note-link tracker feeding
+      // the graph view) — destroying it here would silently kill those
+      // observers the next time this note is reopened in the same session.
     }
   }, [note?.doc, note?.idb])
 

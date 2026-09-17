@@ -172,9 +172,9 @@ export function NoteGraph({ notebookId, tree, currentNoteId, onNavigate }: Props
         )}
       </div>
       <GraphOptions display={display} forces={forces} onDisplayChange={setDisplay} onForcesChange={setForces} />
-      {(loading || failed || !notes.length || !edges.length) && (
+      {(loading || failed || !notes.length) && (
         <p className="note-graph__hint" role="status">
-          {loading ? "Loading note connections…" : failed ? "Some note connections could not be loaded." : !notes.length ? "Create a note to start your graph." : "Link notes with [[ to see connections here."}
+          {loading ? "Loading note connections…" : failed ? "Some note connections could not be loaded." : "Create a note to start your graph."}
         </p>
       )}
     </section>

@@ -41,7 +41,6 @@
   text { fill: var(--graph-text); font-size: 11px; }
   &.is-current circle, &:hover circle, &:focus circle { fill: var(--graph-accent); }
   &:focus { outline: none; }
-  &:focus circle { stroke: var(--graph-text); }
   &.is-current text { font-weight: 600; }
 }
 

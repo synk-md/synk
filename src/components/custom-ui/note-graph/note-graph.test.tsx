@@ -21,7 +21,7 @@ it("updates connections from documents, navigates, renames, and removes observer
     { id: "image", name: "Photo", isFolder: false, assetId: "asset" },
   ] }
   const { rerender, unmount } = render(<NoteGraph notebookId="nb" tree={tree} currentNoteId="a" onNavigate={onNavigate} />)
-  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Link notes with [["))
+  await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument())
   const graph = screen.getByLabelText("Note connections")
   expect(graph.querySelectorAll("line")).toHaveLength(0)
   expect(screen.queryByRole("button", { name: "Zoom in" })).not.toBeInTheDocument()
