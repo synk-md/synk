@@ -1,4 +1,4 @@
-import { isNoteNode, type TreeNode } from "@/components/custom-ui/file-browser/tree"
+import { findNode, isNoteNode, type TreeNode } from "@/components/custom-ui/file-browser/tree"
 import { createNotebookIndexDoc, readNotebookIndexTree } from "@/lib/yjs-utils"
 import { getLastOpenedNoteId } from "@/lib/notebook-settings"
 
@@ -11,6 +11,20 @@ function findFirstNoteId(node?: TreeNode | null): string | null {
     if (result) return result
   }
   return null
+}
+
+/**
+ * The note to open for a notebook when no specific one was asked for: the note
+ * this device was last on, or the first note in the tree if that note is gone
+ * (or was never recorded). Synchronous, because the remembered id is
+ * device-local - see notebook-settings.ts.
+ */
+export function pickNotebookTargetNote(notebookId: string, root?: TreeNode | null): string | null {
+  const remembered = getLastOpenedNoteId(notebookId)
+  if (remembered && root && isNoteNode(findNode(root, remembered).node)) {
+    return remembered
+  }
+  return findFirstNoteId(root)
 }
 
 export async function resolveNotebookTargetNote(

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest"
 import { flattenTree, type TreeNode } from "@/components/custom-ui/file-browser/tree"
 import { createNotebookIndexDoc, evictNotebookIndexDoc } from "@/lib/yjs-utils"
-import { setLastOpenedNoteId } from "@/lib/notebook-settings"
-import { findFirstNoteId, resolveNotebookTargetNote } from "./resolve-notebook-target"
+import { forgetLastOpenedNoteId, setLastOpenedNoteId } from "@/lib/notebook-settings"
+import { findFirstNoteId, pickNotebookTargetNote, resolveNotebookTargetNote } from "./resolve-notebook-target"
 
 function note(id: string): TreeNode {
   return { id, name: id, isFolder: false }
@@ -88,5 +88,30 @@ describe("resolveNotebookTargetNote", () => {
     const result = await resolveNotebookTargetNote(notebookId, folder("root", [note("fallback-note")]))
 
     expect(result).toBe("preferred-note")
+  })
+})
+
+describe("pickNotebookTargetNote", () => {
+  const tree = folder("root", [note("first-note"), note("second-note")])
+
+  it("prefers the note this device was last on over the first note in the tree", () => {
+    forgetLastOpenedNoteId("nb-pick")
+    setLastOpenedNoteId("nb-pick", "second-note")
+    expect(pickNotebookTargetNote("nb-pick", tree)).toBe("second-note")
+  })
+
+  it("falls back to the first note when nothing is remembered", () => {
+    forgetLastOpenedNoteId("nb-pick-empty")
+    expect(pickNotebookTargetNote("nb-pick-empty", tree)).toBe("first-note")
+  })
+
+  it("falls back to the first note when the remembered one has been deleted", () => {
+    setLastOpenedNoteId("nb-pick-stale", "deleted-note")
+    expect(pickNotebookTargetNote("nb-pick-stale", tree)).toBe("first-note")
+  })
+
+  it("returns null when the notebook has no notes at all", () => {
+    setLastOpenedNoteId("nb-pick-bare", "deleted-note")
+    expect(pickNotebookTargetNote("nb-pick-bare", folder("root", []))).toBeNull()
   })
 })

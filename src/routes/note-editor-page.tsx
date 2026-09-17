@@ -4,21 +4,9 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useNotebooks } from "@/hooks/use-notebooks"
 import { useNotebookFileSystem } from "@/components/custom-ui/file-browser/use-notebook-filesystem"
 import { findNode, isNoteNode } from "@/components/custom-ui/file-browser/tree"
-import type { TreeNode } from "@/components/custom-ui/file-browser/tree"
 import { useBackgroundNoteSync } from "@/hooks/use-background-note-sync"
 import { setLastOpenedNoteId } from "@/lib/notebook-settings"
-
-function findFirstNoteId(root: TreeNode | null): string | undefined {
-  if (!root) return undefined
-  if (!root.isFolder) return isNoteNode(root) ? (root.id as string) : undefined
-
-  for (const child of root.children ?? []) {
-    const found = findFirstNoteId(child)
-    if (found) return found
-  }
-
-  return undefined
-}
+import { pickNotebookTargetNote } from "@/lib/resolve-notebook-target"
 
 export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; noteId?: string }) {
   const navigate = useNavigate()
@@ -44,16 +32,19 @@ export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; no
     return isNoteNode(node)
   }, [activeNotebook, noteId])
 
-  const fallbackNoteId = React.useMemo(() => {
-    if (!activeNotebook) return undefined
-    return findFirstNoteId(activeNotebook.root)
-  }, [activeNotebook])
+  // Where `/nb/:notebookId` lands, and where a note that no longer exists
+  // falls back to: the note this device was last on, or the first note in the
+  // tree if that one is gone.
+  const originNoteId = React.useMemo(() => {
+    if (!notebookId || !activeNotebook) return undefined
+    return pickNotebookTargetNote(notebookId, activeNotebook.root) ?? undefined
+  }, [notebookId, activeNotebook])
 
   const effectiveNoteId = React.useMemo(() => {
     if (isEmptyEditorRoute) return undefined
     if (noteExists && noteId) return noteId
-    return fallbackNoteId
-  }, [isEmptyEditorRoute, noteExists, noteId, fallbackNoteId])
+    return originNoteId
+  }, [isEmptyEditorRoute, noteExists, noteId, originNoteId])
 
   const fileSystem = useNotebookFileSystem(activeNotebook, updateNotebookRoot)
   const rootNodeId = activeNotebook?.root.id ?? null
@@ -82,22 +73,22 @@ export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; no
 
     if (isOriginRoute) {
       if (isEmptyEditorRoute) return
-      if (fallbackNoteId) {
-        navigate(`/nb/${notebookId}/n/${fallbackNoteId}`, { replace: true })
+      if (originNoteId) {
+        navigate(`/nb/${notebookId}/n/${originNoteId}`, { replace: true })
       }
       return
     }
 
     if (!noteExists) {
-      if (fallbackNoteId) {
+      if (originNoteId) {
         // Go straight to the fallback note
-        navigate(`/nb/${notebookId}/n/${fallbackNoteId}`, { replace: true })
+        navigate(`/nb/${notebookId}/n/${originNoteId}`, { replace: true })
       } else {
         // No fallback note at all – just go to the notebook root
         navigate(`/nb/${notebookId}`, { replace: true })
       }
     }
-  }, [navigate, notebookId, activeNotebook, isOriginRoute, isEmptyEditorRoute, noteId, noteExists, fallbackNoteId])
+  }, [navigate, notebookId, activeNotebook, isOriginRoute, isEmptyEditorRoute, noteId, noteExists, originNoteId])
 
   // Mark this as last opened whenever it mounts or note changes
   React.useEffect(() => {
