@@ -6,6 +6,7 @@ import {
   defaultMarkdownSerializer,
 } from '@tiptap/pm/markdown'
 import { DOMParser as PMDOMParser } from '@tiptap/pm/model'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import markdownItTaskLists from 'markdown-it-task-lists'
 
 declare module '@tiptap/core' {
@@ -269,6 +270,84 @@ function normalizeTaskListDOM(doc: Document) {
   })
 }
 
+/** Matches a "- [ ] " / "- [x] " / "* [x] " / "+ [ ] " task list line. */
+const TASK_LIST_LINE = /^[ \t]*[-*+][ \t]+\[[ xX]\][ \t]+\S/m
+
+/** Clipboard HTML that already uses our own taskItem markup — the default paste handling parses it fine. */
+const HTML_HAS_OWN_TASK_LIST = /data-type=["']?taskItem["']?|class=["'][^"']*\btask-list/i
+
+/**
+ * Many apps (browsers copying a rendered checklist — e.g. Claude's chat UI,
+ * GitHub, etc.) put plain `<li><input type="checkbox"> …</li>` on the
+ * clipboard with none of our editor's own `data-type="taskItem"` markup.
+ * TipTap's TaskItem only recognizes its own markup, so left alone this loses
+ * the checkbox and becomes a plain list item. Tag the DOM so the schema's
+ * own parsing rules pick it up as a real task list.
+ */
+function normalizeGenericTaskListHTML(dom: Document): boolean {
+  let found = false
+  dom.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+    const li = checkbox.closest('li')
+    if (!li) return
+    found = true
+
+    li.setAttribute('data-type', 'taskItem')
+    const checked = checkbox.hasAttribute('checked') || (checkbox as HTMLInputElement).checked
+    li.setAttribute('data-checked', checked ? 'true' : 'false')
+    checkbox.remove()
+
+    // Most sources put a space between the checkbox and the label text.
+    if (li.firstChild?.nodeType === Node.TEXT_NODE) {
+      li.firstChild.textContent = li.firstChild.textContent?.replace(/^\s+/, '') ?? ''
+    }
+
+    li.closest('ul, ol')?.setAttribute('data-type', 'taskList')
+  })
+  return found
+}
+
+/**
+ * Convert a pasted checklist into a real task list instead of losing its
+ * checkbox state. Handles two clipboard shapes:
+ * - Rich HTML with generic `<input type="checkbox">` markup (see
+ *   `normalizeGenericTaskListHTML`).
+ * - Plain-text-only markdown syntax ("- [ ] Buy milk"), e.g. from an app or
+ *   markdown source that doesn't provide rich HTML at all.
+ */
+export function handleTaskListPaste(editor: Editor, event: ClipboardEvent): boolean {
+  const clipboardData = event.clipboardData
+  if (!clipboardData) return false
+
+  const html = clipboardData.getData('text/html')
+
+  if (html) {
+    if (HTML_HAS_OWN_TASK_LIST.test(html)) return false
+
+    const dom = new window.DOMParser().parseFromString(html, 'text/html')
+    if (normalizeGenericTaskListHTML(dom)) {
+      try {
+        editor.chain().focus().insertContent(dom.body.innerHTML).run()
+        return true
+      } catch (e) {
+        console.error('Task list paste (HTML) conversion failed:', e)
+        return false
+      }
+    }
+  }
+
+  const text = clipboardData.getData('text/plain')
+  if (!text || !TASK_LIST_LINE.test(text)) return false
+
+  try {
+    const doc = markdownToProseMirrorDoc(editor, text)
+    editor.chain().focus().insertContent(doc.toJSON()).run()
+    return true
+  } catch (e) {
+    console.error('Task list paste conversion failed:', e)
+    return false
+  }
+}
+
 /** Helper: parse Markdown to a PM doc using HTML DOM parsing for best mark fidelity */
 export function markdownToProseMirrorDoc(editor: Editor, markdown: string) {
   // 1) Markdown -> HTML
@@ -319,6 +398,18 @@ export const MarkdownConversion = Extension.create({
           }
         },
     }
+  },
+
+  addProseMirrorPlugins() {
+    const editor = this.editor
+    return [
+      new Plugin({
+        key: new PluginKey('markdownTaskListPaste'),
+        props: {
+          handlePaste: (_view, event) => handleTaskListPaste(editor, event),
+        },
+      }),
+    ]
   },
 })
 

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest"
 import { Editor } from "@tiptap/core"
 import { StarterKit } from "@tiptap/starter-kit"
+import { TaskItem, TaskList } from "@tiptap/extension-list"
 
 import { Table } from "@/components/tiptap-node/table-node/table-node-extension"
-import { getMarkdownContent, markdownToProseMirrorDoc } from "./markdown-conversion"
+import { getMarkdownContent, handleTaskListPaste, markdownToProseMirrorDoc } from "./markdown-conversion"
 
 let editor: Editor | null = null
 
@@ -64,5 +65,58 @@ describe("markdown tables", () => {
       }],
     })
     expect(getMarkdownContent(ed)).toBe("| wide |  |\n| --- | --- |\n| one<br>two |  |")
+  })
+})
+
+function fakePaste(text: string, html = "") {
+  const data: Record<string, string> = { "text/plain": text, "text/html": html }
+  return { clipboardData: { getData: (type: string) => data[type] ?? "" } } as unknown as ClipboardEvent
+}
+
+describe("task list paste", () => {
+  it("converts plain-text markdown checklist lines into a real task list", () => {
+    editor = new Editor({ extensions: [StarterKit, TaskList, TaskItem] })
+    const handled = handleTaskListPaste(editor, fakePaste("- [ ] Buy milk\n- [x] Done"))
+    expect(handled).toBe(true)
+
+    const doc = editor.state.doc
+    expect(doc.firstChild!.type.name).toBe("taskList")
+    const items = doc.firstChild!
+    expect(items.childCount).toBe(2)
+    expect(items.child(0).attrs.checked).toBe(false)
+    expect(items.child(1).attrs.checked).toBe(true)
+  })
+
+  it("leaves plain text without checklist syntax alone", () => {
+    editor = new Editor({ extensions: [StarterKit, TaskList, TaskItem] })
+    const handled = handleTaskListPaste(editor, fakePaste("just a note"))
+    expect(handled).toBe(false)
+  })
+
+  it("defers to default HTML paste handling when the clipboard already has our own task list markup", () => {
+    editor = new Editor({ extensions: [StarterKit, TaskList, TaskItem] })
+    const html = '<ul data-type="taskList"><li data-type="taskItem"><input type="checkbox">Buy milk</li></ul>'
+    const handled = handleTaskListPaste(editor, fakePaste("- [ ] Buy milk", html))
+    expect(handled).toBe(false)
+  })
+
+  it("converts generic <li><input type=checkbox> HTML (e.g. copied from a rendered web checklist) into a task list", () => {
+    editor = new Editor({ extensions: [StarterKit, TaskList, TaskItem] })
+    const html =
+      '<ul>' +
+      '<li><input disabled="" type="checkbox"> Buy milk</li>' +
+      '<li><input disabled="" type="checkbox" checked=""> Done</li>' +
+      '</ul>'
+    const handled = handleTaskListPaste(editor, fakePaste("Buy milk\nDone", html))
+    expect(handled).toBe(true)
+
+    const doc = editor.state.doc
+    expect(doc.firstChild!.type.name).toBe("taskList")
+    const items = doc.firstChild!
+    expect(items.childCount).toBe(2)
+    expect(items.child(0).attrs.checked).toBe(false)
+    expect(items.child(0).textContent).toBe("Buy milk")
+    expect(items.child(1).attrs.checked).toBe(true)
+    expect(items.child(1).textContent).toBe("Done")
   })
 })
