@@ -1,6 +1,6 @@
 import * as React from "react"
 import { NotebooksProvider, useNotebooks } from "@/hooks/use-notebooks"
-import { createNotebookSettingsDoc } from "@/lib/yjs-utils"
+import { getLastOpenedNoteId } from "@/lib/notebook-settings"
 import { isNoteNode } from "@/components/custom-ui/file-browser/tree"
 import { NoteEditorPage } from "@/routes/note-editor-page" // your SimpleEditor wrapper
 import { getOrCreateGuestIdentity, setGuestName } from "@/lib/guest-identity"
@@ -236,16 +236,13 @@ function EditorScreen({ notebook }: { notebook: any }) {
 const [noteId, setNoteId] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    let mounted = true
-    ;(async () => {
-      const { doc, settings } = createNotebookSettingsDoc(notebook.id)
-      const last = settings.get("lastOpenedNoteId") as string | null
-      doc.destroy()
-
-      const fallbackFirst = findFirstNoteId(notebook.root)
-      if (mounted) setNoteId(last || fallbackFirst || null)
-    })()
-    return () => { mounted = false }
+    const last = getLastOpenedNoteId(notebook.id)
+    const fallbackFirst = findFirstNoteId(notebook.root)
+    setNoteId(last || fallbackFirst || null)
+    // Resolving the starting note is a one-shot per notebook; notebook.root is
+    // read for its fallback only and deliberately not a dependency, or every
+    // tree edit would yank the open note back to the start.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notebook.id])
 
   //if (!noteId) return <div className="empty-content"><p>No note found. Create one from the sidebar.</p></div>

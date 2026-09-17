@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import { customAlphabet } from "nanoid";
 import { IndexeddbPersistence } from "y-indexeddb";
-import { getNoteLinkIndex, trackNoteLinks, deleteNoteLinkIndex } from "./note-link-index";
+import { getNoteLinkIndex, trackNoteLinks, deleteNoteLinkIndex, noteLinkIndexPersistences } from "./note-link-index";
 import { collectNoteLinks } from "./note-graph";
 import {
   buildTreeFromFlat,
@@ -16,7 +16,6 @@ const docs = new Map<string, { doc: Y.Doc, idb: IndexeddbPersistence }>()
 
 // build a unique key so different notebooks/notes are isolated
 const keyFor = (notebookId: string, noteId: string) => `nb:${notebookId}:n:${noteId}`;
-const keyForSettings = (notebookId: string) => `nb:${notebookId}:settings`;
 // Also doubles as the notebook index doc's WebRTC room name.
 export const keyForIndex = (notebookId: string) => `nb:${notebookId}:index`;
 
@@ -91,6 +90,47 @@ export async function ensureNoteLinks(notebookId: string, noteIds: string[], sig
   try { await task } finally { if (linkBackfills.get(notebookId) === task) linkBackfills.delete(notebookId) }
 }
 
+// Waits for everything y-indexeddb has already queued for one doc to actually
+// hit disk. IndexedDB runs transactions with overlapping scope in the order
+// they were created, so a fresh transaction on the `updates` store can only
+// complete once every append made before it has committed - which makes this
+// a real write barrier rather than just a delay.
+function flushPersistence(idb: IndexeddbPersistence): Promise<void> {
+  // No db handle yet means y-indexeddb's update handler has never written
+  // anything for this doc, so there is nothing queued to wait for.
+  const db = idb.db
+  if (!db) return Promise.resolve()
+
+  return new Promise<void>(resolve => {
+    try {
+      const tx = db.transaction(['updates'], 'readwrite')
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => resolve()
+      tx.onabort = () => resolve()
+      // The barrier is the transaction itself; this just gives it a request
+      // to run so it doesn't sit idle.
+      tx.objectStore('updates').count()
+    } catch (error) {
+      console.warn('Could not flush pending writes', error)
+      resolve()
+    }
+  })
+}
+
+// Waits for every pending IndexedDB write across all docs this session has
+// open. Called before a service-worker takeover reloads the tab (see
+// main.tsx): y-indexeddb writes each edit in its own asynchronous
+// transaction, and an in-flight transaction is aborted on unload.
+// Deliberately never rejects - a failed flush must not block the reload.
+export async function flushPersistedDocs(): Promise<void> {
+  const persistences = [
+    ...[...docs.values()].map(entry => entry.idb),
+    ...[...indexDocs.values()].map(entry => entry.idb),
+    ...noteLinkIndexPersistences(),
+  ]
+  await Promise.all(persistences.map(flushPersistence))
+}
+
 // Deletes a single IndexedDB database by name, used for both per-note docs
 // and the notebook-level settings/index docs.
 async function deleteIndexedDbDatabase(dbName: string) {
@@ -134,24 +174,15 @@ export async function deleteNoteFromIndexedDB(notebookId: string, noteId: string
   return deleteIndexedDbDatabase(keyFor(notebookId, noteId));
 }
 
-// Deletes a notebook's own settings/index Y.Docs from IndexedDB (not its notes —
+// Deletes a notebook's own index Y.Doc from IndexedDB (not its notes —
 // call deleteNoteFromIndexedDB per note first).
 export async function deleteNotebookMetaFromIndexedDB(notebookId: string) {
   await Promise.all([
     deleteNoteLinkIndex(notebookId),
-    deleteIndexedDbDatabase(keyForSettings(notebookId)),
     deleteIndexedDbDatabase(keyForIndex(notebookId)),
   ]);
 }
 
-
-// Creates or loads a Y.Doc for the notebook's settings.
-export function createNotebookSettingsDoc(notebookId: string) {
-  const doc = new Y.Doc()
-  const idb = new IndexeddbPersistence(keyForSettings(notebookId), doc)
-  const settings = doc.getMap<any>("settings")
-  return { doc, idb, settings }
-}
 
 const indexDocs = new Map<string, {
   doc: Y.Doc

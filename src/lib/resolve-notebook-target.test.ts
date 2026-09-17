@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { flattenTree, type TreeNode } from "@/components/custom-ui/file-browser/tree"
-import { createNotebookSettingsDoc, createNotebookIndexDoc, evictNotebookIndexDoc } from "@/lib/yjs-utils"
+import { createNotebookIndexDoc, evictNotebookIndexDoc } from "@/lib/yjs-utils"
+import { setLastOpenedNoteId } from "@/lib/notebook-settings"
 import { findFirstNoteId, resolveNotebookTargetNote } from "./resolve-notebook-target"
 
 function note(id: string): TreeNode {
@@ -80,16 +81,9 @@ describe("resolveNotebookTargetNote", () => {
     expect(result).toBeNull()
   })
 
-  it("prefers an explicitly remembered lastOpenedNoteId over the index/fallback, once settings have synced", async () => {
+  it("prefers an explicitly remembered last opened note over the index/fallback", async () => {
     const notebookId = "nb-preferred"
-
-    // Prime the settings doc and make sure the write actually reaches
-    // IndexedDB before resolveNotebookTargetNote opens its own handle to it.
-    const priming = createNotebookSettingsDoc(notebookId)
-    await priming.idb.whenSynced
-    priming.settings.set("lastOpenedNoteId", "preferred-note")
-    await tick()
-    priming.doc.destroy()
+    setLastOpenedNoteId(notebookId, "preferred-note")
 
     const result = await resolveNotebookTargetNote(notebookId, folder("root", [note("fallback-note")]))
 

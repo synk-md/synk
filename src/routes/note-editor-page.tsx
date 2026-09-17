@@ -1,12 +1,12 @@
 import * as React from "react"
 import { SimpleEditor } from "@/components/editor/editor"
-import { createNotebookSettingsDoc } from "@/lib/yjs-utils"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useNotebooks } from "@/hooks/use-notebooks"
 import { useNotebookFileSystem } from "@/components/custom-ui/file-browser/use-notebook-filesystem"
 import { findNode, isNoteNode } from "@/components/custom-ui/file-browser/tree"
 import type { TreeNode } from "@/components/custom-ui/file-browser/tree"
 import { useBackgroundNoteSync } from "@/hooks/use-background-note-sync"
+import { setLastOpenedNoteId } from "@/lib/notebook-settings"
 
 function findFirstNoteId(root: TreeNode | null): string | undefined {
   if (!root) return undefined
@@ -104,9 +104,7 @@ export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; no
     // Only when we actually have a valid note
     if (!notebookId || !noteId || !noteExists) return
 
-    const { doc, settings } = createNotebookSettingsDoc(notebookId)
-    settings.set("lastOpenedNoteId", noteId)
-    doc.destroy()
+    setLastOpenedNoteId(notebookId, noteId)
   }, [notebookId, noteId, noteExists])
 
   const handleNavigateNote = React.useCallback((targetNoteId: string) => {

@@ -8,13 +8,13 @@ import {
   newNoteId,
   SIGNALING_SERVERS,
   getOrCreateYDoc,
-  createNotebookSettingsDoc,
   createNotebookIndexDoc,
   evictNotebookIndexDoc,
   deleteNoteFromIndexedDB,
   deleteNotebookMetaFromIndexedDB,
   readNotebookIndexTree,
   writeNotebookIndexTree,
+  flushPersistedDocs,
 } from "./yjs-utils"
 
 function note(id: string): TreeNode {
@@ -63,21 +63,6 @@ describe("getOrCreateYDoc", () => {
     const c = getOrCreateYDoc("nb-y", "note-x")
     expect(a.doc).not.toBe(b.doc)
     expect(a.doc).not.toBe(c.doc)
-  })
-})
-
-describe("createNotebookSettingsDoc", () => {
-  it("returns a working settings Y.Map bound to its own Y.Doc", async () => {
-    const { doc, idb, settings } = createNotebookSettingsDoc("nb-settings-1")
-    await idb.whenSynced
-    settings.set("theme", "dark")
-    expect(doc.getMap("settings").get("theme")).toBe("dark")
-  })
-
-  it("is not cached: each call creates a fresh doc", () => {
-    const a = createNotebookSettingsDoc("nb-settings-2")
-    const b = createNotebookSettingsDoc("nb-settings-2")
-    expect(a.doc).not.toBe(b.doc)
   })
 })
 
@@ -198,15 +183,8 @@ describe("deleteNoteFromIndexedDB / deleteNotebookMetaFromIndexedDB", () => {
     await reloadedIdb.destroy()
   })
 
-  it("removes a notebook's settings and index docs from IndexedDB", async () => {
+  it("removes a notebook's index doc from IndexedDB", async () => {
     const notebookId = "nb-delete-2"
-    const settingsDoc = new Y.Doc()
-    const settingsIdb = new IndexeddbPersistence(`nb:${notebookId}:settings`, settingsDoc)
-    await settingsIdb.whenSynced
-    settingsDoc.getMap("settings").set("theme", "dark")
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    await settingsIdb.destroy()
-
     const indexDoc = new Y.Doc()
     const indexIdb = new IndexeddbPersistence(`nb:${notebookId}:index`, indexDoc)
     await indexIdb.whenSynced
@@ -215,12 +193,6 @@ describe("deleteNoteFromIndexedDB / deleteNotebookMetaFromIndexedDB", () => {
     await indexIdb.destroy()
 
     await deleteNotebookMetaFromIndexedDB(notebookId)
-
-    const reloadedSettings = new Y.Doc()
-    const reloadedSettingsIdb = new IndexeddbPersistence(`nb:${notebookId}:settings`, reloadedSettings)
-    await reloadedSettingsIdb.whenSynced
-    expect(reloadedSettings.getMap("settings").get("theme")).toBeUndefined()
-    await reloadedSettingsIdb.destroy()
 
     const reloadedIndex = new Y.Doc()
     const reloadedIndexIdb = new IndexeddbPersistence(`nb:${notebookId}:index`, reloadedIndex)
@@ -232,5 +204,30 @@ describe("deleteNoteFromIndexedDB / deleteNotebookMetaFromIndexedDB", () => {
   it("resolves without throwing for a notebook/note that was never persisted", async () => {
     await expect(deleteNoteFromIndexedDB("nb-never", "note-never")).resolves.toBeUndefined()
     await expect(deleteNotebookMetaFromIndexedDB("nb-never-meta")).resolves.toBeUndefined()
+  })
+})
+
+describe("flushPersistedDocs", () => {
+  it("waits for queued writes to commit, with no arbitrary timeout", async () => {
+    const notebookId = "nb-flush-1"
+    const noteId = "note-flush-1"
+    const { doc, idb } = getOrCreateYDoc(notebookId, noteId)
+    await idb.whenSynced
+
+    doc.getMap("meta").set("title", "written just before a reload")
+
+    // The point of the barrier: the write is readable back straight after,
+    // without the `setTimeout(0)` the other tests here have to use.
+    await flushPersistedDocs()
+
+    const reloadedDoc = new Y.Doc()
+    const reloadedIdb = new IndexeddbPersistence(`nb:${notebookId}:n:${noteId}`, reloadedDoc)
+    await reloadedIdb.whenSynced
+    expect(reloadedDoc.getMap("meta").get("title")).toBe("written just before a reload")
+    await reloadedIdb.destroy()
+  })
+
+  it("resolves when nothing has been persisted yet", async () => {
+    await expect(flushPersistedDocs()).resolves.toBeUndefined()
   })
 })

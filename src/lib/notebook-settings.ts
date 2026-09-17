@@ -1,21 +1,29 @@
-import type * as Y from "yjs"
 
-export type NotebookSettings = {
-  theme?: "light" | "dark" | "system"
-  enabledPlugins?: string[]
-  lastOpenedNoteId?: string | null
-}
+const lastOpenedNoteKey = (notebookId: string) => `lastOpenedNote:${notebookId}`
 
-export function readNotebookSettings(settings: Y.Map<any>): NotebookSettings {
-  return {
-    theme: settings.get("theme") ?? "system",
-    enabledPlugins: settings.get("enabledPlugins") ?? [],
-    lastOpenedNoteId: settings.get("lastOpenedNoteId") ?? null,
+/** The note last opened in this notebook on this device, if any. */
+export function getLastOpenedNoteId(notebookId: string): string | null {
+  try {
+    return localStorage.getItem(lastOpenedNoteKey(notebookId))
+  } catch (error) {
+    // Storage can be unavailable outright (private browsing, blocked cookies).
+    console.warn("Could not read the last opened note", error)
+    return null
   }
 }
 
-export function updateNotebookSettings(settings: Y.Map<any>, patch: Partial<NotebookSettings>) {
-  for (const [k, v] of Object.entries(patch)) {
-    settings.set(k, v as any)
+export function setLastOpenedNoteId(notebookId: string, noteId: string) {
+  try {
+    localStorage.setItem(lastOpenedNoteKey(notebookId), noteId)
+  } catch (error) {
+    console.warn("Could not remember the last opened note", error)
+  }
+}
+
+export function forgetLastOpenedNoteId(notebookId: string) {
+  try {
+    localStorage.removeItem(lastOpenedNoteKey(notebookId))
+  } catch (error) {
+    console.warn("Could not forget the last opened note", error)
   }
 }

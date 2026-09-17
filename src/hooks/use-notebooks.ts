@@ -7,7 +7,6 @@ Keeps a list of notebooks and which one is active. Persists to localStorage.
 
 import * as React from "react"
 import {
-  createNotebookSettingsDoc,
   deleteNoteFromIndexedDB,
   deleteNotebookMetaFromIndexedDB,
   evictNotebookIndexDoc,
@@ -16,6 +15,7 @@ import {
 } from "@/lib/yjs-utils"
 import { collectLeaves, type TreeNode, type Notebook, type NotebooksState } from "@/components/custom-ui/file-browser/tree"
 import { seedWelcomeNote } from "@/lib/seed-welcome-note"
+import { forgetLastOpenedNoteId, setLastOpenedNoteId } from "@/lib/notebook-settings"
 import { deleteImageAsset } from "@/lib/image-assets"
 import { importNotebookArchive } from "@/lib/notebook-import"
 
@@ -108,10 +108,7 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
     // Seed the welcome note's Y.Doc with initial content + meta
     await seedWelcomeNote(nb_id, welcomeId)
 
-    const { doc: settingsDoc, settings } = createNotebookSettingsDoc(nb_id)
-    settings.set("lastOpenedNoteId", welcomeId)
-
-    settingsDoc.destroy()
+    setLastOpenedNoteId(nb_id, welcomeId)
 
     return { notebookId: nb_id, welcomeNoteId: welcomeId }
   }, [persist, state.notebooks])
@@ -163,7 +160,7 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
   }, [persist, state.notebooks])
 
   // Removes a notebook and tears down its underlying storage: every note's
-  // Y.Doc, any image assets, and the notebook's own settings/index docs.
+  // Y.Doc, any image assets, and the notebook's own index doc.
   const deleteNotebook = React.useCallback(async (id: string) => {
     const target = state.notebooks.find(nb => nb.id === id)
     if (!target) return
@@ -176,6 +173,7 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
 
     const { noteIds, assetIds } = collectLeaves(target.root)
     evictNotebookIndexDoc(id)
+    forgetLastOpenedNoteId(id)
 
     await Promise.all([
       ...noteIds.map(noteId =>

@@ -124,6 +124,11 @@ export function trackNoteLinks(notebookId: string, noteId: string, doc: Y.Doc, r
   }).catch(error => console.error("Could not index note links", error))
 }
 
+/** Every link-index persistence this session has open, for flushPersistedDocs. */
+export function noteLinkIndexPersistences() {
+  return [...indexes.values()].map(index => index.idb)
+}
+
 export async function deleteNoteLinkIndex(notebookId: string) {
   const index = getNoteLinkIndex(notebookId)
   await index.idb.clearData()

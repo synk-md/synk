@@ -498,6 +498,33 @@ export function SimpleEditor({
     return { doc, idb }
   }, [notebookId, noteId])
 
+  // No local write may touch a note's Y.Doc before IndexedDB has replayed
+  // what's stored for it. y-tiptap latches `initialContentChanged` the first
+  // time the editor holds a non-empty doc, and from then on writes the whole
+  // ProseMirror doc back into Yjs on every view update - so a doc that is
+  // still empty only because the replay hasn't landed can have that
+  // emptiness committed over the stored content as a real deletion. The
+  // notebook tree already gates its local writes exactly this way (see
+  // `treeReady` in use-notebook-filesystem.ts); note content did not.
+  const [syncedNoteId, setSyncedNoteId] = React.useState<string | null>(null)
+  const noteContentSynced = Boolean(noteId) && syncedNoteId === noteId
+
+  React.useEffect(() => {
+    const idb = note?.idb
+    if (!idb || !noteId) return
+
+    let disposed = false
+    // whenSynced only ever resolves - if the database can't be opened at all
+    // it simply never settles, leaving the note read-only. That's the right
+    // failure mode rather than a bug: y-indexeddb silently drops every write
+    // in that state, so an "editable" note would lose the edits anyway.
+    void idb.whenSynced.then(() => {
+      if (!disposed) setSyncedNoteId(noteId)
+    })
+
+    return () => { disposed = true }
+  }, [note?.idb, noteId])
+
   const syncNoteLinkAccessToTree = React.useCallback(
     (id: NodeId | undefined | null, access: LinkAccess) => {
       if (!id || typeof id !== "string") return
@@ -639,7 +666,10 @@ export function SimpleEditor({
     : isViewOnly ? "view"
     : (isSharedView && !permissionConfirmed) ? "view"
     : "edit"
-  const isEditable = sharedPermission === "edit"
+  // noteContentSynced keeps the note read-only for the window between mount
+  // and its IndexedDB replay, so nothing can be typed into - or deleted from -
+  // a document whose stored content hasn't loaded yet.
+  const isEditable = sharedPermission === "edit" && noteContentSynced
 
   // Stable reference: a fresh closure here would flow into `extensions`'
   // deps via `ensureImageAssetNode` below and recreate the editor every render.
@@ -865,7 +895,10 @@ export function SimpleEditor({
   const extensions = React.useMemo(() => {
     // Collaboration extension brings its own undo/redo (Y.UndoManager), which
     // conflicts with StarterKit's built-in UndoRedo extension.
-    const doc = note?.doc
+    // Binding is withheld until the note's IndexedDB replay has landed (see
+    // noteContentSynced) - until then there is no binding that could write an
+    // empty document back over the stored content.
+    const doc = noteContentSynced ? note?.doc : undefined
     const base = [
       StarterKit.configure({
         horizontalRule: false,
@@ -945,7 +978,7 @@ export function SimpleEditor({
     }
 
     return base;
-  }, [note?.doc, providerReady, providerGeneration, currentUser, collaborationActive, resolveImageAsset, uploadAndRegisterImage, getNoteLinkApi]);
+  }, [note?.doc, noteContentSynced, providerReady, providerGeneration, currentUser, collaborationActive, resolveImageAsset, uploadAndRegisterImage, getNoteLinkApi]);
 
   
   const editor = useEditor({

@@ -1,5 +1,6 @@
 import { isNoteNode, type TreeNode } from "@/components/custom-ui/file-browser/tree"
-import { createNotebookIndexDoc, createNotebookSettingsDoc, readNotebookIndexTree } from "@/lib/yjs-utils"
+import { createNotebookIndexDoc, readNotebookIndexTree } from "@/lib/yjs-utils"
+import { getLastOpenedNoteId } from "@/lib/notebook-settings"
 
 function findFirstNoteId(node?: TreeNode | null): string | null {
   if (!node) return null
@@ -16,21 +17,9 @@ export async function resolveNotebookTargetNote(
   notebookId: string,
   fallbackRoot?: TreeNode | null,
 ): Promise<string | null> {
-  let settingsHandle: ReturnType<typeof createNotebookSettingsDoc> | null = null
-  try {
-    settingsHandle = createNotebookSettingsDoc(notebookId)
-    try {
-      await settingsHandle.idb.whenSynced
-    } catch {}
-    const { settings } = settingsHandle
-    const preferred = (settings.get("lastOpenedNoteId") as string | null) ?? null
-    if (preferred) {
-      return preferred
-    }
-  } catch (error) {
-    console.error("Failed to read notebook settings", error)
-  } finally {
-    settingsHandle?.doc.destroy()
+  const preferred = getLastOpenedNoteId(notebookId)
+  if (preferred) {
+    return preferred
   }
 
   // Note: the index doc is cached per notebookId (see createNotebookIndexDoc),
