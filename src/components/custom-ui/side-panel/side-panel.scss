@@ -65,6 +65,15 @@
   left: 0;
 }
 
+/* reserve space so the handle doesn't sit on top of the content's scrollbar */
+.side-panel--left .side-panel__inner {
+  margin-right: 6px;
+}
+
+.side-panel--right .side-panel__inner {
+  margin-left: 6px;
+}
+
 .side-panel__resize-handle:hover {
   background: rgba(255, 255, 255, 0.08);
 }

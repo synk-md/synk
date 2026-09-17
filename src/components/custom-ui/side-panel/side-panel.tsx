@@ -2,7 +2,7 @@ import * as React from "react"
 import "./side-panel.scss"
 
 const MIN_WIDTH = 200
-const MAX_WIDTH = 600
+const MAX_WIDTH = 1600
 
 type Side = "left" | "right"
 

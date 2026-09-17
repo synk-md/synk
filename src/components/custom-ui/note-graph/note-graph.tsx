@@ -45,7 +45,7 @@ export function NoteGraph({ notebookId, tree, currentNoteId, onNavigate }: Props
       const cursorX = (event.clientX - rect.left) / scale
       const cursorY = (event.clientY - rect.top) / scale
       setViewport(previous => {
-        const nextZoom = Math.max(0.25, Math.min(4, previous.zoom * Math.exp(-delta * 0.002)))
+        const nextZoom = Math.max(0.1, Math.min(8, previous.zoom * Math.exp(-delta * 0.002)))
         const ratio = nextZoom / previous.zoom
         // Keep the same graph point underneath the cursor as its scale changes.
         return { zoom: nextZoom, x: cursorX - (cursorX - previous.x) * ratio, y: cursorY - (cursorY - previous.y) * ratio }
