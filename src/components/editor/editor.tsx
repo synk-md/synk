@@ -431,7 +431,7 @@ export function SimpleEditor({
   const editorAreaRef = React.useRef<HTMLDivElement | null>(null); // For context menu container
   const fileTreeRef = React.useRef<FileTreeHostHandle | null>(null)
   const noteTabBarRef = React.useRef<NoteTabBarHandle | null>(null)
-  const titleInputRef = React.useRef<HTMLInputElement | null>(null)
+  const titleInputRef = React.useRef<HTMLTextAreaElement | null>(null)
   const pendingTitleSelectionNoteIdRef = React.useRef<NodeId | null>(null)
   const activeTitleNoteIdRef = React.useRef<NodeId | null>(null)
 
@@ -1007,6 +1007,27 @@ export function SimpleEditor({
   React.useEffect(() => {
     setTitleDraft(activeTitle)
   }, [activeTitle])
+
+  // The title is a textarea so long names wrap; keep its height matched to the wrapped content.
+  React.useLayoutEffect(() => {
+    const input = titleInputRef.current
+    if (!input) return
+
+    const fitHeight = () => {
+      input.style.height = "auto"
+      input.style.height = `${input.scrollHeight}px`
+    }
+
+    fitHeight()
+
+    const container = input.parentElement
+    if (!container) return
+
+    // Re-wrap when the editor column changes width (side panels, window resize).
+    const observer = new ResizeObserver(fitHeight)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [titleDraft, inlineTitleVisible, editorSettings.lineWidth, editorSettings.font])
 
   const navigateToNote = React.useCallback(
     (id: NodeId) => {
@@ -1780,15 +1801,17 @@ export function SimpleEditor({
                 ) : hasActiveNote ? (
                   <div className="simple-editor-content" style={{ "--editor-line-width": lineWidths.find(item => item.id === editorSettings.lineWidth)!.width, "--editor-font-family": editorFonts.find(item => item.id === editorSettings.font)!.family } as React.CSSProperties}>
                     {inlineTitleVisible && (
-                      <input
+                      <textarea
                         ref={titleInputRef}
                         className="note-inline-title"
+                        rows={1}
+                        maxLength={80}
                         value={titleDraft}
                         placeholder="Untitled"
                         aria-label="Note title"
                         spellCheck={false}
                         readOnly={!isEditable}
-                        onChange={(event) => setTitleDraft(event.target.value)}
+                        onChange={(event) => setTitleDraft(event.target.value.replace(/[\r\n]+/g, " "))}
                         onBlur={commitTitle}
                         onKeyDown={(event) => {
                           if (event.key !== "Enter") return
