@@ -201,7 +201,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  margin-left: calc(var(--root-indent) - 3px);
+  margin-left: calc(var(--root-indent) - (var(--fe-indent) / 2));
   border-left: 1px solid var(--fe-connector);
   z-index: 2;
 }

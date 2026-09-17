@@ -82,10 +82,36 @@
   }
 }
 
-.toc-item__index {
+.toc-item__chevron {
   flex: 0 0 auto;
-  color: var(--toc-muted);
-  font-variant-numeric: tabular-nums;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:not(.empty) {
+    cursor: pointer;
+  }
+
+  &:not(.empty):before {
+    content: '';
+    display: inline-block;
+    border-bottom: 1px solid var(--toc-muted);
+    border-right: 1px solid var(--toc-muted);
+    height: 6px;
+    width: 6px;
+  }
+
+  &.right:before {
+    margin-bottom: 1px;
+    transform: rotate(-45deg);
+  }
+
+  &.bottom:before {
+    margin-bottom: 3px;
+    transform: rotate(45deg);
+  }
 }
 
 .toc-item__label {

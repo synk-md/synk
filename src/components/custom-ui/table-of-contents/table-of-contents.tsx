@@ -12,15 +12,30 @@ export interface ToCItemData {
 }
 
 type OnItemClick = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => void
+type OnToggle = (id: string) => void
 
-export const ToCItem: React.FC<{ item: ToCItemData; onItemClick: OnItemClick }> = ({ item, onItemClick }) => {
+export const ToCItem: React.FC<{
+  item: ToCItemData
+  hasChildren: boolean
+  isCollapsed: boolean
+  onItemClick: OnItemClick
+  onToggle: OnToggle
+}> = ({ item, hasChildren, isCollapsed, onItemClick, onToggle }) => {
   return (
     <div
       className={`toc-item ${item.isActive && !item.isScrolledOver ? 'is-active' : ''} ${item.isScrolledOver ? 'is-scrolled-over' : ''}`}
       style={{ ['--level' as any]: item.level }}
     >
       <a href={`#${item.id}`} onClick={(e) => onItemClick(e, item.id)} data-item-index={item.itemIndex}>
-        {item.itemIndex != null && <span className="toc-item__index">{item.itemIndex}.</span>}
+        <span
+          className={`toc-item__chevron ${hasChildren ? (isCollapsed ? 'right' : 'bottom') : 'empty'}`}
+          onClick={(e) => {
+            if (!hasChildren) return
+            e.preventDefault()
+            e.stopPropagation()
+            onToggle(item.id)
+          }}
+        />
         <span className="toc-item__label">{item.textContent}</span>
       </a>
     </div>
@@ -34,6 +49,17 @@ export const ToCEmptyState: React.FC = () => (
 )
 
 export const ToC: React.FC<{ items?: ToCItemData[]; editor?: Editor | null }> = ({ items = [], editor }) => {
+  const [collapsedIds, setCollapsedIds] = React.useState<Set<string>>(() => new Set())
+
+  const onToggle: OnToggle = (id) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const onItemClick: OnItemClick = (e, id) => {
     e.preventDefault()
     if (!editor) return
@@ -58,12 +84,41 @@ export const ToC: React.FC<{ items?: ToCItemData[]; editor?: Editor | null }> = 
     .run()
   }
 
+  const { visibleItems, hasChildrenMap } = React.useMemo(() => {
+    const hasChildren = new Map<string, boolean>()
+    items.forEach((item, i) => {
+      const next = items[i + 1]
+      hasChildren.set(item.id, !!next && next.level > item.level)
+    })
+
+    const visible: ToCItemData[] = []
+    const collapseStack: number[] = []
+    for (const item of items) {
+      while (collapseStack.length && item.level <= collapseStack[collapseStack.length - 1]) {
+        collapseStack.pop()
+      }
+      if (collapseStack.length === 0) visible.push(item)
+      if (collapsedIds.has(item.id) && hasChildren.get(item.id)) {
+        collapseStack.push(item.level)
+      }
+    }
+
+    return { visibleItems: visible, hasChildrenMap: hasChildren }
+  }, [items, collapsedIds])
+
   return (
     <nav className="table-of-contents" aria-label="Table of contents">
-      {items.length === 0
+      {visibleItems.length === 0
         ? <ToCEmptyState />
-        : items.map((item) => (
-          <ToCItem onItemClick={onItemClick} key={item.id} item={item} />
+        : visibleItems.map((item) => (
+          <ToCItem
+            onItemClick={onItemClick}
+            onToggle={onToggle}
+            key={item.id}
+            item={item}
+            hasChildren={!!hasChildrenMap.get(item.id)}
+            isCollapsed={collapsedIds.has(item.id)}
+          />
         ))}
     </nav>
   )
