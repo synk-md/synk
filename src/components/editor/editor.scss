@@ -207,6 +207,15 @@ body,
   overflow: hidden;
 }
 
+.editor-nav-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.25rem 0.375rem;
+  background: var(--tt-bg-color);
+}
+
 .toolbar-stack {
   display: flex;
   flex-direction: column;

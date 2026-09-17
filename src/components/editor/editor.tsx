@@ -98,7 +98,7 @@ import { WebrtcProvider } from "y-webrtc"
 import { ArrowLeftIcon } from "@/components/tiptap-icons/arrow-left-icon"
 import { HighlighterIcon } from "@/components/tiptap-icons/highlighter-icon"
 import { LinkIcon } from "@/components/tiptap-icons/link-icon"
-import { RiHome4Line, RiListUnordered, RiSearchLine, RiNodeTree } from "@remixicon/react"
+import { RiArrowLeftLine, RiArrowRightLine, RiHome4Line, RiListUnordered, RiSearchLine, RiNodeTree } from "@remixicon/react"
 import { NoteGraph } from "@/components/custom-ui/note-graph/note-graph"
 
 // --- Hooks ---
@@ -107,6 +107,7 @@ import { useNotePresence } from "@/hooks/use-note-presence"
 import { useUnreadNoteIds, markNoteViewed } from "@/hooks/use-unread-notes"
 import { useWindowSize } from "@/hooks/use-window-size"
 import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
+import { useViewHistory, type ViewHistoryEntry } from "@/hooks/use-view-history"
 import type { NotebookFileSystemApi } from "@/components/custom-ui/file-browser/use-notebook-filesystem"
 import { useFileCommands } from "@/components/custom-ui/file-browser/use-file-commands"
 
@@ -1044,6 +1045,56 @@ export function SimpleEditor({
     [noteId, onNavigateNote],
   )
 
+  // --- Back/forward over the editor's active view ---------------------------
+
+  const currentView = React.useMemo<ViewHistoryEntry | null>(() => {
+    if (activeNewTabId) return { kind: "newTab", id: activeNewTabId }
+    if (typeof previewNodeId === "string") return { kind: "preview", id: previewNodeId }
+    if (typeof selectedNoteId === "string") return { kind: "note", id: selectedNoteId }
+    return null
+  }, [activeNewTabId, previewNodeId, selectedNoteId])
+
+  const isViewValid = React.useCallback(
+    (entry: ViewHistoryEntry) => {
+      if (entry.kind === "newTab") return newTabIds.includes(entry.id)
+      return Boolean(findNode(fs.tree, entry.id as NodeId).node)
+    },
+    [fs.tree, newTabIds],
+  )
+
+  const showView = React.useCallback(
+    (entry: ViewHistoryEntry) => {
+      if (entry.kind === "newTab") {
+        setPreviewNodeId(null)
+        setActiveNewTabId(entry.id)
+        return
+      }
+
+      if (entry.kind === "preview") {
+        setActiveNewTabId(null)
+        setPreviewNodeId(entry.id as NodeId)
+        return
+      }
+
+      noteTabBarRef.current?.openNote(entry.id, "replace")
+      navigateToNote(entry.id as NodeId)
+    },
+    [navigateToNote],
+  )
+
+  const viewHistory = useViewHistory({
+    current: currentView,
+    isEntryValid: isViewValid,
+    navigate: showView,
+  })
+  const recordView = viewHistory.record
+
+  // Opening a different notebook starts a fresh history.
+  const resetViewHistory = viewHistory.reset
+  React.useEffect(() => {
+    resetViewHistory()
+  }, [notebookId, resetViewHistory])
+
   const selectTitleWhenReady = React.useCallback((id: NodeId) => {
     pendingTitleSelectionNoteIdRef.current = id
 
@@ -1081,15 +1132,17 @@ export function SimpleEditor({
 
   const handleOpenNewTab = React.useCallback(() => {
     const id = `new-tab-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    recordView({ kind: "newTab", id })
     setPreviewNodeId(null)
     setNewTabIds((ids) => [...ids, id])
     setActiveNewTabId(id)
-  }, [])
+  }, [recordView])
 
   const handleSelectNewTab = React.useCallback((id: string) => {
+    recordView({ kind: "newTab", id })
     setPreviewNodeId(null)
     setActiveNewTabId(id)
-  }, [])
+  }, [recordView])
 
   const handleCloseActiveNewTab = React.useCallback(() => {
     if (activeNewTabId) closeNewTab(activeNewTabId)
@@ -1103,12 +1156,14 @@ export function SimpleEditor({
     const newTabIdToConsume = activeNewTabId
 
     void createNote("Untitled", rootId).then((createdId) => {
+      if (mode === "append") resetViewHistory()
+      else recordView({ kind: "note", id: createdId as string })
       if (newTabIdToConsume) closeNewTab(newTabIdToConsume)
       noteTabBarRef.current?.openNote(createdId as string, mode)
       navigateToNote(createdId)
       selectTitleWhenReady(createdId)
     })
-  }, [activeNewTabId, canCreateNodes, closeNewTab, createNote, navigateToNote, rootId, selectTitleWhenReady])
+  }, [activeNewTabId, canCreateNodes, closeNewTab, createNote, navigateToNote, recordView, resetViewHistory, rootId, selectTitleWhenReady])
 
   const handleToolbarCreateNote = React.useCallback(() => {
     createNoteAndSelectTitle()
@@ -1154,14 +1209,16 @@ export function SimpleEditor({
       // Assets-folder entries aren't notes; preview them in place of the
       // editor instead of opening a tab.
       if (findNode(fs.tree, id).node?.assetId) {
+        recordView({ kind: "preview", id })
         setActiveNewTabId(null)
         setPreviewNodeId(id)
         return
       }
+      recordView({ kind: "note", id })
       noteTabBarRef.current?.openNote(id, "replace")
       navigateToNote(id)
     },
-    [navigateToNote, fs.tree],
+    [navigateToNote, fs.tree, recordView],
   )
 
   noteLinkApiRef.current = { tree: fs.tree, onNavigate: handleSelectNote }
@@ -1169,6 +1226,10 @@ export function SimpleEditor({
   const handleOpenNoteInNewTab = React.useCallback(
     (id: NodeId) => {
       if (!id || typeof id !== "string") return
+      // A new tab starts its own history: nothing to go back to, so back
+      // can never pull you out of the tab you just opened.
+      resetViewHistory()
+
       if (findNode(fs.tree, id).node?.assetId) {
         noteTabBarRef.current?.openNote(id, "append")
         setActiveNewTabId(null)
@@ -1178,7 +1239,7 @@ export function SimpleEditor({
       noteTabBarRef.current?.openNote(id, "append")
       navigateToNote(id)
     },
-    [navigateToNote, fs.tree],
+    [navigateToNote, fs.tree, resetViewHistory],
   )
 
   const handleOpenImageAssetInTab = React.useCallback(
@@ -1306,13 +1367,15 @@ export function SimpleEditor({
   const handleSelectTab = React.useCallback(
     (id: string) => {
       if (findNode(fs.tree, id).node?.assetId) {
+        recordView({ kind: "preview", id })
         setActiveNewTabId(null)
         setPreviewNodeId(id)
         return
       }
+      recordView({ kind: "note", id })
       navigateToNote(id)
     },
-    [navigateToNote, fs.tree],
+    [navigateToNote, fs.tree, recordView],
   )
 
   const handleCloseLastTab = React.useCallback(() => {
@@ -1779,6 +1842,29 @@ export function SimpleEditor({
                     </Toolbar>
                   )
                 )}
+
+                <div className="editor-nav-bar" data-tt-role="nav-history">
+                  <Button
+                    type="button"
+                    data-style="ghost"
+                    tooltip="Go back"
+                    aria-label="Go back"
+                    disabled={!viewHistory.canGoBack}
+                    onClick={viewHistory.goBack}
+                  >
+                    <RiArrowLeftLine className="tiptap-button-icon" />
+                  </Button>
+                  <Button
+                    type="button"
+                    data-style="ghost"
+                    tooltip="Go forward"
+                    aria-label="Go forward"
+                    disabled={!viewHistory.canGoForward}
+                    onClick={viewHistory.goForward}
+                  >
+                    <RiArrowRightLine className="tiptap-button-icon" />
+                  </Button>
+                </div>
               </div>
 
               <div
@@ -1796,7 +1882,10 @@ export function SimpleEditor({
                     assetId={previewNode.assetId}
                     name={previewNode.name}
                     resolveAsset={resolveImageAsset}
-                    onClose={() => setPreviewNodeId(null)}
+                    onClose={() => {
+                      recordView(selectedNoteId ? { kind: "note", id: selectedNoteId } : null)
+                      setPreviewNodeId(null)
+                    }}
                   />
                 ) : hasActiveNote ? (
                   <div className="simple-editor-content" style={{ "--editor-line-width": lineWidths.find(item => item.id === editorSettings.lineWidth)!.width, "--editor-font-family": editorFonts.find(item => item.id === editorSettings.font)!.family } as React.CSSProperties}>
