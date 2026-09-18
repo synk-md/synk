@@ -363,7 +363,7 @@ export const FileTree = React.forwardRef<FileTreeHandle, FileTreeProps>(function
             run: () => {
               void Promise.resolve(props.onCreate(node.id, false)).then((createdId) => {
                 if (createdId) {
-                  requestRename(createdId)
+                  requestRename(createdId, true)
                 }
               })
             },
