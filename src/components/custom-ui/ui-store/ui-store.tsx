@@ -5,6 +5,7 @@ type Listener = () => void;
 
 const TOOLBAR_VISIBLE_KEY = "tt:toolbarVisible";
 const INLINE_TITLE_VISIBLE_KEY = "tt:inlineTitleVisible";
+const READ_MODE_KEY = "tt:readMode";
 
 const store = {
   visible: (() => {
@@ -15,6 +16,7 @@ const store = {
     const saved = localStorage.getItem(INLINE_TITLE_VISIBLE_KEY);
     return saved == null ? true : saved === "1";
   })(),
+  readMode: localStorage.getItem(READ_MODE_KEY) === "1",
   listeners: new Set<Listener>(),
 };
 
@@ -57,6 +59,29 @@ export function useInlineTitleVisible() {
   const [v, setV] = React.useState(getInlineTitleVisible());
   React.useEffect(() => {
     const l = () => setV(getInlineTitleVisible());
+    store.listeners.add(l);
+    return () => {
+      store.listeners.delete(l);
+    };
+  }, []);
+  return v;
+}
+
+export function getReadMode() {
+  return store.readMode;
+}
+
+export function setReadMode(v: boolean) {
+  if (store.readMode === v) return;
+  store.readMode = v;
+  localStorage.setItem(READ_MODE_KEY, v ? "1" : "0");
+  store.listeners.forEach((fn) => fn());
+}
+
+export function useReadMode() {
+  const [v, setV] = React.useState(getReadMode());
+  React.useEffect(() => {
+    const l = () => setV(getReadMode());
     store.listeners.add(l);
     return () => {
       store.listeners.delete(l);

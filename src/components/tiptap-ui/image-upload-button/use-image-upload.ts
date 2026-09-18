@@ -153,9 +153,11 @@ export function useImageUpload(config?: UseImageUploadConfig) {
     handleSelectionUpdate()
 
     editor.on("selectionUpdate", handleSelectionUpdate)
+    editor.on("update", handleSelectionUpdate)
 
     return () => {
       editor.off("selectionUpdate", handleSelectionUpdate)
+      editor.off("update", handleSelectionUpdate)
     }
   }, [editor, hideWhenUnavailable])
 

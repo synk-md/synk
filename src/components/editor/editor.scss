@@ -216,6 +216,13 @@ body,
   background: var(--tt-bg-color);
 }
 
+.editor-nav-bar-note-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  margin-left: auto;
+}
+
 .toolbar-stack {
   display: flex;
   flex-direction: column;

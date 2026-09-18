@@ -114,9 +114,11 @@ export function useHeadingDropdownMenu(config?: UseHeadingDropdownMenuConfig) {
     handleSelectionUpdate()
 
     editor.on("selectionUpdate", handleSelectionUpdate)
+    editor.on("update", handleSelectionUpdate)
 
     return () => {
       editor.off("selectionUpdate", handleSelectionUpdate)
+      editor.off("update", handleSelectionUpdate)
     }
   }, [editor, hideWhenUnavailable, levels])
 

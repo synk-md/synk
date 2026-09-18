@@ -281,9 +281,11 @@ export function useList(config: UseListConfig) {
     handleSelectionUpdate()
 
     editor.on("selectionUpdate", handleSelectionUpdate)
+    editor.on("update", handleSelectionUpdate)
 
     return () => {
       editor.off("selectionUpdate", handleSelectionUpdate)
+      editor.off("update", handleSelectionUpdate)
     }
   }, [editor, type, hideWhenUnavailable])
 

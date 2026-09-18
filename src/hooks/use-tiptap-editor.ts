@@ -24,24 +24,43 @@ export function useTiptapEditor(providedEditor?: Editor | null): {
     [providedEditor, coreEditor]
   )
 
-  const editorState = useEditorState({
+  // Subscribed only to re-render on transactions. The snapshot itself can't
+  // be trusted for the instance: when the editor is recreated (e.g. once a
+  // note's content has synced), useEditorState keeps serving the old,
+  // destroyed editor until the new one dispatches a transaction - leaving
+  // toolbar buttons bound to a dead editor until the user focuses it.
+  useEditorState({
     editor: mainEditor,
     selector(context) {
-      if (!context.editor) {
-        return {
-          editor: null,
-          editorState: undefined,
-          canCommand: undefined,
-        }
-      }
-
-      return {
-        editor: context.editor,
-        editorState: context.editor.state,
-        canCommand: context.editor.can,
-      }
+      return context.editor?.state
     },
   })
 
-  return editorState || { editor: null }
+  // editor.setEditable() doesn't dispatch a transaction, so the subscription
+  // above never sees it. Components that read editor.isEditable while
+  // rendering would otherwise keep showing the old editable state.
+  const [, forceRender] = React.useReducer((x: number) => x + 1, 0)
+  React.useEffect(() => {
+    if (!mainEditor) return
+
+    let wasEditable = mainEditor.isEditable
+    const handleUpdate = () => {
+      if (mainEditor.isEditable === wasEditable) return
+      wasEditable = mainEditor.isEditable
+      forceRender()
+    }
+
+    mainEditor.on("update", handleUpdate)
+    return () => {
+      mainEditor.off("update", handleUpdate)
+    }
+  }, [mainEditor])
+
+  if (!mainEditor) return { editor: null }
+
+  return {
+    editor: mainEditor,
+    editorState: mainEditor.state,
+    canCommand: mainEditor.can,
+  }
 }

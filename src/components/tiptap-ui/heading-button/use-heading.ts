@@ -286,9 +286,11 @@ export function useHeading(config: UseHeadingConfig) {
     handleSelectionUpdate()
 
     editor.on("selectionUpdate", handleSelectionUpdate)
+    editor.on("update", handleSelectionUpdate)
 
     return () => {
       editor.off("selectionUpdate", handleSelectionUpdate)
+      editor.off("update", handleSelectionUpdate)
     }
   }, [editor, level, hideWhenUnavailable])
 

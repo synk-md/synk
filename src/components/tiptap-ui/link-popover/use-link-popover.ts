@@ -88,7 +88,7 @@ export function shouldShowLinkButton(props: {
 
   const linkInSchema = isMarkInSchema("link", editor)
 
-  if (!linkInSchema || !editor) {
+  if (!linkInSchema || !editor || !editor.isEditable) {
     return false
   }
 
@@ -214,9 +214,11 @@ export function useLinkState(props: {
     handleSelectionUpdate()
 
     editor.on("selectionUpdate", handleSelectionUpdate)
+    editor.on("update", handleSelectionUpdate)
 
     return () => {
       editor.off("selectionUpdate", handleSelectionUpdate)
+      editor.off("update", handleSelectionUpdate)
     }
   }, [editor, hideWhenUnavailable])
 

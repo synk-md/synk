@@ -98,7 +98,7 @@ import { WebrtcProvider } from "y-webrtc"
 import { ArrowLeftIcon } from "@/components/tiptap-icons/arrow-left-icon"
 import { HighlighterIcon } from "@/components/tiptap-icons/highlighter-icon"
 import { LinkIcon } from "@/components/tiptap-icons/link-icon"
-import { RiArrowLeftLine, RiArrowRightLine, RiHome4Line, RiListUnordered, RiSearchLine, RiNodeTree } from "@remixicon/react"
+import { RiArrowLeftLine, RiArrowRightLine, RiBookOpenLine, RiPencilLine, RiHome4Line, RiListUnordered, RiSearchLine, RiNodeTree } from "@remixicon/react"
 import { NoteGraph } from "@/components/custom-ui/note-graph/note-graph"
 
 // --- Hooks ---
@@ -132,7 +132,7 @@ import { NoteImageRefIndex } from "@/lib/note-image-refs"
 import "./editor.scss"
 import "@/components/custom-ui/table-of-contents/table-of-contents.scss"
 
-import { useInlineTitleVisible, useToolbarVisible } from "@/components/custom-ui/ui-store/ui-store"
+import { setReadMode, useInlineTitleVisible, useReadMode, useToolbarVisible } from "@/components/custom-ui/ui-store/ui-store"
 import { findNode, findAssetNode, setNodeLinkAccess, touchNodeModifiedAt, collectLeaves, type FileTreeSortOrder } from "@/components/custom-ui/file-browser/tree"
 
 function pathSegments(path: string | undefined, fallbackName: string) {
@@ -145,20 +145,16 @@ function pathSegments(path: string | undefined, fallbackName: string) {
 const MemorizedToC = React.memo(ToC)
 
 const MainToolbarContent = ({
-  editor,
   onHighlighterClick,
   onLinkClick,
   isMobile,
   uploadImage,
-  getActiveTitle,
   rightSlot,
 }: {
-  editor: Editor | null
   onHighlighterClick: () => void
   onLinkClick: () => void
   isMobile: boolean
   uploadImage: ImageUploadFn
-  getActiveTitle: () => string
   rightSlot?: React.ReactNode
 }) => {
   return (
@@ -221,11 +217,6 @@ const MainToolbarContent = ({
         <TableButton />
       </ToolbarGroup>
 
-      <ToolbarSeparator />
-
-      <ToolbarGroup>
-        <MoreActionsButton editor={editor} spec={toolbarMoreSpec} extraContext={{ getActiveTitle }} />
-      </ToolbarGroup>
 
       {rightSlot ?? <Spacer />}
 
@@ -671,6 +662,10 @@ export function SimpleEditor({
   // and its IndexedDB replay, so nothing can be typed into - or deleted from -
   // a document whose stored content hasn't loaded yet.
   const isEditable = sharedPermission === "edit" && noteContentSynced
+  // Read mode is a user preference layered on top of permission: it only
+  // ever takes editing away, never grants it.
+  const readMode = useReadMode()
+  const isEditorEditable = isEditable && !readMode
 
   // Stable reference: a fresh closure here would flow into `extensions`'
   // deps via `ensureImageAssetNode` below and recreate the editor every render.
@@ -998,8 +993,8 @@ export function SimpleEditor({
   }, [extensions, touchActiveNoteModifiedAt]);
 
   React.useEffect(() => {
-    editor?.setEditable(isEditable)
-  }, [editor, isEditable])
+    editor?.setEditable(isEditorEditable)
+  }, [editor, isEditorEditable])
 
   React.useEffect(() => {
     setSelectedNoteId(noteId)
@@ -1801,12 +1796,10 @@ export function SimpleEditor({
                     >
                       {mobileView === "main" ? (
                         <MainToolbarContent
-                          editor={editor}
                           onHighlighterClick={() => setMobileView("highlighter")}
                           onLinkClick={() => setMobileView("link")}
                           isMobile={isMobile}
                           uploadImage={uploadAndRegisterImage}
-                          getActiveTitle={() => activeTitle}
                           rightSlot={isSharedView && showFileBrowser ? (
                             <SharedNoteBar
                               ownerName={ownerName}
@@ -1864,6 +1857,25 @@ export function SimpleEditor({
                   >
                     <RiArrowRightLine className="tiptap-button-icon" />
                   </Button>
+                  {hasActiveNote && !previewNode && !activeNewTabId && (
+                    <div className="editor-nav-bar-note-actions">
+                      {sharedPermission === "edit" && (
+                        <Button
+                          type="button"
+                          data-style="ghost"
+                          tooltip={readMode ? "Edit note" : "Read mode"}
+                          aria-label={readMode ? "Edit note" : "Read mode"}
+                          aria-pressed={readMode}
+                          onClick={() => setReadMode(!readMode)}
+                        >
+                          {readMode
+                            ? <RiPencilLine className="tiptap-button-icon" />
+                            : <RiBookOpenLine className="tiptap-button-icon" />}
+                        </Button>
+                      )}
+                      <MoreActionsButton editor={editor} spec={toolbarMoreSpec} extraContext={{ getActiveTitle: () => activeTitle }} />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1899,7 +1911,7 @@ export function SimpleEditor({
                         placeholder="Untitled"
                         aria-label="Note title"
                         spellCheck={false}
-                        readOnly={!isEditable}
+                        readOnly={!isEditorEditable}
                         onChange={(event) => setTitleDraft(event.target.value.replace(/[\r\n]+/g, " "))}
                         onBlur={commitTitle}
                         onKeyDown={(event) => {

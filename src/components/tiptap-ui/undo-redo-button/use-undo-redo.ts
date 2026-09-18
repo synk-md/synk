@@ -158,9 +158,11 @@ export function useUndoRedo(config: UseUndoRedoConfig) {
     handleUpdate()
 
     editor.on("transaction", handleUpdate)
+    editor.on("update", handleUpdate)
 
     return () => {
       editor.off("transaction", handleUpdate)
+      editor.off("update", handleUpdate)
     }
   }, [editor, hideWhenUnavailable, action])
 
