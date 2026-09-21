@@ -1,14 +1,9 @@
 /**
- * HKDF-SHA256 (RFC 5869).
+ * HKDF-SHA256 (RFC 5869). Turns an X25519 shared secret into an AES key inside
+ * the sealed box, and walks the epoch rotation seed forward.
  *
- * Two jobs in this system: turning a raw X25519 shared secret into an AES key
- * inside the sealed box, and walking the epoch rotation seed forward so the
- * retained keyring stays near-constant in size instead of growing with the
- * epoch count.
- *
- * `info` is never optional in practice - every call site passes a distinct
- * domain-separation label, so a derived key from one context can never be
- * mistaken for a key from another.
+ * Every call site passes a distinct `info` label, so a key derived for one
+ * context can never be mistaken for another's.
  */
 
 import { asBufferSource, utf8, type Bytes } from "./bytes"

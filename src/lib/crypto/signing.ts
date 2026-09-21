@@ -1,17 +1,9 @@
 /**
- * Ed25519 device signing keys.
+ * Ed25519 device signing keys - the root of authorship, since every member
+ * holds the same content key and only a signature binds a specific device.
  *
- * A device key is the root of authorship in Synk: an envelope's signature is the
- * only thing that binds a specific device to an update, because every member of
- * a notebook holds the same content key and so the AEAD proves nothing about
- * who wrote what. Attribution, capability chains and `did:key` principals all
- * hang off this pair.
- *
- * `generateSigningKey()` defaults to non-extractable. That is the point of
- * preferring WebCrypto: hostile code delivered in a compromised bundle can ask
- * the key to sign, but cannot read it and mail it somewhere. Under the `@noble`
- * fallback the scalar is ordinary heap bytes and the key reports
- * `extractable: true` - callers that care must check rather than assume.
+ * Non-extractable by default under WebCrypto. The `@noble` fallback cannot hide
+ * a key and reports `extractable: true` honestly.
  */
 
 import { ed25519 } from "@noble/curves/ed25519.js"
@@ -32,6 +24,17 @@ const ED25519_PKCS8_PREFIX = new Uint8Array([
   0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
 ])
 
+/**
+ * Structured-cloneable handle for persisting a key to IndexedDB.
+ *
+ * Carries the `CryptoKeyPair` itself, which is a handle rather than key
+ * material - structured clone preserves `extractable: false`. Never
+ * JSON-serialise this; IndexedDB is the only supported sink.
+ */
+export type StorableSigningKey =
+  | { backend: "webcrypto"; pair: CryptoKeyPair; extractable: boolean }
+  | { backend: "noble"; secretKey: Bytes }
+
 export interface SigningKey {
   /** Raw 32-byte Ed25519 public key - the device's identity. */
   readonly publicKey: Bytes
@@ -41,6 +44,8 @@ export interface SigningKey {
   sign(message: Bytes): Promise<Bytes>
   /** The raw 32-byte seed, or null when the key is non-extractable. */
   exportSecretKey(): Promise<Bytes | null>
+  /** Handle for IndexedDB persistence. See `StorableSigningKey`. */
+  toStorable(): StorableSigningKey
 }
 
 export interface GenerateSigningKeyOptions {
@@ -70,6 +75,7 @@ function nobleKey(seed: Bytes): SigningKey {
     // WebCrypto backend genuinely needs.
     sign: (message) => Promise.resolve(ed25519.sign(message, seed)),
     exportSecretKey: () => Promise.resolve(seed.slice()),
+    toStorable: () => ({ backend: "noble", secretKey: seed.slice() }),
   }
 }
 
@@ -87,7 +93,20 @@ async function webcryptoKey(pair: CryptoKeyPair, extractable: boolean): Promise<
       if (!jwk.d) return null
       return fromBase64Url(jwk.d)
     },
+    toStorable: () => ({ backend: "webcrypto", pair, extractable }),
   }
+}
+
+/**
+ * Rebuild a signing key from a persisted handle.
+ *
+ * The stored backend is honoured rather than re-probed: a key persisted under
+ * one backend must come back under the same one, or its public key would not
+ * match the identity it was stored against.
+ */
+export async function restoreSigningKey(stored: StorableSigningKey): Promise<SigningKey> {
+  if (stored.backend === "noble") return nobleKey(stored.secretKey.slice())
+  return webcryptoKey(stored.pair, stored.extractable)
 }
 
 /** Fresh device signing key. Non-extractable unless asked otherwise. */

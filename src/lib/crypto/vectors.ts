@@ -1,21 +1,12 @@
 /**
- * Published known-answer vectors.
+ * Published known-answer vectors - the point of milestone M1.
  *
- * These are the point of milestone M1. A primitive that round-trips against
- * itself proves only that it is self-consistent - it would pass just as happily
- * with the parameters swapped, the wrong curve, or a silently broken clamp.
- * Matching bytes that someone else published is what says we implemented the
- * actual algorithm.
+ * A primitive that round-trips against itself proves only self-consistency; it
+ * would pass just as happily with the wrong curve or a broken clamp. Matching
+ * bytes someone else published is what says we implemented the real algorithm.
  *
- * Sources, all reproducible from the linked documents:
- *   Ed25519  RFC 8032 section 7.1
- *   X25519   RFC 7748 sections 5.2 and 6.1
- *   HKDF     RFC 5869 appendix A (SHA-256 cases)
- *   AES-GCM  "The Galois/Counter Mode of Operation (GCM)", McGrath & Viega,
- *            test cases 13-16 (the AES-256 set), as referenced by NIST SP 800-38D
- *
- * Kept in a plain module rather than inline so the same bytes can be driven
- * through both the WebCrypto and the @noble backend.
+ * Sources: Ed25519 RFC 8032 s7.1; X25519 RFC 7748 s5.2 and s6.1; HKDF RFC 5869
+ * appendix A; AES-GCM the McGrath & Viega GCM spec, cases 13-16.
  */
 
 /** RFC 8032 section 7.1 - Ed25519 sign/verify. */

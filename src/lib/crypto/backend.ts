@@ -1,22 +1,9 @@
 /**
- * Which implementation backs the curve operations.
+ * Chooses the implementation backing the curve operations.
  *
- * The design is WebCrypto-first: a key generated through `crypto.subtle` can be
- * marked non-extractable, so a compromised bundle can ask it to sign but cannot
- * read it. That is the single most valuable property this layer has, and it is
- * only available from WebCrypto - `@noble` necessarily holds the scalar as
- * readable bytes in the JS heap.
- *
- * Ed25519 and X25519 are the young half of WebCrypto (Chrome 137+, Safari 17+,
- * Firefox 130+), so `@noble/curves` is the fallback below that floor. AES-GCM,
- * HKDF and SHA-256 are not probed: they have been in every WebCrypto since the
- * beginning, and the app already requires a secure context for IndexedDB and
- * service workers, so there is no environment we support that has `subtle` but
- * lacks them.
- *
- * Detection is a real functional probe, not a name check. Some engines expose an
- * algorithm that then throws on use, and a backend that fails halfway through
- * signing is worse than one we never chose.
+ * WebCrypto first, because only it can hold a key non-extractably; `@noble` is
+ * the fallback below the Ed25519/X25519 browser floor. Detection is a real
+ * functional probe, not a name check.
  */
 
 export type CurveBackendName = "webcrypto" | "noble"

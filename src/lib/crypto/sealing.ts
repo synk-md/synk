@@ -1,30 +1,16 @@
 /**
- * X25519 key agreement and the sealed-box construction.
- *
- * A sealed box is how a notebook's epoch DEK reaches a member: the key is
- * sealed once per authorised member's X25519 public key, and the resulting
- * copies can sit in the open keyring on an untrusted relay because each one
- * opens only with its recipient's private key. Adding, removing and rekeying
- * members are all just decisions about which sealed copies exist.
- *
- * Construction: ephemeral X25519 -> HKDF-SHA256 -> AES-256-GCM.
+ * X25519 key agreement and the sealed box - how a notebook's epoch DEK reaches
+ * a member. Each sealed copy opens only with its recipient's private key, so
+ * the keyring can sit on an untrusted relay.
  *
  *   epk, esk  <- fresh X25519 keypair, one per seal
  *   shared    <- X25519(esk, recipientPk)
- *   key‖nonce <- HKDF(ikm = shared, salt = "", info = LABEL‖epk‖recipientPk, 44)
- *   box       <- epk ‖ AES-256-GCM(key, nonce, plaintext, aad)
+ *   key|nonce <- HKDF(ikm = shared, salt = "", info = LABEL|epk|recipientPk, 44)
+ *   box       <- epk | AES-256-GCM(key, nonce, plaintext, aad)
  *
- * Two details are load-bearing. Both public keys go into the HKDF `info`, so a
- * ciphertext is bound to the exact pair it was produced for and cannot be
- * re-addressed by an attacker who swaps the recipient. And the nonce is derived
- * rather than carried: the ephemeral key is fresh for every seal, so the
- * (key, nonce) pair is unique by construction and there is nothing to store or
- * to get wrong.
- *
- * This is not libsodium's `crypto_box_seal` - that one is XSalsa20-Poly1305
- * with a Blake2b-derived nonce. Same shape, different primitives, chosen to
- * stay inside WebCrypto. It has not been externally reviewed; see the open
- * items in the design document before making any strong claim about it.
+ * Both public keys go into the HKDF info, so a box cannot be re-addressed; the
+ * nonce is derived, not carried. Not libsodium's crypto_box_seal, and not
+ * externally reviewed.
  */
 
 import { x25519 } from "@noble/curves/ed25519.js"
@@ -43,6 +29,15 @@ const X25519_PKCS8_PREFIX = new Uint8Array([
   0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x6e, 0x04, 0x22, 0x04, 0x20,
 ])
 
+/**
+ * Structured-cloneable handle for persisting a sealing key to IndexedDB.
+ * Same reasoning as `StorableSigningKey`: a `CryptoKey` is a handle, not key
+ * material, and structured clone preserves non-extractability.
+ */
+export type StorableSealingKey =
+  | { backend: "webcrypto"; pair: CryptoKeyPair; extractable: boolean }
+  | { backend: "noble"; secretKey: Bytes }
+
 export interface SealingKey {
   /** Raw 32-byte X25519 public key - what others seal to. */
   readonly publicKey: Bytes
@@ -51,6 +46,8 @@ export interface SealingKey {
   /** Open a sealed box addressed to this key. Throws if it was not. */
   open(box: Bytes, aad?: Bytes): Promise<Bytes>
   exportSecretKey(): Promise<Bytes | null>
+  /** Handle for IndexedDB persistence. See `StorableSealingKey`. */
+  toStorable(): StorableSealingKey
 }
 
 export interface GenerateSealingKeyOptions {
@@ -118,6 +115,7 @@ function nobleSealingKey(secretKey: Bytes): SealingKey {
     open: (box, aad) =>
       openWith(box, publicKey, aad, (epk) => Promise.resolve(agreeNoble(secretKey, epk))),
     exportSecretKey: () => Promise.resolve(secretKey.slice()),
+    toStorable: () => ({ backend: "noble", secretKey: secretKey.slice() }),
   }
 }
 
@@ -137,7 +135,14 @@ async function webcryptoSealingKey(
       if (!jwk.d) return null
       return fromBase64Url(jwk.d)
     },
+    toStorable: () => ({ backend: "webcrypto", pair, extractable }),
   }
+}
+
+/** Rebuild a sealing key from a persisted handle. See `restoreSigningKey`. */
+export async function restoreSealingKey(stored: StorableSealingKey): Promise<SealingKey> {
+  if (stored.backend === "noble") return nobleSealingKey(stored.secretKey.slice())
+  return webcryptoSealingKey(stored.pair, stored.extractable)
 }
 
 /** Shared open path: split the box, redo the agreement, derive, decrypt. */

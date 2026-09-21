@@ -1,10 +1,7 @@
 /**
- * Byte helpers shared by the crypto primitives.
- *
- * Everything here is deliberately dependency-free and allocation-obvious: these
- * functions sit underneath signature verification and AEAD framing, so their
- * behaviour on odd input (wrong length, odd-length hex, non-ASCII) has to be
- * boring and predictable rather than clever.
+ * Byte helpers shared by the crypto primitives. Dependency-free and
+ * deliberately boring: these sit underneath signature verification and AEAD
+ * framing, so their behaviour on odd input has to be predictable.
  */
 
 export type Bytes = Uint8Array

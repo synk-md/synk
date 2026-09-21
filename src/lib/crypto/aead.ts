@@ -1,16 +1,9 @@
 /**
- * AES-256-GCM, the content cipher.
+ * AES-256-GCM, the content cipher, used with a notebook's epoch DEK.
  *
- * This is what a notebook's epoch DEK is used with: every Yjs update payload
- * that crosses the network is sealed here first. It provides confidentiality
- * and integrity against anyone without the key, but says nothing about *which*
- * member produced a ciphertext - all members hold the same DEK - so an envelope
- * is always signed as well.
- *
- * Nonces are random 96-bit values. With a 12-byte random nonce the birthday
- * bound is reached around 2^32 messages under one key; epochs are cut at every
- * membership change long before a notebook approaches that, and the sequence
- * counter in the envelope makes accidental reuse detectable.
+ * Provides confidentiality and integrity, but says nothing about *which* member
+ * produced a ciphertext - all members hold the same DEK - so envelopes are
+ * signed as well.
  */
 
 import { asBufferSource, assertLength, randomBytes, type Bytes } from "./bytes"
