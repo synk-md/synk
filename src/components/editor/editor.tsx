@@ -213,7 +213,7 @@ const MainToolbarContent = ({
       <ToolbarSeparator />
 
       <ToolbarGroup>
-        <ImageUploadButton text="Add" upload={uploadImage} />
+        <ImageUploadButton upload={uploadImage} />
         <TableButton />
       </ToolbarGroup>
 
@@ -1143,12 +1143,17 @@ export function SimpleEditor({
     if (activeNewTabId) closeNewTab(activeNewTabId)
   }, [activeNewTabId, closeNewTab])
 
-  const createNoteAndSelectTitle = React.useCallback((mode: "replace" | "append" = "replace") => {
+  const createNoteAndSelectTitle = React.useCallback((
+    mode: "replace" | "append" = "replace",
+    // Which "New tab" placeholder the note takes over, if any. Defaults to
+    // the active one, which is the placeholder the note is created from.
+    consumeNewTabId: string | null = activeNewTabId,
+  ) => {
     if (!canCreateNodes || !rootId) return
 
-    // If this note is being created from inside an active "New tab"
-    // placeholder, that placeholder is being replaced by the real note.
-    const newTabIdToConsume = activeNewTabId
+    // If this note is being created from inside a "New tab" placeholder,
+    // that placeholder is being replaced by the real note.
+    const newTabIdToConsume = consumeNewTabId
 
     void createNote("Untitled", rootId).then((createdId) => {
       if (mode === "append") resetViewHistory()
@@ -1176,12 +1181,15 @@ export function SimpleEditor({
 
       event.preventDefault()
       event.stopPropagation()
-      createNoteAndSelectTitle()
+      // Ctrl+N never overwrites the tab you are on: it fills an already open
+      // "New tab" placeholder (the active one first) or opens its own tab.
+      const reusableNewTabId = activeNewTabId ?? newTabIds[0] ?? null
+      createNoteAndSelectTitle("append", reusableNewTabId)
     }
 
     window.addEventListener("keydown", handleNewNoteShortcut, true)
     return () => window.removeEventListener("keydown", handleNewNoteShortcut, true)
-  }, [createNoteAndSelectTitle])
+  }, [activeNewTabId, createNoteAndSelectTitle, newTabIds])
 
   React.useEffect(() => {
     const handleFindNoteShortcut = (event: KeyboardEvent) => {
