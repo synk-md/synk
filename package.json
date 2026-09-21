@@ -9,10 +9,12 @@
     "rebuild": "pnpm run tiptap:install && pnpm run tiptap:build && pnpm install",
     "dev": "vite",
     "signaling": "y-webrtc-signaling",
-    "build": "tsc -p tsconfig.app.json --noEmit && vite build",
+    "typecheck": "tsc -b --noEmit",
+    "build": "pnpm run typecheck && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare": "husky"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.7.4",
@@ -74,6 +76,7 @@
     "eslint-plugin-react-x": "^1.52.6",
     "fake-indexeddb": "^6.2.5",
     "globals": "^16.3.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "sass-embedded": "^1.90.0",
     "typescript": "~5.8.3",

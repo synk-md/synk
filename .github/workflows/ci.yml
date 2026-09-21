@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HUSKY: 0
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm run tiptap:install && pnpm run tiptap:build
+
+      - run: pnpm install
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      # Lint and tests have a pre-existing backlog (583 lint errors, 11 failing
+      # tests as of this commit). They run for visibility but do not fail CI.
+      # Drop the continue-on-error lines once each backlog reaches zero.
+      - name: Lint
+        run: pnpm run lint
+        continue-on-error: true
+
+      - name: Test
+        run: pnpm run test
+        continue-on-error: true

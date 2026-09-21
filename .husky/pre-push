@@ -1,0 +1,3 @@
+# Mirrors the "typecheck" script. Invoked as the bare binary rather than via
+# pnpm, since a package manager is not always on PATH in a non-interactive shell.
+tsc -b --noEmit
