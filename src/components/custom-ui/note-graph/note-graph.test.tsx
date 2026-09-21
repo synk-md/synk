@@ -30,11 +30,14 @@ it("updates connections from documents, navigates, renames, and removes observer
   expect(wheel.defaultPrevented).toBe(true)
   expect(parseFloat(graph.style.width)).toBeGreaterThan(100)
   fireEvent.wheel(graph, { deltaY: -10000 })
-  expect(graph.style.width).toBe("400%")
+  expect(graph.style.width).toBe("800%")
   fireEvent.wheel(graph, { deltaY: 10000 })
-  expect(graph.style.width).toBe("25%")
-  fireEvent.wheel(graph, { deltaY: -Math.log(4) / 0.002 })
-  expect(graph.style.width).toBe("100%")
+  expect(graph.style.width).toBe("10%")
+  // Back to 1x from the 0.1 floor. Checked with a tolerance rather than an
+  // exact string: 0.1 is not binary-exact, so the round trip lands on
+  // 100.00000000000003%.
+  fireEvent.wheel(graph, { deltaY: -Math.log(10) / 0.002 })
+  expect(parseFloat(graph.style.width)).toBeCloseTo(100)
   const canvas = graph.parentElement!
   canvas.setPointerCapture = vi.fn()
   canvas.hasPointerCapture = vi.fn(() => true)

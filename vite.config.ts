@@ -67,5 +67,16 @@ export default defineConfig({
     // (*.spec.js using `context`/`cy` globals, not vitest) - without this,
     // vitest's default include glob picks them up too and they all error.
     exclude: ['**/node_modules/**', 'vendor/**'],
+    // vitest externalises node_modules deps by default, so Node - not Vite -
+    // resolves their imports and the `yjs` alias above does not apply to them.
+    // The vendored tiptap ships its own yjs (13.6.23) next to the root one
+    // (13.6.27), so @tiptap/y-tiptap would build Y.XmlElements from a second
+    // Yjs instance and inserting them failed with "Unexpected content type in
+    // insert operation". Inlining routes them back through Vite and the alias.
+    server: {
+      deps: {
+        inline: [/@tiptap\//, /y-tiptap/, /y-prosemirror/],
+      },
+    },
   },
 })

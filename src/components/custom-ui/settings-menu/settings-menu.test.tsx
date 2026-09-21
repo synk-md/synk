@@ -25,7 +25,10 @@ describe("Settings menu", () => {
     const search = screen.getByRole("searchbox", { name: "Search settings" })
     fireEvent.change(search, { target: { value: "spelling" } })
     expect(screen.getByRole("switch", { name: "Spell check" })).toBeInTheDocument()
-    expect(screen.getByRole("status")).toHaveTextContent("1 setting found")
+    // Both the spell check toggle and its language picker carry the "spelling"
+    // keyword, so the count is also asserting the plural wording.
+    expect(screen.getByLabelText("Spell check language")).toBeInTheDocument()
+    expect(screen.getByRole("status")).toHaveTextContent("2 settings found")
     fireEvent.change(search, { target: { value: "unknown option" } })
     expect(screen.getByText("No matching settings")).toBeInTheDocument()
     fireEvent.click(screen.getByRole("button", { name: "Appearance" }))
