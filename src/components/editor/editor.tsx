@@ -1702,6 +1702,8 @@ export function SimpleEditor({
                   onCreateFolder={handleToolbarCreateFolder}
                   onImportFiles={handleImportNotes}
                   onCollapseAll={fs.collapseAll}
+                  onExpandAll={fs.expandAll}
+                  anyFolderExpanded={fs.anyFolderExpanded}
                   sortOrder={fileTreeSortOrder}
                   onSortOrderChange={setFileTreeSortOrder}
                   disabled={!canCreateNodes}

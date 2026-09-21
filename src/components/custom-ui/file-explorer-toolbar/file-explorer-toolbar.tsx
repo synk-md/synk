@@ -13,6 +13,7 @@ import { isImportableFolderFile, isImportableNoteFile, type NoteImportItem } fro
 import {
   RiCheckLine,
   RiCollapseVerticalLine,
+  RiExpandVerticalLine,
   RiFileAddLine,
   RiFolderAddLine,
   RiFolderUploadLine,
@@ -37,6 +38,8 @@ export type FileExplorerToolbarProps = {
   onCreateFolder: () => void
   onImportFiles: (files: NoteImportItem[]) => void
   onCollapseAll: () => void
+  onExpandAll: () => void
+  anyFolderExpanded: boolean
   sortOrder: FileTreeSortOrder
   onSortOrderChange: (sortOrder: FileTreeSortOrder) => void
   className?: string
@@ -48,6 +51,8 @@ export function FileExplorerToolbar({
   onCreateFolder,
   onImportFiles,
   onCollapseAll,
+  onExpandAll,
+  anyFolderExpanded,
   sortOrder,
   onSortOrderChange,
   disabled = false,
@@ -140,15 +145,20 @@ export function FileExplorerToolbar({
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* Flips to "Expand all" once every folder is collapsed. */}
         <Button
           type="button"
           data-style="ghost"
-          tooltip="Collapse all"
-          onClick={onCollapseAll}
-          aria-label="Collapse all folders"
+          tooltip={anyFolderExpanded ? "Collapse all" : "Expand all"}
+          onClick={anyFolderExpanded ? onCollapseAll : onExpandAll}
+          aria-label={anyFolderExpanded ? "Collapse all folders" : "Expand all folders"}
           disabled={disabled}
         >
-          <RiCollapseVerticalLine className="tiptap-button-icon" />
+          {anyFolderExpanded ? (
+            <RiCollapseVerticalLine className="tiptap-button-icon" />
+          ) : (
+            <RiExpandVerticalLine className="tiptap-button-icon" />
+          )}
         </Button>
 
         <DropdownMenu>

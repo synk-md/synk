@@ -683,7 +683,8 @@ export const FileTree = React.forwardRef<FileTreeHandle, FileTreeProps>(function
       const isCut = isMeta && (event.key === "x" || event.key === "X")
       const isPaste = isMeta && (event.key === "v" || event.key === "V")
       const isEscape = event.key === "Escape"
-      if (!isDelete && !isCopy && !isCut && !isPaste && !isEscape) return
+      const isRename = event.key === "F2"
+      if (!isDelete && !isCopy && !isCut && !isPaste && !isEscape && !isRename) return
       if (contextMenu) return
 
       // Don't hijack the key while the user is typing somewhere else
@@ -699,6 +700,20 @@ export const FileTree = React.forwardRef<FileTreeHandle, FileTreeProps>(function
       }
 
       const focusedIds = multiSelectedIds.size > 0 ? Array.from(multiSelectedIds) : focusedNoteId ? [focusedNoteId] : []
+
+      if (isRename) {
+        // Rename targets a single node: whatever was last focused in the tree,
+        // otherwise the lone multi-selection, otherwise the open note.
+        const target = focusedNoteId
+          ?? (multiSelectedIds.size === 1 ? Array.from(multiSelectedIds)[0] : null)
+          ?? props.selectedId
+          ?? null
+        if (!target) return
+        event.preventDefault()
+        setMultiSelectedIds(new Set())
+        requestRename(target)
+        return
+      }
 
       if (isPaste) {
         if (!clipboard) return
@@ -732,7 +747,7 @@ export const FileTree = React.forwardRef<FileTreeHandle, FileTreeProps>(function
 
     document.addEventListener("keydown", handleKeyDown)
     return () => document.removeEventListener("keydown", handleKeyDown)
-  }, [contextMenu, multiSelectedIds, focusedNoteId, deleteMany, clipboard, pasteClipboard])
+  }, [contextMenu, multiSelectedIds, focusedNoteId, deleteMany, clipboard, pasteClipboard, props.selectedId, requestRename])
 
   const handleDrop = React.useCallback(
     async (event: React.DragEvent<HTMLElement>, destinationParentId: NodeId) => {

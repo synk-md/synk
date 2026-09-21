@@ -262,6 +262,36 @@ export function collapseAll(tree: TreeNode): TreeNode {
   return walk(tree)
 }
 
+// Expands every collapsed folder in the tree, used by the file tree's
+// "Expand all" toolbar action. Only meaningful for trees whose children are
+// already loaded — lazily fetched folders keep whatever children they have.
+export function expandAll(tree: TreeNode): TreeNode {
+  function walk(n: TreeNode): TreeNode {
+    if (!n.isFolder) return n
+    let changed = !n.expanded
+    const children = n.children?.map((child) => {
+      const next = walk(child)
+      if (next !== child) changed = true
+      return next
+    })
+    if (!changed) return n
+    return { ...n, expanded: true, children }
+  }
+  return walk(tree)
+}
+
+// True when any folder below the root is expanded. The root itself is skipped
+// because it is usually a hidden synthetic node whose expanded flag isn't
+// visible, so toggling it shouldn't affect the toolbar's collapse/expand state.
+export function hasExpandedFolders(tree: TreeNode): boolean {
+  function walk(n: TreeNode): boolean {
+    if (!n.isFolder) return false
+    if (n.expanded) return true
+    return Boolean(n.children?.some(walk))
+  }
+  return Boolean(tree.children?.some(walk))
+}
+
 // Also called just to reconcile the tree's cached linkAccess/isShared with
 // whatever a note's access already is every time that note is opened (see
 // simple-editor.tsx) — not just when someone deliberately changes it. So it

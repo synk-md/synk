@@ -14,6 +14,8 @@ import {
   renameNode,
   setExpanded,
   collapseAll,
+  expandAll,
+  hasExpandedFolders,
   setNodeLinkAccess,
   touchNodeModifiedAt,
   findAssetNode,
@@ -329,6 +331,46 @@ describe("collapseAll", () => {
     const tree = folder("root", [note("a")], { expanded: true })
     const next = collapseAll(tree)
     expect(next.children![0]).toBe(tree.children![0])
+  })
+})
+
+describe("expandAll", () => {
+  it("expands every collapsed folder, nested or not", () => {
+    const tree = folder("root", [folder("a", [folder("b", [])])])
+
+    const next = expandAll(tree)
+    expect(next.expanded).toBe(true)
+    expect(next.children![0].expanded).toBe(true)
+    expect(next.children![0].children![0].expanded).toBe(true)
+  })
+
+  it("returns the same reference when everything was already expanded", () => {
+    const tree = folder("root", [folder("a", [note("x")], { expanded: true })], {
+      expanded: true,
+    })
+    expect(expandAll(tree)).toBe(tree)
+  })
+
+  it("leaves note leaves untouched", () => {
+    const tree = folder("root", [note("a")])
+    const next = expandAll(tree)
+    expect(next.children![0]).toBe(tree.children![0])
+  })
+})
+
+describe("hasExpandedFolders", () => {
+  it("is false when every folder below the root is collapsed", () => {
+    const tree = folder("root", [folder("a", [folder("b", [])])], { expanded: true })
+    expect(hasExpandedFolders(tree)).toBe(false)
+  })
+
+  it("is true when a nested folder is expanded", () => {
+    const tree = folder("root", [folder("a", [folder("b", [], { expanded: true })])])
+    expect(hasExpandedFolders(tree)).toBe(true)
+  })
+
+  it("is false for a tree with no folders below the root", () => {
+    expect(hasExpandedFolders(folder("root", [note("a")], { expanded: true }))).toBe(false)
   })
 })
 

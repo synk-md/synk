@@ -9,6 +9,8 @@ import {
 	renameNode as applyRename,
 	setExpanded,
 	collapseAll as applyCollapseAll,
+	expandAll as applyExpandAll,
+	hasExpandedFolders,
 	upsertChildren,
 	findNode,
 } from "./tree"
@@ -120,6 +122,16 @@ export function useFileSystem(options: {
 		[setTreeMarked]
 	)
 
+	// Expands every collapsed folder whose children are already loaded.
+	const expandAll = React.useCallback(
+		() => setTreeMarked((t) => applyExpandAll(t) as TNode),
+		[setTreeMarked]
+	)
+
+	// Lets the toolbar flip its "Collapse all" action to "Expand all" once
+	// everything is collapsed.
+	const anyFolderExpanded = React.useMemo(() => hasExpandedFolders(tree), [tree])
+
 	// Inserts a child node under parentId.
 	const createNode = React.useCallback(
 		(parentId: NodeId, node: Omit<TreeNode, "id"> & { id?: NodeId }) => {
@@ -196,6 +208,8 @@ export function useFileSystem(options: {
 		selectedId,
 		expandFolder,
 		collapseAll,
+		expandAll,
+		anyFolderExpanded,
 		createNode,
 		rename,
 		remove,

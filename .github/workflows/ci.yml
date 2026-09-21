@@ -34,9 +34,6 @@ jobs:
       - name: Typecheck
         run: pnpm run typecheck
 
-      # Lint still has a pre-existing backlog (583 errors as of this commit),
-      # so it runs for visibility but does not fail CI. Drop the
-      # continue-on-error line once that backlog reaches zero.
       - name: Lint
         run: pnpm run lint
         continue-on-error: true
