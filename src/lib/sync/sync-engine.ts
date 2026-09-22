@@ -24,6 +24,7 @@ import {
 import { EnvelopeLog, type DeliveryVector } from "./envelope-log"
 import { checkUpdateAuthorship } from "./update-guard"
 import type { Transport } from "./transport"
+import { openSnapshot, type Snapshot } from "@/lib/snapshots/snapshot"
 
 /** Tags a transaction as an applied remote update. Closes the feedback loop. */
 export const REMOTE_ORIGIN = Symbol("synk/remote")
@@ -61,6 +62,7 @@ export interface EpochKeyProvider {
 
 export type RejectionReason =
   | "malformed"
+  | "bad-snapshot"
   | "unsupported-kind"
   | "unknown-author"
   | "bad-signature"
@@ -81,6 +83,7 @@ export interface SyncResult {
 export interface SyncStats {
   published: number
   applied: number
+  snapshotsApplied: number
   duplicates: number
   rejected: Record<RejectionReason, number>
 }
@@ -89,9 +92,11 @@ function emptyStats(): SyncStats {
   return {
     published: 0,
     applied: 0,
+    snapshotsApplied: 0,
     duplicates: 0,
     rejected: {
       malformed: 0,
+      "bad-snapshot": 0,
       "unsupported-kind": 0,
       "unknown-author": 0,
       "bad-signature": 0,
@@ -277,6 +282,53 @@ export class SyncEngine {
   }
 
   deliveryVector(): DeliveryVector {
+    return this.log.deliveryVector()
+  }
+
+  /**
+   * Adopt a snapshot: verify, decrypt, apply, and advance the delivery vector
+   * to the point it covers.
+   *
+   * This is the one place a merged, unauthored artifact is accepted, and only
+   * from a resolvable author who is authorised to write here - someone who
+   * could already put arbitrary content in the document. The client-id check
+   * that guards ordinary updates deliberately does not apply: a snapshot
+   * contains every author's operations by construction.
+   *
+   * Applying it is what re-establishes a clean per-author causal baseline, so
+   * subsequent edits from pre-existing authors can place.
+   */
+  async applySnapshot(
+    snapshot: Snapshot,
+    verify: (snapshot: Snapshot, author: AuthorInfo) => Promise<boolean>,
+  ): Promise<boolean> {
+    if (this.closed) return false
+    if (snapshot?.resourceId !== this.options.resourceId) return this.reject("wrong-resource")
+
+    const author = await this.options.authors.resolve(snapshot.author)
+    if (!author) return this.reject("unknown-author")
+    if (!(await verify(snapshot, author))) return this.reject("bad-snapshot")
+    if (!(await this.options.policy.canWrite(snapshot.resourceId, snapshot.author)))
+      return this.reject("unauthorized")
+
+    const dek = await this.options.keys.forEpoch(snapshot.epoch)
+    if (!dek) return this.reject("unknown-epoch")
+
+    let state: Bytes
+    try {
+      state = await openSnapshot(snapshot, dek)
+    } catch {
+      return this.reject("undecryptable")
+    }
+
+    Y.applyUpdate(this.options.doc, state, REMOTE_ORIGIN)
+    this.log.markCovered(snapshot.covers)
+    this.stats.snapshotsApplied += 1
+    return true
+  }
+
+  /** The point in the log a snapshot taken now would cover. */
+  snapshotCoverage(): DeliveryVector {
     return this.log.deliveryVector()
   }
 

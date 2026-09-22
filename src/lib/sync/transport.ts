@@ -19,6 +19,7 @@
  * optimisation behind this same interface, carrying the same opaque envelopes.
  */
 
+import type { Snapshot } from "@/lib/snapshots/snapshot"
 import type { Envelope } from "./envelope"
 import type { DeliveryVector } from "./envelope-log"
 
@@ -45,6 +46,17 @@ export interface Transport {
    * and pushes it.
    */
   vector(): Promise<DeliveryVector>
+  /**
+   * Put a snapshot in the archive.
+   *
+   * A snapshot is another opaque signed, encrypted blob - the transport can no
+   * more read it than an envelope. It lives here so a joiner can collect it
+   * without any member being online: the admitting admin deposits it with the
+   * grant, and the relay holds it.
+   */
+  depositSnapshot(snapshot: Snapshot): Promise<void>
+  /** Archived snapshots for a resource, oldest first. */
+  fetchSnapshots(resourceId: string): Promise<Snapshot[]>
   close(): void
 }
 
@@ -62,6 +74,12 @@ export class OfflineTransport implements Transport {
   }
   vector(): Promise<DeliveryVector> {
     return Promise.resolve({})
+  }
+  depositSnapshot(): Promise<void> {
+    return Promise.resolve()
+  }
+  fetchSnapshots(): Promise<Snapshot[]> {
+    return Promise.resolve([])
   }
   close(): void {
     // nothing to release

@@ -9,12 +9,15 @@
  * re-verify everything, so the worst it can do is withhold or delay.
  */
 
+import type { Snapshot } from "@/lib/snapshots/snapshot"
 import { EnvelopeLog, type DeliveryVector } from "./envelope-log"
 import type { Envelope } from "./envelope"
 import type { Transport } from "./transport"
 
 export class MemoryRelay {
   private readonly log = new EnvelopeLog()
+  /** The archive: snapshots by resource, in deposit order. */
+  private readonly snapshots = new Map<string, Snapshot[]>()
   private readonly clients = new Set<RelayTransport>()
   /** Set false to model an outage; envelopes stop flowing, nothing is lost. */
   online = true
@@ -49,6 +52,16 @@ export class MemoryRelay {
   /** Everything the relay is holding. Ciphertext only. */
   stored(): Envelope[] {
     return this.log.all()
+  }
+
+  archive(snapshot: Snapshot): void {
+    const held = this.snapshots.get(snapshot.resourceId) ?? []
+    if (held.some((existing) => existing.id === snapshot.id)) return
+    this.snapshots.set(snapshot.resourceId, [...held, snapshot])
+  }
+
+  archived(resourceId: string): Snapshot[] {
+    return this.online ? [...(this.snapshots.get(resourceId) ?? [])] : []
   }
 
   get size(): number {
@@ -87,6 +100,15 @@ export class RelayTransport implements Transport {
     // A disconnected client must not conclude the relay has everything, or it
     // would skip pushing its backlog on reconnect.
     return Promise.resolve(this.connected ? this.relay.vector() : {})
+  }
+
+  depositSnapshot(snapshot: Snapshot): Promise<void> {
+    if (this.connected) this.relay.archive(snapshot)
+    return Promise.resolve()
+  }
+
+  fetchSnapshots(resourceId: string): Promise<Snapshot[]> {
+    return Promise.resolve(this.connected ? this.relay.archived(resourceId) : [])
   }
 
   deliver(envelope: Envelope): void {

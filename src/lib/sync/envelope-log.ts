@@ -76,6 +76,23 @@ export class EnvelopeLog {
     return out
   }
 
+  /**
+   * Treat everything up to `vector` as already delivered, without holding it.
+   *
+   * What applying a snapshot does to the log. The snapshot's state already
+   * contains those operations, so re-requesting them is pointless - and for a
+   * joiner they are sealed under epochs it can never open, so it would ask
+   * forever. Only ever raises a watermark; a lower claim is ignored.
+   */
+  markCovered(vector: DeliveryVector): void {
+    for (const [author, covered] of Object.entries(vector)) {
+      const state = this.state(author)
+      if (covered > state.contiguousTo) state.contiguousTo = covered
+      // A gap the snapshot bridged may make later held envelopes contiguous.
+      while (state.bySeq.has(state.contiguousTo + 1)) state.contiguousTo += 1
+    }
+  }
+
   /** Highest sequence this author has authored here, for allocating the next. */
   highestSeq(author: string): number {
     const state = this.authors.get(author)
