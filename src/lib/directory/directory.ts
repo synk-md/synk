@@ -1,0 +1,231 @@
+/**
+ * The workspace directory: member keys, prekeys, invitations and redemptions,
+ * carried as Yjs state.
+ *
+ * Yjs is the transport here, never the authority. Its merge is a convenience
+ * for getting records to everyone; it decides nothing about what is true. Every
+ * record is independently signed, and every read re-verifies from scratch. A
+ * peer that writes garbage, replays an old record, or overwrites an entry with
+ * a well-formed record of its own produces entries that simply fail
+ * verification and are dropped.
+ *
+ * That is why the read API returns only verified records and takes the trusted
+ * admin set as an argument. `rawEntries` exists for debugging and is the only
+ * way to see unverified state; it is named to make its use obvious in review.
+ */
+
+import * as Y from "yjs"
+import {
+  verifyAdmittedDevice,
+  verifyDeviceRecord,
+  verifyLinkedDevice,
+  type AdmittedDevice,
+  type DeviceAdmission,
+  type DeviceLink,
+  type DeviceRecord,
+  type LinkedDevice,
+  type MemberDevice,
+  type VerifyAdmissionOptions,
+} from "@/lib/identity"
+import { verifyPrekeyBundle, type PrekeyBundle } from "./prekeys"
+import {
+  verifyInvitation,
+  verifyRedemption,
+  type Invitation,
+  type Redemption,
+} from "./invitation"
+
+/** Sub-maps of the directory document. */
+export const DIRECTORY_MAPS = {
+  devices: "directory:devices",
+  admissions: "directory:admissions",
+  links: "directory:links",
+  prekeys: "directory:prekeys",
+  invitations: "directory:invitations",
+  redemptions: "directory:redemptions",
+} as const
+
+export interface DirectoryReadOptions extends VerifyAdmissionOptions {
+  now?: number
+}
+
+/**
+ * Everything that survived verification. Records that failed are absent, and
+ * `rejected` counts them so a caller can surface "some records were dropped"
+ * rather than silently showing a shorter list.
+ */
+export interface VerifiedDirectory {
+  devices: MemberDevice[]
+  prekeys: Map<string, PrekeyBundle>
+  invitations: Invitation[]
+  redemptions: Map<string, Redemption[]>
+  rejected: number
+}
+
+function map<T>(doc: Y.Doc, name: string): Y.Map<T> {
+  return doc.getMap<T>(name)
+}
+
+// ---------------------------------------------------------------------------
+// Writing. Any peer may write; nothing here grants anything.
+// ---------------------------------------------------------------------------
+
+export function putDeviceRecord(doc: Y.Doc, record: DeviceRecord): void {
+  map<DeviceRecord>(doc, DIRECTORY_MAPS.devices).set(record.did, record)
+}
+
+export function putAdmission(doc: Y.Doc, admission: DeviceAdmission): void {
+  map<DeviceAdmission>(doc, DIRECTORY_MAPS.admissions).set(admission.did, admission)
+}
+
+export function putLink(doc: Y.Doc, link: DeviceLink): void {
+  map<DeviceLink>(doc, DIRECTORY_MAPS.links).set(link.did, link)
+}
+
+export function putPrekeyBundle(doc: Y.Doc, bundle: PrekeyBundle): void {
+  map<PrekeyBundle>(doc, DIRECTORY_MAPS.prekeys).set(bundle.did, bundle)
+}
+
+export function putInvitation(doc: Y.Doc, invitation: Invitation): void {
+  map<Invitation>(doc, DIRECTORY_MAPS.invitations).set(invitation.invitationId, invitation)
+}
+
+/**
+ * Redemptions are appended per invitation rather than keyed singly, because
+ * seeing a *second* redemption is the signal that an invitation was reused.
+ * Overwriting would hide exactly what single-use enforcement needs to notice.
+ */
+export function putRedemption(doc: Y.Doc, redemption: Redemption): void {
+  const store = map<Redemption[]>(doc, DIRECTORY_MAPS.redemptions)
+  const existing = store.get(redemption.invitationId) ?? []
+  if (existing.some((prior) => prior.sig === redemption.sig)) return
+  store.set(redemption.invitationId, [...existing, redemption])
+}
+
+// ---------------------------------------------------------------------------
+// Reading. Everything is re-verified.
+// ---------------------------------------------------------------------------
+
+/**
+ * Read and verify the whole directory.
+ *
+ * Device presence is resolved exactly as `verifyUser` does it: an admission
+ * from a trusted admin, or a link whose parent is an admin-admitted device of
+ * the same member, resolved from within this directory.
+ */
+export async function readDirectory(
+  doc: Y.Doc,
+  trustedAdminDids: readonly string[],
+  options: DirectoryReadOptions = {},
+): Promise<VerifiedDirectory> {
+  const now = options.now ?? Date.now()
+  let rejected = 0
+
+  const records = new Map<string, DeviceRecord>()
+  for (const [did, record] of map<DeviceRecord>(doc, DIRECTORY_MAPS.devices).entries()) {
+    // A record filed under a DID other than its own is a misfiled or hostile
+    // entry; the key is part of what is being asserted.
+    if (record?.did === did && (await verifyDeviceRecord(record))) records.set(did, record)
+    else rejected += 1
+  }
+
+  // Admissions first: links can only be rooted in an admitted parent.
+  const admitted = new Map<string, AdmittedDevice>()
+  for (const [did, admission] of map<DeviceAdmission>(doc, DIRECTORY_MAPS.admissions).entries()) {
+    const record = records.get(did)
+    if (!record || admission?.did !== did) {
+      rejected += 1
+      continue
+    }
+    const device: AdmittedDevice = { record, admission }
+    if (await verifyAdmittedDevice(device, trustedAdminDids, options)) admitted.set(did, device)
+    else rejected += 1
+  }
+
+  const linked: LinkedDevice[] = []
+  for (const [did, link] of map<DeviceLink>(doc, DIRECTORY_MAPS.links).entries()) {
+    const record = records.get(did)
+    const parent = link ? admitted.get(link.parent) : undefined
+    if (!record || !parent || link.did !== did) {
+      rejected += 1
+      continue
+    }
+    const device: LinkedDevice = { record, link }
+    if (await verifyLinkedDevice(device, parent, trustedAdminDids, options)) linked.push(device)
+    else rejected += 1
+  }
+
+  const devices: MemberDevice[] = [
+    ...[...admitted.values()].map((device) => ({ kind: "admitted" as const, ...device })),
+    ...linked.map((device) => ({ kind: "linked" as const, ...device })),
+  ]
+
+  const prekeys = new Map<string, PrekeyBundle>()
+  for (const [did, bundle] of map<PrekeyBundle>(doc, DIRECTORY_MAPS.prekeys).entries()) {
+    // Only devices that are actually present may publish a sealing target.
+    const present = admitted.has(did) || linked.some((device) => device.record.did === did)
+    if (present && bundle?.did === did && (await verifyPrekeyBundle(bundle, { now })))
+      prekeys.set(did, bundle)
+    else rejected += 1
+  }
+
+  const invitations: Invitation[] = []
+  for (const [id, invitation] of map<Invitation>(doc, DIRECTORY_MAPS.invitations).entries()) {
+    if (
+      invitation?.invitationId === id &&
+      (await verifyInvitation(invitation, trustedAdminDids, { ...options, now }))
+    ) {
+      invitations.push(invitation)
+    } else rejected += 1
+  }
+
+  const byId = new Map(invitations.map((invitation) => [invitation.invitationId, invitation]))
+  const redemptions = new Map<string, Redemption[]>()
+  for (const [id, entries] of map<Redemption[]>(doc, DIRECTORY_MAPS.redemptions).entries()) {
+    const invitation = byId.get(id)
+    if (!invitation || !Array.isArray(entries)) {
+      rejected += 1
+      continue
+    }
+    const valid: Redemption[] = []
+    for (const redemption of entries) {
+      if (await verifyRedemption(redemption, invitation, { now })) valid.push(redemption)
+      else rejected += 1
+    }
+    if (valid.length > 0) redemptions.set(id, valid)
+  }
+
+  return { devices, prekeys, invitations, redemptions, rejected }
+}
+
+/**
+ * Redemptions recorded against one invitation, verified.
+ *
+ * More than one naming different devices means the invitation was reused; the
+ * grant path refuses in that case rather than picking a winner.
+ */
+export async function redemptionsFor(
+  doc: Y.Doc,
+  invitationId: string,
+  trustedAdminDids: readonly string[],
+  options: DirectoryReadOptions = {},
+): Promise<Redemption[]> {
+  const directory = await readDirectory(doc, trustedAdminDids, options)
+  return directory.redemptions.get(invitationId) ?? []
+}
+
+/** Where to seal to this device, or undefined if it published no usable bundle. */
+export function sealingBundleFor(
+  directory: VerifiedDirectory,
+  did: string,
+): PrekeyBundle | undefined {
+  return directory.prekeys.get(did)
+}
+
+/**
+ * Raw, **unverified** state. For debugging and tests only - never build a
+ * decision on this. Named so its use stands out in review.
+ */
+export function rawEntries(doc: Y.Doc, mapName: string): [string, unknown][] {
+  return [...doc.getMap<unknown>(mapName).entries()]
+}
