@@ -231,11 +231,33 @@ export class FlatKeyring implements ReadKeySource {
   private currentTimeline: EpochTimeline
   private readonly anchors: Map<number, Bytes>
   private derived = new Map<number, Bytes>()
+  /**
+   * Epochs destroyed by erasure. Sticky, because the sealed copies are still on
+   * the relay: without this, the next refresh re-opens them and quietly undoes
+   * the erasure.
+   */
+  private readonly destroyed: Set<number>
 
-  constructor(timeline: EpochTimeline, anchors: Map<number, Bytes>) {
+  constructor(timeline: EpochTimeline, anchors: Map<number, Bytes>, destroyed?: Iterable<number>) {
     this.domain = timeline[0].domain
     this.currentTimeline = timeline
     this.anchors = anchors
+    this.destroyed = new Set(destroyed ?? [])
+    for (const epoch of this.destroyed) this.anchors.delete(epoch)
+  }
+
+  /** Forget these epochs and refuse to take them back. */
+  forget(epochs: Iterable<number>): void {
+    for (const epoch of epochs) {
+      this.destroyed.add(epoch)
+      this.anchors.delete(epoch)
+      this.derived.delete(epoch)
+    }
+  }
+
+  /** What has been destroyed here, so a caller can persist it. */
+  get destroyedEpochs(): number[] {
+    return [...this.destroyed].sort((a, b) => a - b)
   }
 
   get timeline(): EpochTimeline {
@@ -256,7 +278,12 @@ export class FlatKeyring implements ReadKeySource {
       throw new Error(`refusing to refresh ${this.domain} with a timeline for ${timeline[0].domain}`)
     }
     this.currentTimeline = timeline
-    if (anchors) for (const [epoch, key] of anchors) this.anchors.set(epoch, key)
+    if (anchors) {
+      for (const [epoch, key] of anchors) {
+        if (this.destroyed.has(epoch)) continue
+        this.anchors.set(epoch, key)
+      }
+    }
     // Segment boundaries can only be appended, never rewritten, so derivations
     // stay valid - but recomputing is cheap and removes the need to reason
     // about it at every call site.
@@ -273,6 +300,10 @@ export class FlatKeyring implements ReadKeySource {
   }
 
   async keyFor(epoch: number): Promise<Bytes | undefined> {
+    // Refused even when an earlier anchor could derive it. The scope
+    // calculation is meant to have removed those anchors too; this is the
+    // second line rather than the only one.
+    if (this.destroyed.has(epoch)) return undefined
     const cached = this.derived.get(epoch)
     if (cached) return cached
     const key = await resolveEpochKey(this.currentTimeline, this.anchors, epoch)
@@ -281,7 +312,9 @@ export class FlatKeyring implements ReadKeySource {
   }
 
   readableEpochs(): number[] {
-    return reachableEpochs(this.currentTimeline, this.anchors)
+    return reachableEpochs(this.currentTimeline, this.anchors).filter(
+      (epoch) => !this.destroyed.has(epoch),
+    )
   }
 }
 
@@ -304,7 +337,9 @@ export async function readKeysFor(
   sealed: readonly SealedEpochKey[],
   sealingDid: string,
   sealingKey: SealingKey,
+  /** Previously destroyed epochs, so a reload does not resurrect them. */
+  destroyed?: Iterable<number>,
 ): Promise<FlatKeyring> {
   const { anchors } = await openKeyring(sealed, timeline[0].domain, sealingDid, sealingKey)
-  return new FlatKeyring(timeline, anchors)
+  return new FlatKeyring(timeline, anchors, destroyed)
 }

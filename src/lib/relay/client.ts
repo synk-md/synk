@@ -45,6 +45,16 @@ export interface RelayClientOptions {
   onError?: (error: unknown) => void
 }
 
+/**
+ * A request without its id. Distributive, because `Omit` over a union keeps
+ * only the keys every member shares - which for this union is `op` alone.
+ */
+type ClientRequest = ClientMessage extends infer T
+  ? T extends { id: string }
+    ? Omit<T, "id">
+    : never
+  : never
+
 interface Pending {
   resolve: (reply: ServerReply) => void
   reject: (error: Error) => void
@@ -129,8 +139,8 @@ export class RelayClient implements Transport {
     }
   }
 
-  private request(message: Omit<ClientMessage, "id"> & { id?: string }): Promise<ServerReply> {
-    const id = message.id ?? nextRequestId()
+  private request(message: ClientRequest): Promise<ServerReply> {
+    const id = nextRequestId()
     const framed = { ...message, id } as ClientMessage
 
     return new Promise<ServerReply>((resolve, reject) => {
@@ -172,7 +182,7 @@ export class RelayClient implements Transport {
     this.setConnection("online")
   }
 
-  private async call(message: Omit<ClientMessage, "id">): Promise<ServerReply | undefined> {
+  private async call(message: ClientRequest): Promise<ServerReply | undefined> {
     try {
       await this.ensureReady()
       const reply = await this.request(message)

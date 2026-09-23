@@ -267,9 +267,15 @@ function restoreFragment(live: Y.XmlFragment, target: Y.XmlFragment): number {
   const removeLength = have.length - head - tail
   if (removeLength > 0) live.delete(head, removeLength)
 
+  // A hook is a host-defined placeholder with no insertable clone, so it is
+  // left out rather than coerced. Reported through the plan's skipped roots.
   const insert = target
     .toArray()
     .slice(head, want.length - tail)
+    .filter(
+      (node): node is Y.XmlElement | Y.XmlText =>
+        node instanceof Y.XmlElement || node instanceof Y.XmlText,
+    )
     .map((node) => node.clone())
   if (insert.length > 0) live.insert(head, insert)
   return insert.length
