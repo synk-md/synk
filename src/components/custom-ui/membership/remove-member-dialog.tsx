@@ -13,31 +13,22 @@ export type RemoveMemberDialogProps = {
   open: boolean
   onClose: () => void
   member: MemberView | null
-  /** Everyone who keeps access. Shown in full, because an omission locks someone out. */
+  /** Shown in full: an omission locks someone out. */
   remaining: readonly { did: string; label: string }[]
   onRemove: (request: RemovalRequest, reason: string | undefined) => Promise<void> | void
   className?: string
 }
 
 /**
- * Removing a member.
+ * Removing a member: revoke, rotate, reseal.
  *
- * Removal is revoke plus rotate plus reseal, and the two halves fail
- * differently. Rotation denies future reads immediately and unconditionally;
- * revocation stops accepted writes only once it propagates. A dialog that said
- * "they will be removed" would flatten that into one promise, and then the
- * perfectly normal sight of a removed member still appearing for a minute would
- * read as the promise being broken.
+ * The two halves fail differently - rotation denies reads immediately,
+ * revocation stops writes only once it propagates - so they are shown as two
+ * rows rather than one promise, or a normal minute of lingering reads as the
+ * promise being broken.
  *
- * Two things removal does not do are stated here rather than discovered later.
- * They keep whatever they already read - nothing can un-share that. And their
- * own copy of the document keeps working, because nothing can stop a
- * local-first client editing its own replica, and nothing should try. What
- * changes is that nobody else accepts those edits.
- *
- * Who keeps access is listed in full. The reseal goes to exactly this set, so
- * an omission here is somebody quietly locked out of a notebook they own work
- * in, discovered much later.
+ * What removal cannot undo is stated here rather than discovered later. Who
+ * keeps access is listed in full, because the reseal goes to exactly that set.
  */
 export function RemoveMemberDialog({
   open,

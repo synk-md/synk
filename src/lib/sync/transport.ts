@@ -1,22 +1,13 @@
 /**
  * The transport seam. Carries opaque envelopes and nothing else.
  *
- * **No transport is ever given a `Y.Doc`.** Only the envelope layer holds one.
- * Nothing in this interface mentions a document, which is what keeps the rule
- * structural rather than a convention someone has to remember.
+ * **No transport is ever given a `Y.Doc`.** Nothing here mentions a document,
+ * which keeps the rule structural. That disqualifies `y-protocols/sync`, which
+ * answers a state-vector request with a merged diff nobody authored or signed:
+ * convergence is fine, attributability is gone.
  *
- * That rule disqualifies the standard Yjs sync protocol and every provider
- * built on it. `y-protocols/sync` answers a state-vector request with
- * `Y.encodeStateAsUpdate(doc, sv)` - a merged diff nobody authored and nobody
- * signed. It converges correctly, which is exactly why the hazard is easy to
- * miss: convergence is fine, attributability is gone. A provider that needs the
- * document in order to synthesise that diff cannot be made safe by wrapping it.
- *
- * Relay-first: the relay is the backbone because peers are usually not online
- * together, and it is trusted for liveness only - it can delay or withhold, but
- * every envelope it carries is verified independently on arrival, so it cannot
- * forge or read anything. A direct peer link, if added, is a latency
- * optimisation behind this same interface, carrying the same opaque envelopes.
+ * Relay-first, since peers are usually not online together. A direct peer link
+ * is a latency optimisation behind this same interface.
  */
 
 import type { Snapshot } from "@/lib/snapshots/snapshot"
@@ -30,30 +21,16 @@ export interface Transport {
   /** Live delivery. Returns an unsubscribe. */
   subscribe(handler: (envelope: Envelope) => void): () => void
   /**
-   * Catch-up: originals beyond the caller's vector.
-   *
-   * The responder may only return envelopes it actually holds. It must never
-   * compute a merged diff - a synthesised update carries no author signature,
-   * so an untrusted responder could tamper with it undetectably.
+   * Originals beyond the caller's vector, never a computed diff - a synthesised
+   * update carries no author signature.
    */
   fetchSince(vector: DeliveryVector): Promise<Envelope[]>
   /**
-   * The responder's own delivery vector.
-   *
-   * Catch-up has to run both ways. A peer that authored while disconnected
-   * holds envelopes the relay never saw, and pulling alone would strand them
-   * there forever - so the reconnecting side asks what the responder is missing
-   * and pushes it.
+   * The responder's vector, so catch-up runs both ways. A peer that authored
+   * while disconnected would otherwise be stranded holding the only copy.
    */
   vector(): Promise<DeliveryVector>
-  /**
-   * Put a snapshot in the archive.
-   *
-   * A snapshot is another opaque signed, encrypted blob - the transport can no
-   * more read it than an envelope. It lives here so a joiner can collect it
-   * without any member being online: the admitting admin deposits it with the
-   * grant, and the relay holds it.
-   */
+  /** Here so a joiner can collect it without any member being online. */
   depositSnapshot(snapshot: Snapshot): Promise<void>
   /** Archived snapshots for a resource, oldest first. */
   fetchSnapshots(resourceId: string): Promise<Snapshot[]>

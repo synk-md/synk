@@ -1,27 +1,16 @@
 /**
  * The epoch timeline and the key chain underneath it.
  *
- * A new epoch is cut at every membership change. Which epoch keys a member
- * holds is exactly which parts of the history they can decrypt, so the two
- * required properties are properties of how keys relate to each other:
+ * Two properties are needed at once - a joiner must not derive backwards, a
+ * removed member must not derive forwards - and a single hash chain gives one
+ * or the other. So the chain runs forward *within a segment* and is broken at
+ * every removal:
  *
- *   history excluded on join   a joiner must not derive backwards
- *   removal denies future reads  a removed member must not derive forwards
+ *   join     `chain`     k(n+1) = KDF(k(n)); reseal to the joiner only, O(1)
+ *   removal  `rotation`  fresh seed, flat reseal to whoever remains, O(members)
  *
- * A single hash chain gives one or the other, never both. So the chain runs
- * forward *within a segment* and is broken at every removal:
- *
- *   join     `chain`     k(n+1) = KDF(k(n)). Existing members derive the new
- *                        key themselves, so the reseal is to the joiner only.
- *                        One-way, so the joiner cannot reach earlier epochs.
- *   removal  `rotation`  fresh random seed, flat-resealed to everyone who
- *                        remains. The removed member holds a key the chain no
- *                        longer reaches from.
- *
- * That asymmetry is deliberate: joins are frequent and cost O(1) seals,
- * removals are rare and cost O(members). It is also what keeps the retained
- * keyring near-constant - a member keeps one anchor per segment they were in,
- * not one key per epoch.
+ * The asymmetry matches the frequencies, and keeps the retained keyring near
+ * constant: one anchor per segment, not one key per epoch.
  */
 
 import { deriveKey, generateAeadKey, type Bytes } from "@/lib/crypto"

@@ -1,45 +1,18 @@
 /**
- * The join grant: an epoch cut and the snapshot that makes it usable, produced
- * as one unit.
+ * An epoch cut and the snapshot that makes it usable, produced as one unit.
  *
- * ## Why they are atomic
+ * A sealed key alone admits nobody to a non-empty notebook - the joiner can
+ * decrypt what comes next and place none of it, because every pre-existing
+ * author has a gap. `stageAddMember` computes the cut without applying it, so a
+ * grant without a usable snapshot behind it is never created.
  *
- * A sealed epoch key on its own does not admit anybody to a non-empty notebook.
- * The joiner can decrypt what comes next and still place none of it, because
- * every pre-existing author has a gap they cannot fill. So the grant and the
- * snapshot are produced together and published together: **a joiner grant
- * without a usable snapshot behind it is never created.**
+ * Produced by the admitting admin from its own replica, and deposited in the
+ * relay archive, so no other member need ever come online.
  *
- * `KeyDomainAdmin.stageAddMember` computes the cut without applying it, which
- * is what makes that structural rather than hopeful. If snapshot production
- * throws, the domain never advanced and nothing was handed out.
- *
- * ## Who produces it
- *
- * The admitting admin, from its own replica. Not "some member, later" - that
- * would make admission depend on someone coming online afterwards, and a joiner
- * would sit unable to participate until they did.
- *
- * ## Staleness, and the limit of "it heals by replay"
- *
- * The admin snapshots what it has. Anything written *after* the cut is under an
- * epoch the joiner holds, so ordinary replay of original signed envelopes
- * closes that gap - staleness there costs a larger catch-up and nothing else.
- *
- * It does **not** heal in one direction, and the distinction is sharp. An
- * envelope written under a *pre-join* epoch that the admin had not yet seen is
- * in neither the snapshot nor the joiner's reach: they cannot decrypt it, and
- * replaying it to them achieves nothing. That content stays invisible to the
- * joiner until some member who does hold it produces a later snapshot.
- *
- * So the admin must be caught up with the relay at the moment it cuts the
- * epoch. `relayVector` makes that a precondition rather than a hope: supply it
- * and an admission from a demonstrably behind replica is refused.
- *
- * ## Why it goes in the relay archive
- *
- * So no member need be online after the join. The admin deposits the grant and
- * the snapshot; the joiner collects both from the relay whenever it arrives.
+ * Staleness heals by replay in one direction only: envelopes written after the
+ * cut are under an epoch the joiner holds, but one written under a *pre-join*
+ * epoch the admin had not seen is in neither the snapshot nor their reach.
+ * `relayVector` makes being caught up a precondition rather than a hope.
  */
 
 import type { SigningKey } from "@/lib/crypto"
@@ -55,10 +28,7 @@ export interface JoinGrant {
   record: EpochRecord
   /** The joiner's sealed copy of the new epoch key. */
   sealed: SealedEpochKey[]
-  /**
-   * The baseline the joiner needs. Null only for an empty notebook, where
-   * there are no pre-existing authors and so no gaps to close.
-   */
+  /** Null only for an empty notebook, where there are no gaps to close. */
   snapshot: Snapshot | null
 }
 

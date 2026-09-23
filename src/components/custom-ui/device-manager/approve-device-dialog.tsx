@@ -28,24 +28,13 @@ export type ApproveDeviceDialogProps = {
 }
 
 /**
- * Approving a new device, from a device that already has access.
+ * Approving a new device from one that already has access. The security value
+ * is entirely in the fingerprint comparison, so the flow is built around it:
+ * retype rather than eyeball-and-click, approve disabled until it matches, and
+ * the claimed name shown as a claim - an attacker would choose a good one.
  *
- * The whole security value of this dialog is the fingerprint comparison, so the
- * flow is built around it rather than around the button:
- *
- *   - the fingerprint is shown large, and the person is asked to read it off
- *     the *new* device and type it here
- *   - approve stays disabled until what they typed matches
- *   - the name the new device claims is shown as a claim, not a fact, because
- *     the new device chose it and an attacker would choose "Sindre's iPhone"
- *
- * Making the person retype rather than eyeball-and-click is deliberate. A
- * confirm button next to a displayed code gets clicked without reading it;
- * typing the code cannot be done without looking at both screens.
- *
- * The code is sixteen characters because that is 80 bits, which is what makes a
- * matching forgery not worth grinding for. It is a security parameter, not a
- * layout choice - see `deviceFingerprint`.
+ * The length is a security parameter, not a layout choice; see
+ * `deviceFingerprint`.
  */
 export function ApproveDeviceDialog({
   open,

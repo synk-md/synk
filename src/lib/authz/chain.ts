@@ -1,15 +1,9 @@
 /**
- * The verifier: a general chain walk to the resource owner.
+ * A general chain walk to the resource owner, of arbitrary depth, checking
+ * attenuation at every link. Nothing in it knows about roles.
  *
- * Deliberately not hard-coded to owner-to-member. It walks `prf` pointers of
- * arbitrary depth, checking attenuation at every link, and succeeds only when
- * it reaches a root the resource owner issued. Owner → admin → writer → leaf is
- * just the two-link case; nothing in the walk knows about those roles.
- *
- * Failures are returned rather than thrown, and they name the rule that failed.
- * An authorization check runs on attacker-supplied input and its result is a
- * decision, not an exception - but an operator debugging "why was this
- * rejected" needs more than `false`.
+ * Failures are returned rather than thrown - the result is a decision, not an
+ * exception - and they name the rule that failed.
  */
 
 import { checkAttenuation, abilitySatisfies, resourceContains } from "./attenuation"
@@ -20,11 +14,7 @@ import {
   type Capability,
 } from "./capability"
 
-/**
- * Chains longer than this are refused outright. A delegation graph is
- * attacker-supplied; without a bound, a long chain is a cheap way to make every
- * verifier do unbounded signature work.
- */
+/** Without a bound, a long chain is cheap unbounded signature work. */
 export const MAX_CHAIN_DEPTH = 16
 
 export type DenialReason =
@@ -64,11 +54,7 @@ function deny(reason: DenialReason, detail?: string): AuthorizationResult {
   return detail === undefined ? { authorized: false, reason } : { authorized: false, reason, detail }
 }
 
-/**
- * Validate one capability as a link: signature, validity window, revocation.
- *
- * Not attenuation - that is a relation between two links, checked by the walk.
- */
+/** One link in isolation. Attenuation is a relation, checked by the walk. */
 async function checkLink(
   capability: Capability,
   context: AuthorizationContext,
@@ -85,11 +71,8 @@ async function checkLink(
 }
 
 /**
- * Walk a capability to a root the owner issued.
- *
- * Every link is checked in isolation, then against its parent. The walk stops
- * at a root (`prf === null`), which is valid only if the owner issued it -
- * that is the single place ownership enters the model.
+ * Walk to a root, which is valid only if the owner issued it - the single place
+ * ownership enters the model.
  */
 export async function verifyChain(
   leaf: Capability,
@@ -100,10 +83,8 @@ export async function verifyChain(
   let current = leaf
 
   for (let depth = 0; depth < MAX_CHAIN_DEPTH; depth += 1) {
-    // Defence in depth. Attenuation already makes cycles impossible - depth
-    // strictly decreases at every link, so returning to the same capability
-    // would need its depth to be below itself - but a corrupt proof map should
-    // terminate rather than spin.
+    // Unreachable: attenuation makes cycles impossible, since depth strictly
+    // decreases. Here so a corrupt proof map terminates rather than spins.
     if (seen.has(current.cid)) return deny("cycle", `capability ${current.cid} revisited`)
     seen.add(current.cid)
 
@@ -142,12 +123,8 @@ export interface AuthorizationQuery {
 }
 
 /**
- * Does this principal hold this ability on this resource?
- *
- * Tries every capability addressed to them that could cover the request, and
- * succeeds on the first whose chain reaches the owner. Trying all of them
- * matters: a principal may hold several grants, and an expired or revoked one
- * must not mask a good one.
+ * Tries every covering capability, not just the first: a principal may hold
+ * several, and an expired or revoked one must not mask a good one.
  */
 export async function authorize(
   query: AuthorizationQuery,

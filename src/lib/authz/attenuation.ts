@@ -1,9 +1,6 @@
 /**
- * Attenuation: a re-delegation may only narrow.
- *
- * Every rule here is a "no wider than" check. Together they are what makes a
- * chain meaningful - without them a holder could hand on more than they were
- * given, and walking to the owner would prove nothing.
+ * A re-delegation may only narrow. Without these, a holder could hand on more
+ * than they were given and walking to the owner would prove nothing.
  */
 
 import type { Ability, CapabilityPayload } from "./capability"
@@ -21,10 +18,8 @@ export function isWeakerOrEqual(child: Ability, parent: Ability): boolean {
 }
 
 /**
- * Resource containment. Exact match, or a descendant under `/`.
- *
- * `notebook:1` contains `notebook:1/note:abc` but not `notebook:10` - the
- * separator check is what stops a prefix from silently widening scope.
+ * Exact match or a descendant under `/`. The separator is what stops
+ * `notebook:1` from containing `notebook:10`.
  */
 export function resourceContains(parent: string, child: string): boolean {
   return child === parent || child.startsWith(`${parent}/`)
@@ -36,11 +31,8 @@ export interface AttenuationFailure {
 }
 
 /**
- * Check a child against the parent it claims to rest on.
- *
- * `linkage` is the one that is easy to forget: the child's issuer must be the
- * parent's audience, or anyone could staple their own token to someone else's
- * proof.
+ * `linkage` is the easy one to forget: the child's issuer must be the parent's
+ * audience, or anyone could staple their token to someone else's proof.
  */
 export function checkAttenuation(
   child: CapabilityPayload,
@@ -58,8 +50,7 @@ export function checkAttenuation(
   if (!resourceContains(parent.rsc, child.rsc)) {
     return { rule: "resource", detail: `${child.rsc} is not within ${parent.rsc}` }
   }
-  // The parent's remaining budget must cover this delegation and what it grants
-  // onward: a parent with dep 0 is a leaf and may delegate nothing at all.
+  // A parent with dep 0 is a leaf and may delegate nothing.
   if (parent.dep < 1) {
     return { rule: "depth", detail: `proof is a non-delegable leaf (dep ${String(parent.dep)})` }
   }

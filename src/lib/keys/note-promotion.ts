@@ -1,22 +1,10 @@
 /**
- * Promoting a note to its own key domain.
+ * Promoting a note to its own key domain, because sharing it outside the
+ * notebook cannot mean handing over the notebook DEK.
  *
- * A note normally lives under its notebook's DEK. Sharing it with someone
- * outside the notebook cannot mean handing over that DEK - it would unlock
- * every other note too. So the note is promoted: it gets a key domain of its
- * own, with its own epoch timeline, and future updates are sealed under that.
- *
- * Two consequences worth stating plainly.
- *
- * History does not come with it. Envelopes written before promotion are sealed
- * under notebook epochs the outside recipient cannot open, so they see the note
- * from a snapshot taken under the note's genesis key forward. That is the same
- * history-excluded-by-default rule a joiner gets, and the snapshot is M9's.
- *
- * Promotion is one-way here. Demoting a note back under the notebook key would
- * not un-share it - the outside recipient keeps the note keys they already
- * hold - so there is no `demote`, only removing members from the note's domain,
- * which rotates it away from them like any other removal.
+ * History does not come with it - earlier envelopes are under notebook epochs
+ * the recipient cannot open - and promotion is one-way, since demoting would
+ * not take back the note keys they already hold.
  */
 
 import type { Bytes, SealingKey } from "@/lib/crypto"

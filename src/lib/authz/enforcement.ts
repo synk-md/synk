@@ -1,18 +1,9 @@
 /**
- * The two enforcement points.
+ * Two enforcement points: write on update acceptance, read on DEK sealing.
  *
- *   write   update acceptance. `CapabilityWritePolicy` replaces the membership
- *           placeholder M4 shipped with, so an envelope from a correctly signed
- *           but unauthorized author is rejected.
- *   read    DEK access. An epoch key is sealed only to principals holding read,
- *           so a non-reader never obtains it.
- *
- * The asymmetry is the interesting part. A write check is *evaluated* on every
- * inbound envelope, so revoking write takes effect as soon as the revocation
- * propagates. A read check is applied when a key is *sealed*, so it governs
- * future epochs rather than past ones - a reader removed today keeps whatever
- * they already hold, and DEK rotation (M5) is what denies them what comes next.
- * Neither check can un-ring a bell.
+ * The asymmetry matters. A write check runs on every inbound envelope, so it
+ * takes effect as the revocation propagates. A read check runs when a key is
+ * sealed, so it governs future epochs and not past ones.
  */
 
 import type { KeyRecipient } from "@/lib/keys"
@@ -23,11 +14,8 @@ import { authorize, type AuthorizationContext, type AuthorizationResult } from "
 export type ContextSource = () => AuthorizationContext | Promise<AuthorizationContext>
 
 /**
- * Update acceptance gated on write.
- *
- * Deliberately re-resolves the context per check rather than caching: a cached
- * context would keep accepting an author whose capability was revoked, which is
- * precisely the case the check exists for.
+ * Re-resolves the context per check rather than caching: a cached one would
+ * keep accepting an author whose capability was revoked.
  */
 export class CapabilityWritePolicy implements WritePolicy {
   private readonly context: ContextSource
@@ -79,13 +67,7 @@ export interface ReaderGateResult {
   denied: { candidate: CandidateReader; result: AuthorizationResult }[]
 }
 
-/**
- * DEK access gated on read.
- *
- * Filters a candidate set down to principals who actually hold read on the
- * resource. Sealing paths take the result rather than the raw candidates, so a
- * non-reader is never handed an epoch key.
- */
+/** Sealing paths take this rather than raw candidates. */
 export async function gateReaders(
   candidates: readonly CandidateReader[],
   resource: string,
@@ -106,12 +88,8 @@ export async function gateReaders(
 }
 
 /**
- * Seal only to authorized readers, or refuse the whole operation.
- *
- * `strict` is for the paths where silently sealing to fewer people than asked
- * would be worse than failing - an admin resealing after a removal wants to
- * know their intended recipient list was wrong, not to discover it later when
- * someone cannot read.
+ * For paths where sealing to fewer people than asked is worse than failing - an
+ * admin resealing wants to know the list was wrong now, not when someone calls.
  */
 export async function requireReaders(
   candidates: readonly CandidateReader[],

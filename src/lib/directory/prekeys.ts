@@ -6,13 +6,9 @@
  * a one-time key and falls back to the signed prekey when the pool is empty,
  * so addition never blocks on the recipient being reachable.
  *
- * Worth being honest about what this buys. The design has no forward secrecy as
- * a stated non-goal, and a device record already names a long-term sealing key
- * that anyone could seal to. So prekeys are not buying FS here. They buy key
- * hygiene - one sealing target is not reused across every member addition
- * forever - and rotation without changing device identity, which the long-term
- * key in the device record cannot offer. If the FS non-goal is ever revisited,
- * the publication mechanism is already in place.
+ * Not forward secrecy - that is a stated non-goal, and the device record
+ * already names a long-term sealing key. What they buy is key hygiene and
+ * rotation without changing device identity.
  */
 
 import {

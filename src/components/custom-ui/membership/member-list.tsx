@@ -16,11 +16,10 @@ import "./membership.scss"
 
 export type MemberListProps = {
   members: readonly MemberView[]
-  /** How the resource reads in a sentence: "this notebook". */
+  /** Reads in a sentence: "this notebook". */
   resourceLabel: string
-  /** The device the person is acting from. */
   actingDid: string
-  /** Removals still in flight, so a lingering row is explained in place. */
+  /** So a lingering row is explained in place. */
   pending?: readonly PendingRemoval[]
   onAdmit?: (member: MemberView) => void
   onRemove?: (member: MemberView) => void
@@ -31,17 +30,11 @@ export type MemberListProps = {
 }
 
 /**
- * Everyone in the workspace, and what they hold here.
+ * Everyone in the workspace and what they hold here. People with no access are
+ * listed too, with the way in beside them - that is where admission starts.
  *
- * People with no access to this resource are listed too, greyed, with the way
- * in beside them. Being in the workspace and having keys to a given notebook
- * are different things, and a list that showed only key-holders would hide both
- * that difference and the place admission starts from.
- *
- * A member whose removal is still propagating keeps their row, labelled. Making
- * them vanish the instant the button is pressed would be a more satisfying
- * interface and a dishonest one: they have not gone from everywhere yet, and
- * the row is where that belongs.
+ * A member whose removal is still propagating keeps their row, labelled.
+ * Vanishing on click would be more satisfying and untrue.
  */
 export function MemberList({
   members,

@@ -1,22 +1,10 @@
 /**
- * Membership lifecycle: add, change level, remove.
+ * Add, change level, remove. The composition is the point - doing these in the
+ * wrong order, or omitting one, is how a membership system quietly fails.
  *
- * Each operation is a composition of pieces built earlier, and the composition
- * is the point - doing them in the wrong order, or omitting one, is how a
- * membership system quietly fails:
- *
- *   add           cut a chain epoch, seal the new key to the joiner only,
- *                 produce the joiner snapshot under that key, issue a
- *                 capability - all atomically (M5 + M6 + M7)
- *   change level  revoke the old capability, issue the new one
- *   remove        revoke every capability, rotate to a fresh epoch, reseal to
- *                 whoever remains
- *
- * Removal is `revoke + rotate + reseal`, and both halves are load-bearing.
- * Revocation stops accepted writes as soon as it propagates; rotation denies
- * future reads regardless of whether it propagates at all. Neither alone is
- * enough: revocation is eventually consistent, and rotation cannot un-share
- * what the member already decrypted.
+ * Removal is revoke plus rotate plus reseal, and both halves are load-bearing:
+ * revocation stops writes once it propagates, rotation denies reads whether it
+ * propagates or not.
  */
 
 import type { SigningKey } from "@/lib/crypto"
@@ -47,7 +35,7 @@ export interface AddMemberOptions {
   admin: ActingAdmin
   domain: KeyDomainAdmin
   resource: string
-  /** The joining device's signing identity - the capability's audience. */
+  /** The capability's audience. */
   joinerDid: string
   /** Where their epoch key is sealed. */
   joinerSealingDid: string
@@ -55,9 +43,9 @@ export interface AddMemberOptions {
   /** The admin's replica, snapshotted for the joiner. */
   doc: Y.Doc
   covers: DeliveryVector
-  /** The admin's keyring view, proven current before anything is sealed. */
+  /** Proven current before anything is sealed. */
   keyring: Pick<ReadKeySource, "domain" | "currentEpoch">
-  /** Refuse if the admin is behind the relay - see M6's staleness note. */
+  /** Refuse if the admin is behind the relay. */
   relayVector?: DeliveryVector
   parentSnapshot?: string | null
   expiresAt: number
@@ -72,11 +60,9 @@ export interface AddMemberResult {
 }
 
 /**
- * Add a member.
- *
- * The keyring currency check comes first, before anything is cut: sealing from
- * a stale view would hand the joiner a key for a superseded epoch and strand
- * them, and discovering that afterwards means unpicking a published grant.
+ * The currency check comes first, before anything is cut: sealing from a stale
+ * view strands the joiner, and discovering it afterwards means unpicking a
+ * published grant.
  */
 export async function addMember(options: AddMemberOptions): Promise<AddMemberResult> {
   const now = options.now ?? Date.now()
@@ -131,16 +117,11 @@ export interface ChangeLevelResult {
 }
 
 /**
- * Change a member's level.
+ * Revoke then issue, not the reverse: both live at once is a window where the
+ * member holds the union, which for a downgrade is what it was meant to prevent.
  *
- * Revoke then issue, not the reverse: a window where both the old and new grant
- * are live is a window where the member briefly holds the union of them, which
- * for a downgrade is exactly what the change was meant to prevent.
- *
- * No rotation is ever needed here, which is worth stating because it looks like
- * it should be. Every ability implies read, so a level change - in any
- * direction - leaves the member able to decrypt. Withdrawing read is not a
- * level change at all; it is `removeMember`, which rotates.
+ * No rotation is needed, which is worth stating because it looks like it should
+ * be. Withdrawing read is not a level change; it is `removeMember`.
  */
 export async function changeMemberLevel(
   options: ChangeLevelOptions,
@@ -196,12 +177,8 @@ export interface RemoveMemberResult {
 }
 
 /**
- * Remove a member: revoke, rotate, reseal.
- *
- * The rotation is what makes this real. Revocation is eventually consistent, so
- * a peer that has not seen it keeps accepting the removed member's writes for a
- * while; the fresh epoch denies them reads immediately and permanently, however
- * long they keep the keys they were given.
+ * The rotation is what makes this real: a peer that has not seen the revocation
+ * keeps accepting writes for a while, but the fresh epoch denies reads at once.
  */
 export async function removeMember(
   options: RemoveMemberOptions,

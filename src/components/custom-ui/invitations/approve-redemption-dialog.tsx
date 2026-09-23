@@ -27,19 +27,13 @@ export type ApproveRedemptionDialogProps = {
 }
 
 /**
- * The admin's approve step: someone redeemed an invitation, should they be let
- * in?
+ * Someone redeemed an invitation - should they be let in?
  *
- * The trap this screen is built to avoid is that the name on display came from
- * a trusted source - the admin's own invitation - and therefore *looks*
- * confirmed. It is not. It says who the admin meant to invite, not who turned
- * up holding the secret. If the code leaked, the person redeeming is someone
- * else entirely and the name is exactly as reassuring as before.
- *
- * So the name is shown with an explicit unverified badge until the fingerprint
- * has been compared out of band, and the grant button stays disabled until
- * then. There is no "I'll check later" path, because that is the path everyone
- * takes.
+ * The trap: the name came from the admin's own invitation and so *looks*
+ * confirmed. It says who the admin meant to invite, not who turned up holding
+ * the secret. So it carries an unverified badge and Admit stays disabled until
+ * the fingerprint is compared. There is no "I'll check later" path, because
+ * that is the path everyone takes.
  */
 export function ApproveRedemptionDialog({
   open,

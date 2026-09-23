@@ -1,15 +1,10 @@
 /**
- * The interposition point: the Yjs update boundary.
+ * The interposition point: the Yjs update boundary. Outbound, encrypt, sign,
+ * log, publish. Inbound, verify, authorise, dedup, decrypt, check for client-id
+ * forgery, then apply with a REMOTE origin.
  *
- * Outbound, a local update is encrypted, signed, logged and published.
- * Inbound, an envelope is verified, authorised, deduped, decrypted, checked for
- * client-id forgery, and only then applied with a REMOTE origin so it is never
- * re-signed and re-broadcast.
- *
- * The update event is synchronous and cannot await, so the handler does the one
- * thing that must be synchronous - claiming the sequence number, which fixes
- * this edit's place in per-author order - and chains the crypto and the
- * publish onto a serial queue behind it.
+ * The update event cannot await, so the handler does the one synchronous thing
+ * - claiming the sequence number - and queues the crypto behind it.
  */
 
 import * as Y from "yjs"
@@ -38,23 +33,17 @@ export interface AuthorInfo {
   clientId: number
 }
 
-/**
- * Resolves an author DID to its key and permitted client id, normally backed by
- * the verified directory (M3). Returning undefined rejects the envelope.
- */
+/** Undefined rejects the envelope. Normally backed by the verified directory. */
 export interface AuthorResolver {
   resolve(did: string): Promise<AuthorInfo | undefined>
 }
 
-/**
- * Whether an author may write to a resource. A placeholder for the capability
- * chains of M6 - today this is membership, not a delegation walk.
- */
+/** Whether an author may write here. Implemented by the capability chain. */
 export interface WritePolicy {
   canWrite(resourceId: string, authorDid: string): Promise<boolean> | boolean
 }
 
-/** Supplies content keys. M5 replaces this with the real epoch keyring. */
+/** Supplies content keys. */
 export interface EpochKeyProvider {
   current(): Promise<{ epoch: number; dek: Bytes }>
   forEpoch(epoch: number): Promise<Bytes | undefined>
@@ -139,11 +128,7 @@ export class SyncEngine {
     transaction: Y.Transaction,
   ) => void
   private outbound: Promise<void> = Promise.resolve()
-  /**
-   * Inbound is serialised, not merely awaited. Two concurrent `receive` calls
-   * could both pass the dedup check before either appends to the log, applying
-   * one envelope twice; chaining them makes check-then-append atomic.
-   */
+  /** Serialised so check-then-append is atomic across concurrent receives. */
   private inbound: Promise<void> = Promise.resolve()
   private localSeq = 0
   private closed = false
@@ -152,9 +137,8 @@ export class SyncEngine {
     this.options = options
 
     this.updateHandler = (update, origin, _doc, transaction) => {
-      // Loop guard: an applied remote update must never be re-signed and
-      // re-broadcast. Checked on the origin rather than on content, since a
-      // remote update can be byte-identical to something we would author.
+      // Loop guard, on the origin rather than content: a remote update can be
+      // byte-identical to something we would author.
       if (origin === REMOTE_ORIGIN) return
       if (!transaction.local) return
       this.enqueueOutbound(update)
@@ -204,11 +188,7 @@ export class SyncEngine {
       })
   }
 
-  /**
-   * Settle queued work in both directions. Outbound first, because publishing
-   * is what hands a peer something to receive; then inbound; then outbound
-   * again, so anything the inbound side scheduled has drained too.
-   */
+  /** Outbound first, then inbound, then outbound again for what it scheduled. */
   async flush(): Promise<void> {
     await this.outbound
     await this.inbound
@@ -229,17 +209,14 @@ export class SyncEngine {
   }
 
   /**
-   * The inbound pipeline. Order is the security property: nothing
-   * attacker-supplied is decrypted before it is both authentic and authorised.
-   *
-   * Returns whether the envelope was applied, so catch-up can report progress.
+   * Order is the security property: nothing attacker-supplied is decrypted
+   * before it is both authentic and authorised.
    */
   async receive(envelope: Envelope): Promise<boolean> {
     if (this.closed) return false
     if (!isEnvelopeShaped(envelope)) return this.reject("malformed")
-    // Only document updates are handled here. A presence envelope is a
-    // well-formed thing this engine has no handler for, counted separately so
-    // it is visible rather than silently dropped as malformed.
+    // A presence envelope is well formed and unhandled here, so it is counted
+    // separately rather than dropped as malformed.
     if (envelope.kind !== "update") return this.reject("unsupported-kind")
     if (envelope.resourceId !== this.options.resourceId) return this.reject("wrong-resource")
 
@@ -268,13 +245,11 @@ export class SyncEngine {
       return this.reject("undecryptable")
     }
 
-    // The attribution-integrity invariant, enforced. An update whose operations
-    // claim a client id other than its author's is refused outright.
+    // Attribution integrity: operations claiming another author's client id.
     if (!checkUpdateAuthorship(update, author.clientId).ok)
       return this.reject("forged-client-id")
 
-    // Store before applying, so a peer can serve this original onward even if
-    // the apply throws.
+    // Stored before applying, so a peer can serve it on even if apply throws.
     this.log.append(envelope)
     Y.applyUpdate(this.options.doc, update, REMOTE_ORIGIN)
     this.stats.applied += 1
@@ -285,18 +260,11 @@ export class SyncEngine {
     return this.log.deliveryVector()
   }
 
-  /**
-   * Adopt a snapshot: verify, decrypt, apply, and advance the delivery vector
-   * to the point it covers.
-   *
-   * This is the one place a merged, unauthored artifact is accepted, and only
-   * from a resolvable author who is authorised to write here - someone who
-   * could already put arbitrary content in the document. The client-id check
-   * that guards ordinary updates deliberately does not apply: a snapshot
-   * contains every author's operations by construction.
-   *
-   * Applying it is what re-establishes a clean per-author causal baseline, so
-   * subsequent edits from pre-existing authors can place.
+/**
+   * The one place a merged, unauthored artifact is accepted - and only from an
+   * author already authorised to write here, who could put arbitrary content in
+   * the document anyway. The client-id check deliberately does not apply: a
+   * snapshot contains every author's operations by construction.
    */
   async applySnapshot(
     snapshot: Snapshot,
@@ -333,15 +301,8 @@ export class SyncEngine {
   }
 
   /**
-   * Catch-up, in both directions.
-   *
-   * Pull: the ORIGINAL signed envelopes the responder holds beyond our vector,
-   * each verified individually - never a synthesised diff, which would carry no
-   * author signature and so could be tampered with by whoever served it.
-   *
-   * Push: whatever the responder is missing. A peer that authored while
-   * disconnected holds envelopes nobody else has, and pulling alone would leave
-   * them stranded on that device.
+   * Catch-up both ways: pull originals verified individually, push whatever the
+   * responder is missing. Pulling alone strands a peer that authored offline.
    */
   async sync(): Promise<SyncResult> {
     const incoming = await this.options.transport.fetchSince(this.deliveryVector())

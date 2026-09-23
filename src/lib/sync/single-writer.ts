@@ -1,19 +1,13 @@
 /**
- * Single-writer guard for a stable client id.
+ * Single-writer guard for a stable client id. Two tabs share an IndexedDB and
+ * so the same derived client id; uncoordinated, both author under it and
+ * collide in `(client, clock)` space - corruption the watermark can detect
+ * afterwards but not prevent.
  *
- * Two tabs share an IndexedDB, hence the same device key and the same derived
- * client id. Without coordination both can author under it and collide in
- * `(client, clock)` space - silent, unrecoverable corruption that the clock
- * watermark can detect afterwards but cannot prevent.
+ * Web Locks, held for the tab's lifetime so a crash does not strand the others.
+ * Injectable, since `navigator.locks` is absent in jsdom and insecure contexts.
  *
- * Web Locks is the mechanism: a lock held for the lifetime of the tab, released
- * automatically when the tab dies, so a crashed leader does not strand the
- * others. The backend is injectable because `navigator.locks` is absent in
- * jsdom and in non-secure contexts, and because a caller may want to supply a
- * leader election of its own.
- *
- * When no backend is available this reports `unavailable` rather than silently
- * claiming leadership - the caller decides whether to proceed unguarded.
+ * Reports `unavailable` rather than silently claiming leadership.
  */
 
 export type WriterStatus = "leader" | "follower" | "unavailable"

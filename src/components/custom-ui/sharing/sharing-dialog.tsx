@@ -15,7 +15,7 @@ import "./sharing.scss"
 export type SharingDialogProps = {
   open: boolean
   onClose: () => void
-  /** Narrowest first. A note and its notebook, or just the notebook. */
+  /** Narrowest first. */
   scopes: readonly ShareScope[]
   capabilities: readonly Capability[]
   context: AuthorizationContext
@@ -29,15 +29,9 @@ export type SharingDialogProps = {
 }
 
 /**
- * Sharing, as one screen.
- *
- * Who has access comes first and sharing comes second, in that order and not
- * behind a tab. The question "who can already see this" is the one that decides
- * whether to share at all and at what level, and a tab is a good way to make
- * sure it is never asked. The cost is a taller dialog, which is cheap.
- *
- * The scope switch changes what both halves are about, so the list and the
- * grant can never disagree about which resource is being discussed.
+ * Who has access first, sharing second, not behind a tab - "who can already see
+ * this" is the question that decides whether to share at all. The scope switch
+ * moves both halves, so they cannot disagree about the resource.
  */
 export function SharingDialog({
   open,
@@ -77,9 +71,7 @@ export function SharingDialog({
   if (!open) return null
 
   const scope = scopes[Math.min(scopeIndex, scopes.length - 1)]
-  // Sharing is always offered from the narrowest scope up, whichever the list is
-  // showing, so the safe option stays the default even when someone has
-  // switched the view to the notebook.
+  // Offered from the narrowest scope up, so the safe option stays the default.
   const shareScopes = scopes.slice(scopeIndex)
 
   return (

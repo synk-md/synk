@@ -1,13 +1,9 @@
 /**
- * A collection of capabilities and revocations, resolved into a verification
- * context.
+ * Collected capabilities and revocations, resolved into a verification context.
+ * Not a persistence layer.
  *
- * Not a persistence layer. It holds what has been collected - from the
- * directory, from a peer, from an invitation - and answers proof lookups by
- * cid. Where the tokens actually live is M8's.
- *
- * Revocations are only honoured once they have been checked against the chain
- * they claim to withdraw, so a stranger cannot revoke a grant by asserting it.
+ * A revocation is honoured only after it is checked against the chain it claims
+ * to withdraw, so a stranger cannot revoke a grant by asserting it.
  */
 
 import type { Capability } from "./capability"
@@ -49,11 +45,8 @@ export class CapabilityStore {
   }
 
   /**
-   * Record a revocation, if its issuer is entitled to make it.
-   *
-   * Entitlement is judged against the capability's own chain, so this resolves
-   * that chain first - a revocation for a capability whose proofs are missing
-   * is not honoured, because there is no way to know who was entitled.
+   * Entitlement is judged against the capability's own chain, so that is
+   * resolved first: with proofs missing there is no way to know who was entitled.
    */
   async revoke(revocation: Revocation, now: number): Promise<boolean> {
     const capability = this.capabilities.get(revocation.cid)

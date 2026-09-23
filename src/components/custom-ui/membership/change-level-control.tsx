@@ -14,7 +14,7 @@ import "./membership.scss"
 export type ChangeLevelRequest = {
   member: MemberView
   ability: Ability
-  /** Every capability to withdraw first. Derived, so none is left behind. */
+  /** Withdrawn first. Derived, so none is left behind. */
   held: readonly { cid: string }[]
 }
 
@@ -22,26 +22,18 @@ export type ChangeLevelControlProps = {
   member: MemberView
   onSave: (request: ChangeLevelRequest) => Promise<void> | void
   onCancel: () => void
-  /** Offers the removal path, which is what "no access" actually is. */
+  /** The removal path, which is what "no access" actually is. */
   onRemoveInstead?: (member: MemberView) => void
   maxAbility?: Ability
   className?: string
 }
 
 /**
- * Changing what a member can do.
+ * No "no access" level, deliberately: that is removal, which rotates. A fourth
+ * level would leave a member with no capability still holding the current key.
  *
- * The picker has no "no access" option, and that is the point. Taking away read
- * is not a level change; it is removal, which also rotates the content key.
- * Offering it here as a fourth level would produce a member with no capability
- * who still holds the current key and can read everything written from now on -
- * the exact outcome the person was trying to prevent. So the way down from read
- * is a separate control that leads to removal.
- *
- * The other thing worth saying out loud is that no rotation happens here, in
- * either direction. Every level implies read, so a member being downgraded from
- * admin to read could decrypt before and can decrypt after. Nobody should be
- * left thinking a downgrade did more than it did.
+ * Nothing rotates here in either direction, since every level implies read -
+ * worth saying, so nobody thinks a downgrade did more than it did.
  */
 export function ChangeLevelControl({
   member,

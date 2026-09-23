@@ -1,25 +1,13 @@
 /**
  * The revocation set and its signed monotonic freshness summary.
  *
- * Revocations are distributed by the relay, which is trusted for liveness only
- * - it can withhold or delay them. That is a real attack: a relay that simply
- * never forwards a revocation leaves every peer accepting a removed member's
- * writes indefinitely, and nothing in the revocation record itself would show
- * it.
+ * A relay that never forwards a revocation leaves every peer accepting a
+ * removed member's writes indefinitely, and nothing in the record would show
+ * it. The summary makes that visible: signed so it cannot be forged, monotonic
+ * so it cannot be rolled back.
  *
- * The summary makes that visible. It is signed, so it cannot be forged, and
- * **monotonic**, so it cannot be rolled back to an older state. A client keeps
- * the highest summary it has seen and refuses anything below it. Then:
- *
- *   withholding revocations   the summary stops advancing, and its age grows
- *                             past the staleness threshold - detectable
- *   replaying an old summary  refused as a regression - detectable
- *   forging one               no signature - refused
- *
- * What it does not do is *prevent* any of this. The relay can still stall, and
- * a peer offline long enough is legitimately stale. Detection is the property;
- * DEK rotation is the cryptographic backstop that denies reads regardless of
- * what the relay does with the revocation record.
+ * It detects rather than prevents. DEK rotation is the backstop that denies
+ * reads regardless of what the relay does.
  */
 
 import {
@@ -45,7 +33,7 @@ export interface FreshnessSummaryBody {
   seq: number
   /** How many revocations the set contains. */
   count: number
-  /** SHA-256 over the sorted revoked ids, so contents can be compared cheaply. */
+  /** Over the sorted revoked ids, so contents compare cheaply. */
   digest: string
   /** `did:key` of the issuer - the relay, or an admin publishing offline. */
   iss: string
@@ -141,12 +129,8 @@ export interface FreshnessAssessment {
 }
 
 /**
- * Tracks the highest summary seen for a workspace and judges staleness.
- *
  * Monotonicity lives here rather than in the record: a single summary cannot
- * tell you it is old, only a sequence can. Refusing a lower `seq` than one
- * already accepted is what turns a replayed old summary into a detected attack
- * rather than a silent downgrade.
+ * tell you it is old, only a sequence can.
  */
 export class FreshnessTracker {
   readonly workspace: string
@@ -171,11 +155,8 @@ export class FreshnessTracker {
   }
 
   /**
-   * Accept a summary if it verifies and does not go backwards.
-   *
-   * Returns false for a rollback attempt, and remembers it - a peer that has
-   * seen a regression should not quietly forget, because the relay it is
-   * talking to has demonstrably misbehaved.
+   * False for a rollback, and remembered: the relay has demonstrably
+   * misbehaved, and a later valid summary should not erase that.
    */
   async offer(summary: FreshnessSummary): Promise<boolean> {
     if (summary.workspace !== this.workspace) return false
@@ -195,12 +176,7 @@ export class FreshnessTracker {
     return this.regressionSeen
   }
 
-  /**
-   * How much the local view can be trusted.
-   *
-   * `localRevokedIds` is compared against the summary's digest, so a peer that
-   * has the right *count* but the wrong *contents* is caught too.
-   */
+  /** Compared against the digest, so right count with wrong contents is caught. */
   assess(now: number, localRevokedIds?: readonly string[]): Promise<FreshnessAssessment> {
     return this.assessInternal(now, localRevokedIds)
   }

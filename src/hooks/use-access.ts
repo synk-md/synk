@@ -11,18 +11,14 @@ import {
 } from "@/components/custom-ui/sharing/access-model"
 
 /**
- * Resolving access is asynchronous - every entry costs signature checks up the
- * chain - so it cannot be done while rendering. These hooks hold the result and
- * re-resolve when the inputs actually change.
+ * Resolving access costs signature checks, so it cannot happen while rendering.
  *
- * "Actually" is doing work there. `CapabilityStore.context(now)` builds a fresh
- * object on every call, so a dependency on object identity would re-resolve
- * forever. What matters is which capabilities are in play and what has been
- * revoked, so that is what is compared - a string of cids, cheap beside the
- * signature verification it is guarding.
+ * Keyed on a signature of cids rather than object identity, because
+ * `CapabilityStore.context(now)` returns a fresh object every call and would
+ * otherwise re-resolve forever.
  *
- * `loading` is exposed rather than defaulting to an empty list: an unresolved
- * access list and an empty one look identical and mean opposite things.
+ * `loading` is exposed because an unresolved list and an empty one look
+ * identical and mean opposite things.
  */
 
 function contextSignature(context: AuthorizationContext): string {
@@ -53,8 +49,7 @@ export function useAccessSummary(
 ): AccessSummaryState {
   const [state, setState] = React.useState<AccessSummaryState>({ entries: [], loading: true })
 
-  // Read through a ref so the effect uses the current values without being
-  // retriggered by the objects that carry them.
+  // Current values without being retriggered by the objects carrying them.
   const latest = React.useRef({ capabilities, context })
   latest.current = { capabilities, context }
 

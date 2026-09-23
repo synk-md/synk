@@ -1,18 +1,10 @@
 /**
- * Separately signed, eventually consistent revocations.
+ * Its own signed record, not a mutation - capabilities are immutable tokens
+ * held by whoever received them, so there is nothing to edit.
  *
- * A revocation is its own record rather than a mutation of the capability it
- * withdraws - capabilities are immutable signed tokens held by whoever received
- * them, and there is nothing to edit.
- *
- * Who may revoke: any issuer on the chain the capability rests on, or the
- * resource owner. Someone who granted authority can take it back; someone who
- * never granted it cannot.
- *
- * "Eventually consistent" is the honest part. A revocation propagates like any
- * other record, so there is a window in which a peer has not seen it and still
- * accepts the capability. DEK rotation is the cryptographic backstop for reads
- * (M5); for writes the window is real and accepted.
+ * Revocable by any issuer on the chain, or the owner. Eventually consistent:
+ * there is a real window in which a peer has not seen it. DEK rotation is the
+ * backstop for reads; for writes the window is accepted.
  */
 
 import {
@@ -80,11 +72,8 @@ export async function revokeCapability(options: RevokeOptions): Promise<Revocati
 }
 
 /**
- * Is this revocation both authentic and issued by someone entitled to make it?
- *
- * Entitlement is the part worth getting right: anyone can sign a revocation for
- * any cid, so a valid signature alone would let a stranger withdraw a grant
- * they had nothing to do with.
+ * Entitlement is the part that matters: anyone can sign a revocation for any
+ * cid, so a signature alone would let a stranger withdraw someone else's grant.
  */
 export async function verifyRevocation(
   revocation: Revocation,

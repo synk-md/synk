@@ -35,24 +35,14 @@ export type CreateInviteDialogProps = {
 type Stage = "compose" | "share"
 
 /**
- * Creating an invitation and handing it over.
+ * Creating an invitation and handing it over. **The link and the secret must
+ * travel by different routes** - put both in one message and whoever reads it
+ * can join as the invitee.
  *
- * The security property this screen exists to protect is that **the link and
- * the secret must travel by different routes**. The published invitation says
- * who was invited and under what name; the secret is the only thing that proves
- * you are them. Put both in one message and whoever reads that message can join
- * as the invitee.
- *
- * So the separation is built into the interface rather than written above it:
- *
- *   - two distinct copy buttons, never one "copy invitation" that bundles them
- *   - the secret is not shown until the link has been copied, so the natural
- *     order is send, then switch channel, then send
- *   - the guidance names concrete channels rather than saying "use a secure
- *     channel", which nobody acts on
- *
- * A single combined copy action would undo all of it, which is why there isn't
- * one.
+ * Built into the interface rather than written above it: two distinct copy
+ * buttons and never a combined one, the secret withheld until the link has been
+ * copied, and guidance naming concrete channels rather than "use a secure
+ * channel", which nobody acts on.
  */
 export function CreateInviteDialog({
   open,

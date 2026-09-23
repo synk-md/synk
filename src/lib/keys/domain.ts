@@ -34,10 +34,8 @@ export interface CutEpochResult {
 }
 
 /**
- * A cut computed but not yet applied.
- *
- * Exists so a caller that must produce something *else* alongside the cut - a
- * joiner snapshot, above all - can build everything first and advance the
+ * A cut computed but not yet applied, so a caller producing something else
+ * alongside it - a joiner snapshot - can build everything first and advance the
  * timeline only once it all succeeded. Without staging, a failure after the cut
  * would leave an epoch published with no usable snapshot behind it.
  */

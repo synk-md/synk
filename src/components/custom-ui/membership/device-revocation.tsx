@@ -18,33 +18,22 @@ export type LinkRevocationRequest = {
 
 export type DeviceRevocationProps = {
   devices: readonly MemberDevice[]
-  /** The device this person is acting from. Entitlement is judged against it. */
+  /** Entitlement is judged against this. */
   actingDid: string
-  /** Member the devices belong to, for the entitlement check. */
   member: string
   onRevokeLink: (request: LinkRevocationRequest) => Promise<void> | void
   className?: string
 }
 
 /**
- * Invalidating a device.
+ * Invalidating a lost device, from another of the member's own, without an admin.
  *
- * The case this exists for is a lost phone. A member can do it from their
- * laptop without an admin, because the self-service path that created the link
- * should be able to undo it.
+ * Only linked devices get a revoke control: removing an admin-admitted one is a
+ * membership change and is not offered beside unlinking a phone.
  *
- * Only linked devices appear with a revoke control. Removing an admin-admitted
- * device is a membership change, not a device change - it is what strands a
- * member from adding devices at all - so it is not quietly offered next to
- * unlinking a phone.
- *
- * Unlinking does **not** rotate the content key. That is a real limit, not a
- * simplification, and it is stated rather than glossed: the lost phone keeps
- * the key it already holds and can still read anything sealed under the current
- * epoch. What changes is that its writes stop being accepted. Removing the
- * member outright is the operation that rotates, and the interface says so,
- * because somebody unlinking a stolen phone is entitled to know which of the
- * two they have just done.
+ * Unlinking does **not** rotate the content key - a real limit, stated in the
+ * confirmation rather than glossed, since somebody unlinking a stolen phone is
+ * entitled to know which operation they just performed.
  */
 export function DeviceRevocation({
   devices,

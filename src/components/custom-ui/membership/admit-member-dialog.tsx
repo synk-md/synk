@@ -15,7 +15,7 @@ import "./membership.scss"
 
 export type AdmissionRequest = {
   member: MemberView
-  /** The device key the capability is addressed to. */
+  /** The key the capability is addressed to. */
   joinerDid: string
   /** Where their copy of the content key is sealed. */
   joinerSealingDid: string
@@ -39,23 +39,11 @@ export type AdmitMemberDialogProps = {
 const DAY = 24 * 60 * 60 * 1000
 
 /**
- * Letting a person into a notebook's contents.
+ * Letting a person into a notebook's contents - a different step from admitting
+ * them to the workspace, which established who they are. This hands over keys.
  *
- * This is not the same step as admitting them to the workspace, and conflating
- * the two is the mistake it is shaped to avoid. Workspace admission established
- * *who they are*; this hands over *keys*. Someone can be a perfectly legitimate
- * member of the workspace and have no business reading this notebook.
- *
- * Two consequences are stated before the button rather than after.
- *
- * They receive the notebook as it stands now, in full. Admission cuts a fresh
- * epoch and seals a snapshot of the current document under it, so there is no
- * such thing as admitting someone to "only what happens next" - whatever is in
- * there is theirs to read the moment they are let in.
- *
- * They do not receive the edit history from before now. Earlier updates are
- * sealed under earlier keys they cannot derive. Saying so stops both wrong
- * assumptions: that admission is retroactive, and that it is not.
+ * Both opposite wrong assumptions are addressed before the button: they get the
+ * notebook in full as it stands now, and they do not get the earlier history.
  */
 export function AdmitMemberDialog({
   open,
@@ -123,8 +111,7 @@ export function AdmitMemberDialog({
     }
   }
 
-  // `assertKeyringCurrent` throws before anything is cut when the admin's view
-  // is behind. It is the one failure with a specific remedy, so it gets one.
+  // The one failure with a specific remedy, so it gets one.
   const stale = error !== null && /keyring|epoch/i.test(error)
 
   return (

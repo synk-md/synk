@@ -36,12 +36,8 @@ export type MembershipPanelProps = {
 }
 
 /**
- * Membership for one resource, in one place.
- *
- * The removal status sits above the list rather than inside the row that
- * prompted it. A removal in flight is a fact about this whole view - it is why
- * a name is still there, why an edit might still land - and burying it in one
- * row means it is read only by someone already looking at that row.
+ * Membership for one resource. The removal status sits above the list, not in
+ * the row that prompted it: it explains why a name is still there at all.
  */
 export function MembershipPanel({
   users,
@@ -69,8 +65,7 @@ export function MembershipPanel({
   const latest = React.useRef({ users, capabilities, context })
   latest.current = { users, capabilities, context }
 
-  // Same reasoning as the sharing hooks: a fresh context object per render must
-  // not restart the walk, so the effect keys on what is in it.
+  // A fresh context object per render must not restart the walk.
   const key = [
     resource,
     context.owner,
@@ -96,8 +91,8 @@ export function MembershipPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key])
 
-  // Whoever keeps access after a removal. Derived from the same verified view
-  // the list is drawn from, so the reseal set cannot drift from what is shown.
+  // Derived from the same verified view the list is drawn from, so the reseal
+  // set cannot drift from what is shown.
   const remaining = React.useMemo(
     () =>
       members

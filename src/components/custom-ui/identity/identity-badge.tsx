@@ -5,21 +5,11 @@ import { RiShieldCheckLine, RiMailSendLine, RiQuestionLine } from "@remixicon/re
 import "./identity.scss"
 
 /**
- * How much a displayed name is actually worth.
+ * How much a displayed name is worth: chosen by the subject, intended by an
+ * admin, or checked against a key. Only `verified` ties a name to a key.
  *
- * The three levels are not decoration. They are the difference between a name
- * someone typed about themselves, a name an admin intended for someone, and a
- * name whose key has actually been checked:
- *
- *   self-asserted  the subject chose this. Proves nothing - an attacker
- *                  redeeming a leaked invitation would choose it too.
- *   invited        an admin wrote it on the invitation. Says who the admin
- *                  *meant* to invite, not who turned up holding the secret.
- *   verified       someone compared the key fingerprint out of band. This is
- *                  the only level that ties the name to a key.
- *
- * `invited` is the one that misleads if unlabelled, because the name came from
- * a trusted person - just not about the party in front of you.
+ * `invited` is the one that misleads unlabelled - the name came from a trusted
+ * person, just not about the party in front of you.
  */
 export type IdentityAssurance = "self-asserted" | "invited" | "verified"
 
@@ -46,11 +36,7 @@ const COPY: Record<IdentityAssurance, { text: string; title: string }> = {
   },
 }
 
-/**
- * Anything short of `verified` reads as "Unverified" on purpose. A person
- * scanning a list should not have to work out that "invited" is weaker than
- * "verified"; the two unverified levels differ only in the explanation.
- */
+/** Both weak levels read "Unverified" and differ only in the explanation. */
 export function IdentityBadge({ assurance, label, className }: IdentityBadgeProps) {
   const copy = COPY[assurance]
   const verified = assurance === "verified"

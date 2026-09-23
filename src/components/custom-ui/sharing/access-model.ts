@@ -77,12 +77,9 @@ function compareGrants(a: AccessGrant, b: AccessGrant): number {
 }
 
 /**
- * Who currently has access to `resource`, and by what route.
- *
- * Both halves of "by what route" matter. A grant on `notebook:1` covers
- * `notebook:1/note:abc`, so a note's access list that showed only note-level
- * grants would be actively wrong: it would omit most of the people who can read
- * the note, and imply that removing the note grant removes their access.
+ * Who has access, and by what route. A grant on `notebook:1` covers
+ * `notebook:1/note:abc`, so a note list built from note-level grants alone
+ * would omit most of the people who can read it.
  */
 export async function summarizeAccess(
   capabilities: Iterable<Capability>,
@@ -129,12 +126,8 @@ export async function summarizeAccess(
 }
 
 /**
- * May `actor` withdraw this grant?
- *
- * The same rule `verifyRevocation` enforces: the resource owner, or someone who
- * issued a link in the chain the grant rests on. Somebody who never handed out
- * this authority cannot take it back, and the button has to agree with that or
- * it would fail after being pressed.
+ * The same rule `verifyRevocation` enforces: the owner, or an issuer on the
+ * chain. The button has to agree, or it fails after being pressed.
  */
 export function canRevoke(grant: AccessGrant, actor: string, owner: string): boolean {
   return actor === owner || grant.chain.some((link) => link.payload.iss === actor)
@@ -145,23 +138,15 @@ export interface RemovalPlan {
   revoke: Capability[]
   /** Grants this actor cannot withdraw. Access survives while any of these do. */
   blocked: Capability[]
-  /**
-   * Grants that reach past this resource. Withdrawing one of these removes the
-   * person from everything under it, not only from here.
-   */
+  /** Grants reaching past this resource, whose removal goes further than asked. */
   wider: Capability[]
   /** True when withdrawing everything possible still leaves access in place. */
   partial: boolean
 }
 
 /**
- * What removing someone actually entails.
- *
- * Two things a plain "Remove" button would get wrong. A person may hold several
- * grants, so withdrawing the strongest leaves the weaker one standing and they
- * still have access. And the grant conferring access here may be a notebook
- * grant, so withdrawing it removes them from every note in that notebook. Both
- * are surfaced rather than done quietly.
+ * What removal entails. Two things a plain button gets wrong: a person may hold
+ * several grants, and the one conferring access here may name an ancestor.
  */
 export function removalPlan(entry: AccessEntry, resource: string, actor: string, owner: string): RemovalPlan {
   const revoke: Capability[] = []
@@ -177,7 +162,7 @@ export function removalPlan(entry: AccessEntry, resource: string, actor: string,
   return { revoke, blocked, wider, partial: blocked.length > 0 }
 }
 
-/** What a new grant would rest on, and how far it may go. */
+/** What a new grant rests on, and how far it may go. */
 export interface GrantBudget {
   /** Strongest ability the actor may confer. Null when they may not share at all. */
   maxAbility: Ability | null
@@ -188,19 +173,15 @@ export interface GrantBudget {
   notBefore: number
   /** A grant may not outlive its proof, so this is a hard ceiling on expiry. */
   notAfter: number
-  /** Why sharing is unavailable or capped, in words a person can act on. */
+  /** Why sharing is unavailable or capped. */
   reason?: string
 }
 
 const DEFAULT_HORIZON_MS = 365 * 24 * 60 * 60 * 1000
 
 /**
- * What this actor is allowed to hand out here.
- *
- * Derived from the attenuation rules rather than from a role, because those are
- * what the verifier will apply: a grant wider than the budget is one the
- * recipient could not use. Offering it and failing at signing time would teach
- * people that the levels are advisory.
+ * Derived from the attenuation rules rather than a role, because those are what
+ * the verifier applies. Offering more would teach people the levels are advisory.
  */
 export async function grantBudget(
   actor: string,
@@ -227,8 +208,7 @@ export async function grantBudget(
     if (!(await verifyChain(capability, context)).authorized) continue
 
     held = held === null || STRENGTH[capability.payload.can] > STRENGTH[held] ? capability.payload.can : held
-    // A non-delegable leaf is access without the right to pass it on. It is a
-    // deliberate shape, not an oversight, so it is reported as such.
+    // A non-delegable leaf is a deliberate shape, reported as such.
     if (capability.payload.dep < 1) continue
     if (best === null) best = capability
     else {
@@ -267,9 +247,9 @@ export interface GrantRequest {
   audience: string
   resource: string
   ability: Ability
-  /** Zero unless re-sharing was deliberately enabled. */
+  /** Zero unless re-sharing was enabled. */
   depth: number
   expiresAt: number
-  /** The budget's proof, passed through so the caller signs the right chain. */
+  /** Passed through so the caller signs the right chain. */
   proof: Capability | null
 }

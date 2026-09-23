@@ -20,21 +20,18 @@ export type ShareScope = {
   resource: string
   /** How it reads in a sentence: "this note", "the whole notebook". */
   label: string
-  /** What it actually reaches. The part people misjudge, so it is spelled out. */
+  /** What it reaches. The part people misjudge. */
   covers: string
 }
 
 export type ShareDialogProps = {
   open: boolean
   onClose: () => void
-  /**
-   * Narrowest first. The first entry is the default, so opening this from a
-   * note offers the note before the notebook.
-   */
+  /** Narrowest first; the first is the default. */
   scopes: readonly ShareScope[]
   /** People who could be granted access, from the directory. */
   candidates: readonly Person[]
-  /** Everything known, so existing access can be checked before granting more. */
+  /** Checked for existing access before granting more. */
   capabilities: readonly Capability[]
   context: AuthorizationContext
   actor: string
@@ -51,23 +48,11 @@ const DURATIONS: readonly { label: string; ms: number }[] = [
 ]
 
 /**
- * Granting access.
+ * Granting access. Laid out around the three things that go wrong: the wrong
+ * level, the wrong scope, and believing a narrow grant limits someone.
  *
- * Three things go wrong in a share dialog, and the layout is arranged around
- * them rather than around the form fields.
- *
- * *Granting the wrong level.* Every level's consequence is on screen at the
- * moment of choosing, and levels beyond what this person may grant are shown
- * locked rather than hidden.
- *
- * *Granting on the wrong thing.* Scope is an explicit choice, narrowest first,
- * and each option says what it reaches - a notebook grant covers notes that do
- * not exist yet, which is the part nobody expects.
- *
- * *Believing a narrow grant limits someone.* It does not. A new grant only ever
- * adds. If the chosen person already has wider access, that is shown before the
- * button, because adding read on one note to someone holding edit on the
- * notebook changes nothing at all.
+ * It does not - a new grant only ever adds - so existing wider access is shown
+ * above the picker rather than after it.
  */
 export function ShareDialog({
   open,
@@ -117,8 +102,7 @@ export function ShareDialog({
     return () => window.removeEventListener("keydown", handler)
   }, [open, onClose])
 
-  // Re-sharing cannot survive a budget that has none left to pass on, and a
-  // checkbox left ticked while unavailable would grant something it did not say.
+  // A checkbox left ticked while unavailable would grant what it did not say.
   React.useEffect(() => {
     if (budget && budget.maxDepth < 1) setRedelegate(false)
   }, [budget])
@@ -217,8 +201,8 @@ export function ShareDialog({
               </ul>
             )}
 
-            {/* Shown before the level, not after: what someone already has is
-                what decides whether this grant means anything. */}
+            {/* Before the level: what they already have decides whether this
+                grant means anything. */}
             {existing && (
               <div className={["shr-warning", wouldNotReduce ? "is-critical" : ""].join(" ")} role="note">
                 <span className="shr-warning-icon" aria-hidden="true">

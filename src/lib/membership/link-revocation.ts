@@ -1,15 +1,7 @@
 /**
- * Revoking a self-linked device.
- *
- * M2 let a member link their own second browser or phone and left no way to
- * take it back - a lost linked device stayed valid until its member's whole
- * admission was withdrawn. It lives here because it shares its mechanism with
- * member removal: revoke the grant, rotate the epoch, reseal to whoever remains.
- *
- * Who may revoke a link: the admin-admitted device that issued it, any other
- * admin-admitted device of the same member, or a workspace admin. A member who
- * loses their phone can invalidate it from their laptop without an admin, which
- * is the point - the self-service path that created it should be able to undo it.
+ * Revoking a self-linked device. A member who loses their phone can invalidate
+ * it from their laptop without an admin - the self-service path that created
+ * the link should be able to undo it.
  */
 
 import {
@@ -87,11 +79,9 @@ export async function revokeLink(options: RevokeLinkOptions): Promise<LinkRevoca
 }
 
 /**
- * Authentic, and from someone entitled to make it.
- *
- * Entitlement is the part that matters: anyone can sign a revocation naming any
- * device, so a signature alone would let a stranger unlink someone else's phone.
- * The revoker must be an admin-admitted device of the same member.
+ * Entitlement is the part that matters: a signature alone would let a stranger
+ * unlink someone else's phone. The revoker must be an admin-admitted device of
+ * the same member.
  */
 export async function verifyLinkRevocation(
   revocation: LinkRevocation,

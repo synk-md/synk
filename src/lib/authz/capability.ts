@@ -1,26 +1,12 @@
 /**
- * The capability token: a standalone signed delegation, UCAN 1.0-aligned.
+ * A standalone signed delegation, UCAN 1.0-aligned, carrying a pointer to the
+ * proof it rests on so a chain walks back to the owner with no converged
+ * authority structure anywhere.
  *
- * A capability says *this issuer grants this audience this ability on this
- * resource, for this long, and may be re-delegated this many more times*. It
- * carries a pointer to the proof it rests on, so a chain can be walked back to
- * the resource owner without any converged authority structure - no membership
- * document, no roster CRDT, nothing whose concurrent merge would have to be
- * made safe.
+ * `aud` is a bare `did:key` and the verifier never asks what kind of principal
+ * it names - a device today, a group key later, with no change here.
  *
- * ## Why the audience is opaque
- *
- * `aud` is a bare `did:key`. The verifier never asks what kind of principal it
- * names. Today it is a device; it could later be a group key, and nothing here
- * would change. That is what "group-ready" means - not that groups exist, but
- * that adding them touches the directory rather than the authorization model.
- *
- * ## Encoding
- *
- * JWT-compact: `base64url(header).base64url(payload).base64url(signature)`. The
- * signed bytes are the first two segments joined by a dot, exactly as JWT
- * specifies, so a token is a self-contained string that survives a relay, a URL
- * and a copy-paste.
+ * Encoded JWT-compact, so a token survives a relay, a URL and a copy-paste.
  */
 
 import {
@@ -52,10 +38,7 @@ export interface CapabilityPayload {
   /** Typed resource, e.g. `notebook:1` or `notebook:1/note:abc`. */
   rsc: string
   can: Ability
-  /**
-   * Further re-delegations this audience may make. Zero is a non-delegable
-   * leaf, which is the default.
-   */
+  /** Re-delegations this audience may make. Zero is a non-delegable leaf. */
   dep: number
   /** Pointer to the proof this rests on: the parent's `cid`. Null at a root. */
   prf: string | null
@@ -184,13 +167,9 @@ function isPayloadShaped(payload: CapabilityPayload): boolean {
 }
 
 /**
- * Every field of `payload` must be what the signed token actually says.
- *
- * The token is canonical; `payload` is a convenience view of it. Nothing stops
- * a caller from constructing a `Capability` whose payload disagrees - and since
- * the chain walk reads `payload` while the signature covers `token`, a
- * divergence would be a privilege escalation. So they are compared rather than
- * assumed equal.
+ * The token is canonical; `payload` is a view of it. The chain walk reads
+ * `payload` while the signature covers `token`, so a divergence would be a
+ * privilege escalation. Compared, never assumed equal.
  */
 function payloadMatchesToken(capability: Capability, encodedPayload: string): boolean {
   let signed: CapabilityPayload
@@ -216,11 +195,8 @@ function payloadMatchesToken(capability: Capability, encodedPayload: string): bo
 }
 
 /**
- * Signature check, against the issuer named in the token, plus the check that
- * the parsed payload is the signed one.
- *
- * Says nothing about whether the issuer had the authority to grant this - that
- * is the chain walk's job.
+ * Signature plus payload/token agreement. Says nothing about whether the issuer
+ * had the authority to grant this - that is the chain walk's job.
  */
 export async function verifyCapabilitySignature(capability: Capability): Promise<boolean> {
   try {

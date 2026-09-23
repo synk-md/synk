@@ -1,24 +1,14 @@
 /**
- * Snapshots: encrypted, signed, hash-linked state sealed under an epoch key.
+ * Encrypted, signed, hash-linked state sealed under an epoch key.
  *
- * ## Why this is not the synthesised diff M4 forbids
+ * The payload is a merged artifact nobody authored operation by operation -
+ * exactly what is disqualified for catch-up. The difference is the producer: an
+ * authorised member, signed and attributable, who could already write arbitrary
+ * content anyway. A relay serving a synthesised diff could not.
  *
- * A snapshot's payload *is* `Y.encodeStateAsUpdate` - a merged artifact nobody
- * authored operation by operation. M4 disqualifies exactly that for catch-up.
- * The difference is who produces it and what it grants:
- *
- *   catch-up   served by an untrusted relay. A synthesised diff carries no
- *              author signature, so the relay could tamper with it
- *              undetectably. Disqualified.
- *   snapshot   produced by an authorised member, signed by them, attributable.
- *              That member could already write arbitrary content into the
- *              document, so a corrupt snapshot grants them no new power.
- *
- * So a snapshot's *inputs* are verifiable - a hash-linked chain plus the signed
- * envelopes it covers - while its *merge correctness* rests on the producer's
- * attestation rather than a proof. That is an accepted residual, not an
- * oversight. The sharp edge is truncation: never drop the envelopes a snapshot
- * covers until its correctness has been established to you.
+ * So the inputs are verifiable and merge correctness rests on attestation - an
+ * accepted residual. The sharp edge is truncation: never drop the envelopes a
+ * snapshot covers until its correctness is established to you.
  */
 
 import {

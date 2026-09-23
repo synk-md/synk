@@ -12,9 +12,9 @@ import "./sharing.scss"
 export type AccessLevelPickerProps = {
   value: Ability
   onChange: (ability: Ability) => void
-  /** Strongest level on offer. Anything above renders locked, with the reason. */
+  /** Strongest on offer. Above this renders locked. */
   max?: Ability
-  /** Why the stronger levels are unavailable. Shown once, beside the first one. */
+  /** Shown once, beside the first locked level. */
   ceilingReason?: string
   /** Distinguishes several pickers on one screen. */
   name?: string
@@ -23,16 +23,11 @@ export type AccessLevelPickerProps = {
 }
 
 /**
- * Choosing a level, with every level's consequence visible at once.
+ * Radios, not a dropdown: a dropdown hides what the other levels would have
+ * meant, so the comparison that stops an accidental admin grant never happens.
  *
- * A dropdown would be more compact and is the wrong control here. It shows the
- * chosen option and hides what the others would have meant, so the comparison
- * that would stop someone granting admin when they meant edit never happens.
- * Radios put all three consequences on screen at the moment of choosing.
- *
- * Levels above what the person may grant are rendered locked rather than
- * omitted. Omitting them makes a capped picker look like the whole truth;
- * showing them locked says there is more, and that this person cannot give it.
+ * Levels above the ceiling render locked rather than omitted, or a capped
+ * picker would look like the whole truth.
  */
 export function AccessLevelPicker({
   value,
@@ -70,9 +65,7 @@ export function AccessLevelPicker({
                 value={ability}
                 checked={value === ability && !locked}
                 disabled={locked || disabled}
-                // Checked here as well as on the input. `disabled` is a
-                // rendering concern; this is the one that decides, and the
-                // level being capped is the level someone should not get.
+                // `disabled` is a rendering concern; this is what decides.
                 onChange={() => {
                   if (!locked) onChange(ability)
                 }}

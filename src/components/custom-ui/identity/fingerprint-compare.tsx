@@ -22,16 +22,10 @@ export type FingerprintCompareProps = {
 }
 
 /**
- * Out-of-band verification: show a key's fingerprint, and make the person type
- * what they see on the other side.
+ * Out-of-band verification. Typing rather than eyeballing is the point: a
+ * confirm button next to a displayed code gets pressed without being read.
  *
- * Typing rather than eyeballing is the point. A confirm button next to a
- * displayed code gets pressed without being read; entering sixteen characters
- * cannot be done without looking at both screens. A prefix does not count -
- * `fingerprintsMatch` requires the full length, or the length would buy nothing.
- *
- * Shared between approving a new device and admitting an invited person,
- * because it is the same check with different consequences, and a second
+ * Shared between device approval and invited-person admission, because a second
  * implementation is a second chance to weaken it.
  */
 export function FingerprintCompare({
@@ -60,8 +54,7 @@ export function FingerprintCompare({
 
   const matched = expected !== null && typed.length > 0 && fingerprintsMatch(typed, expected)
 
-  // Report upward rather than holding the decision here: the parent owns what
-  // a match unlocks, and it should not have to re-derive it.
+  // The parent owns what a match unlocks.
   React.useEffect(() => {
     onMatchChange(matched)
   }, [matched, onMatchChange])

@@ -1,26 +1,13 @@
 /**
- * Retention: the storage bound, stated rather than left implicit.
+ * Retention, so client storage stays flat in total history: full payloads for a
+ * bounded recent window plus pinned checkpoints, superseded ones degraded to
+ * markers, the deep tail archived server-side.
  *
- * Snapshots are full materialised state, so keeping every one would grow client
- * storage with total history - the thing local-first is supposed to avoid. The
- * policy:
+ * A marker is not nothing - it keeps the timeline complete and the hash chain
+ * walkable, so history stays visible where it is no longer materialised.
  *
- *   retain   full payloads for a bounded recent window, plus every explicitly
- *            pinned checkpoint
- *   degrade  superseded snapshots to lightweight restore-point markers - id,
- *            author, coverage, hash, label, but no payload
- *   archive  the deep tail (older payloads, undropped envelopes) server-side
- *
- * Result: client storage flat in total history, server storage tierable.
- *
- * A marker is deliberately not nothing. It keeps the restore-point timeline
- * complete and the hash chain walkable, so history stays *visible* even where
- * it is no longer *materialised* locally - the payload is refetched from the
- * archive on demand.
- *
- * Incremental or delta snapshots (Sedimentree-shaped) stay deferred. They are
- * the answer to full-snapshot retention being the cost that hurts, and that has
- * not been measured yet; adding them now would be complexity bought on a guess.
+ * Delta snapshots stay deferred until full-snapshot retention is measured to be
+ * the cost that hurts.
  */
 
 import type { DeliveryVector } from "@/lib/sync"
