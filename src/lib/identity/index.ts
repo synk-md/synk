@@ -6,6 +6,14 @@
  * a workspace comes from an admin admission or a member's own device link.
  */
 
+export {
+  deviceFingerprint,
+  FINGERPRINT_BITS,
+  FINGERPRINT_CHARS,
+  FINGERPRINT_PLACEHOLDER,
+  fingerprintsMatch,
+} from "./fingerprint"
+
 export type { DidKeyType, DecodedDid } from "./did"
 export {
   decodeDid,
