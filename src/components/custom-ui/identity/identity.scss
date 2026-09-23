@@ -1,0 +1,137 @@
+/* Shared identity affordances: assurance badges and out-of-band fingerprint
+   comparison. Used by device approval and by invitation admission. */
+
+.idf-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: help;
+
+  &.is-verified {
+    background: color-mix(in srgb, #2e7d32 14%, transparent);
+    color: #2e7d32;
+
+    .dark & {
+      color: #86d992;
+    }
+  }
+
+  &.is-unverified {
+    background: color-mix(in srgb, #b7791f 14%, transparent);
+    color: #a06a15;
+
+    .dark & {
+      color: #e0b45f;
+    }
+  }
+}
+
+.idf-badge-icon {
+  display: inline-flex;
+
+  svg {
+    width: 11px;
+    height: 11px;
+  }
+}
+
+.idf-compare {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--tt-card-border-color);
+  background: var(--tt-gray-light-a-50, rgba(0, 0, 0, 0.02));
+
+  .dark & {
+    background: var(--tt-gray-dark-a-50, rgba(255, 255, 255, 0.03));
+  }
+
+  .idf-field-label:first-child {
+    margin-top: 0;
+  }
+}
+
+.idf-field-label {
+  display: block;
+  font-family: var(--tt-font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--tt-color-text-gray);
+  margin: 12px 0 6px;
+}
+
+.idf-fingerprint-display {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 10px;
+  background: var(--tt-card-bg-color);
+  border: 1px solid var(--tt-card-border-color);
+
+  svg {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    color: var(--tt-color-text-gray);
+  }
+
+  code {
+    font-family: var(--tt-font-mono, monospace);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    word-break: break-all;
+    color: var(--tt-gray-light-900);
+
+    .dark & {
+      color: var(--tt-gray-dark-900);
+    }
+  }
+}
+
+.idf-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tt-color-text-gray);
+}
+
+.idf-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-family: var(--tt-font-mono, monospace);
+  font-size: 15px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border-radius: 10px;
+  border: 1px solid var(--tt-card-border-color);
+  background: var(--tt-card-bg-color);
+  color: var(--tt-gray-light-900);
+
+  .dark & {
+    color: var(--tt-gray-dark-900);
+  }
+
+  &.is-error {
+    border-color: #c53030;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+.idf-error {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #c53030;
+}

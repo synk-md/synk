@@ -1,10 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { RiCloseLine, RiShieldKeyholeLine } from "@remixicon/react"
+import { RiCloseLine } from "@remixicon/react"
 
 import { Button } from "@/components/tiptap-ui-primitive/button"
-import { deviceFingerprint, FINGERPRINT_PLACEHOLDER, fingerprintsMatch } from "@/lib/identity"
+import { FingerprintCompare } from "@/components/custom-ui/identity/fingerprint-compare"
+import { IdentityBadge } from "@/components/custom-ui/identity/identity-badge"
 
 import "./device-manager.scss"
 
@@ -54,27 +55,19 @@ export function ApproveDeviceDialog({
   onClose,
   className,
 }: ApproveDeviceDialogProps) {
-  const [expected, setExpected] = React.useState<string | null>(null)
-  const [typed, setTyped] = React.useState("")
+  const [matches, setMatches] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    setTyped("")
+    setMatches(false)
     setBusy(false)
     setError(null)
-    if (!pending) {
-      setExpected(null)
-      return
-    }
-    let cancelled = false
-    void deviceFingerprint(pending.did).then((value) => {
-      if (!cancelled) setExpected(value)
-    })
-    return () => {
-      cancelled = true
-    }
   }, [pending])
+
+  const onMatchChange = React.useCallback((matched: boolean) => {
+    setMatches(matched)
+  }, [])
 
   React.useEffect(() => {
     if (!open) return
@@ -88,8 +81,6 @@ export function ApproveDeviceDialog({
   }, [open, onClose])
 
   if (!open || !pending) return null
-
-  const matches = expected !== null && typed.length > 0 && fingerprintsMatch(typed, expected)
 
   const approve = async () => {
     if (!matches || busy) return
@@ -133,53 +124,26 @@ export function ApproveDeviceDialog({
 
         {pending.claimedName && (
           <p className="dm-claim">
-            It calls itself <strong>{pending.claimedName}</strong>
+            It calls itself <strong>{pending.claimedName}</strong>{" "}
+            <IdentityBadge assurance="self-asserted" />
             <span className="dm-claim-note">— a name it chose, not one we can verify</span>
           </p>
         )}
 
-        <div className="dm-verify">
-          <span className="dm-field-label">Check the code on the new device</span>
-          <div className="dm-fingerprint-display" aria-label="Expected fingerprint">
-            <RiShieldKeyholeLine aria-hidden="true" />
-            <code>{expected ?? "…"}</code>
-          </div>
-          <p className="dm-hint">
-            If the code on the other screen is different, someone else is trying to join. Reject
-            this request.
-          </p>
+        <FingerprintCompare
+          did={pending.did}
+          onMatchChange={onMatchChange}
+          inputId="approve-device-code"
+          prompt="Check the code on the new device"
+          mismatchGuidance="If the code on the other screen is different, someone else is trying to join. Reject this request."
+          disabled={busy}
+        />
 
-          <label htmlFor="approve-device-code" className="dm-field-label">
-            Type it here to confirm
-          </label>
-          <input
-            id="approve-device-code"
-            autoFocus
-            autoComplete="off"
-            spellCheck={false}
-            value={typed}
-            onChange={(event) => {
-              setTyped(event.target.value)
-              if (error) setError(null)
-            }}
-            placeholder={FINGERPRINT_PLACEHOLDER}
-            className={["dm-input", typed && !matches ? "is-error" : ""].join(" ")}
-            disabled={busy || expected === null}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") void approve()
-            }}
-          />
-          {typed && !matches && (
-            <span className="dm-error" role="alert">
-              That does not match the code above.
-            </span>
-          )}
-          {error && (
-            <span className="dm-error" role="alert">
-              {error}
-            </span>
-          )}
-        </div>
+        {error && (
+          <span className="dm-error" role="alert">
+            {error}
+          </span>
+        )}
 
         <div className="dm-actions">
           <Button
