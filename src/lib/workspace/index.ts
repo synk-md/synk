@@ -61,3 +61,16 @@ export {
   storedEpochRecords,
   storedSealedKeys,
 } from "./notebook-keys"
+
+export type { Admission, AdmitOptions, InviteOptions, RedeemOptions } from "./admission"
+export {
+  admitFromRedemption,
+  findOwnerRoot,
+  INVITATION_TTL_MS,
+  invitationsInDoc,
+  inviteToNotebook,
+  MEMBER_GRANT_TTL_MS,
+  pendingRedemptions,
+  redeemIntoNotebook,
+  redemptionsInDoc,
+} from "./admission"
