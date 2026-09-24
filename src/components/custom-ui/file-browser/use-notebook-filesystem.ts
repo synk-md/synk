@@ -12,6 +12,10 @@ import {
 } from "@/lib/yjs-utils"
 import type { LinkAccess } from "@/lib/note-meta"
 import { getNotebookLinkAccess, setNotebookLinkAccess } from "@/lib/notebook-meta"
+import { hasOutstandingInvitations } from "@/lib/workspace"
+
+/** How long to stay in the index room after the last invitation is settled. */
+const JOIN_LINGER_MS = 30_000
 
 // Optional here (rather than required) since some callers use a plain
 // useFileSystem() fallback stub (e.g. a single-note share's synthetic root)
@@ -73,6 +77,10 @@ export function useNotebookFileSystem(
   const providerRef = React.useRef<WebrtcProvider | null>(null)
   const [linkAccess, setLinkAccessState] = React.useState<LinkAccess>(optimisticLinkAccess)
   const [indexProvider, setIndexProvider] = React.useState<WebrtcProvider | null>(null)
+  // Someone has been invited and has not been let in yet. The redemption and
+  // the grant both travel through the index room, so it has to be joined for
+  // that whole window regardless of whether the notebook is link-shared.
+  const [awaitingJoiners, setAwaitingJoiners] = React.useState(false)
   // True once it's safe to persist local tree edits: either the real tree
   // has been observed (from this browser's IndexedDB or a peer), or — only
   // when seedIfEmpty is false — the grace window closed with nothing found.
@@ -209,11 +217,47 @@ export function useNotebookFileSystem(
   // Connects a WebRTC provider for the notebook's tree/meta doc whenever it's
   // actually shared, mirroring the per-note collaboration gating in
   // simple-editor.tsx (room `nb:{id}:index`, same signaling servers).
+  // Watched separately from link access, which is a different question about a
+  // different thing and was previously the only reason to join the room.
+  React.useEffect(() => {
+    const indexHandle = indexDocRef.current
+    if (!activeNotebookId || !indexHandle) {
+      setAwaitingJoiners(false)
+      return
+    }
+    const doc = indexHandle.doc
+    let linger: ReturnType<typeof setTimeout> | undefined
+
+    const recompute = () => {
+      if (hasOutstandingInvitations(doc)) {
+        clearTimeout(linger)
+        linger = undefined
+        setAwaitingJoiners(true)
+        return
+      }
+      // Granting membership is the act that clears the last outstanding
+      // invitation, and the grant still has to reach the person it admitted.
+      // Dropping the connection in the same tick would strand it.
+      if (linger) return
+      linger = setTimeout(() => {
+        linger = undefined
+        setAwaitingJoiners(false)
+      }, JOIN_LINGER_MS)
+    }
+
+    recompute()
+    doc.on("update", recompute)
+    return () => {
+      clearTimeout(linger)
+      doc.off("update", recompute)
+    }
+  }, [activeNotebookId, treeReady])
+
   React.useEffect(() => {
     const indexHandle = indexDocRef.current
     if (!activeNotebookId || !indexHandle) return
 
-    if (linkAccess === "restricted") {
+    if (linkAccess === "restricted" && !awaitingJoiners) {
       providerRef.current?.disconnect()
       providerRef.current?.destroy()
       providerRef.current = null
@@ -240,7 +284,7 @@ export function useNotebookFileSystem(
     // flips away from "restricted" — indexDocRef.current itself isn't a dep
     // since refs aren't reactive, but it's set synchronously in the effect
     // above, which always runs before this one on the same commit.
-  }, [activeNotebookId, linkAccess])
+  }, [activeNotebookId, linkAccess, awaitingJoiners])
 
   const setLinkAccess = React.useCallback((access: LinkAccess) => {
     const indexHandle = indexDocRef.current

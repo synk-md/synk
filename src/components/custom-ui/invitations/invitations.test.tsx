@@ -115,32 +115,43 @@ describe("CreateInviteDialog", () => {
 
   // A single "copy invitation" action would undo the separation, so there
   // isn't one. Asserted, because it is the sort of convenience that gets added.
+  /**
+   * The link and the code go by different routes, and one button that put both
+   * on the clipboard would undo that with a single click.
+   */
   it("offers no combined copy action", async () => {
     await reachShareStage()
     const buttons = screen.getAllByRole("button").map((b) => b.textContent ?? "")
-    expect(buttons.filter((text) => /copy/i.test(text))).toHaveLength(1)
+
+    expect(buttons.filter((text) => /copy/i.test(text))).toEqual(["Copy link", "Copy code"])
     expect(buttons.some((text) => /copy (invite|invitation|both|all)/i.test(text))).toBe(false)
   })
 
-  // Sequencing the reveal makes the natural order send, switch channel, send -
-  // rather than select-all in one message.
-  it("withholds the code until the link has been sent", async () => {
+  /**
+   * Withholding it bought nothing. A code alone admits nobody - the fingerprint
+   * check does that - so hiding it only ever cost a cancel and a re-invite.
+   */
+  it("shows the code without making the person copy the link first", async () => {
     await reachShareStage()
 
-    expect(screen.queryByLabelText("One-time code")).not.toBeInTheDocument()
-    expect(screen.getByRole("status")).toHaveTextContent("Send the link first")
-
-    fireEvent.click(screen.getByRole("button", { name: /Copy link/ }))
-    await waitFor(() => {
-      expect(screen.getByLabelText("One-time code")).toBeInTheDocument()
-    })
+    expect(screen.getByLabelText("One-time code")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: /Copy code/ })).toBeInTheDocument()
   })
 
   it("names concrete channels rather than saying 'use a secure channel'", async () => {
     await reachShareStage()
-    const note = screen.getByRole("note")
-    expect(note).toHaveTextContent("different routes")
-    expect(note.textContent).toMatch(/call|text|chat|email/i)
+    // The share step carries two notes: this one, and the warning that the code
+    // is shown only once.
+    const note = screen
+      .getAllByRole("note")
+      .find((candidate) => candidate.textContent?.includes("different routes"))
+    expect(note).toBeDefined()
+    expect(note?.textContent).toMatch(/call|text|chat|email/i)
+  })
+
+  it("says the code can be read again later", async () => {
+    await reachShareStage()
+    expect(screen.getByText(/read this code again from the invitation list/)).toBeInTheDocument()
   })
 
   it("copies the code separately once revealed", async () => {

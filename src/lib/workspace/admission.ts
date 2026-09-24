@@ -21,10 +21,17 @@ import type { Bytes, SigningKey } from "@/lib/crypto"
 import {
   createInvitation,
   grantFromRedemption,
+  invitationIdFromSecret,
+  isInvitationExpired,
+  putInvitationRevocation,
+  revokeInvitation,
+  revokedInvitationIds,
+  type InvitationRevocation,
   putDeviceRecord,
   putInvitation,
   putRedemption,
   redeemInvitation,
+  verifyInvitation,
   type Invitation,
   type Redemption,
 } from "@/lib/directory"
@@ -100,6 +107,93 @@ export async function redeemIntoNotebook(options: RedeemOptions): Promise<Redemp
   return redemption
 }
 
+/** Invitation revocations recorded in this notebook. */
+export function invitationRevocationsInDoc(doc: Y.Doc): InvitationRevocation[] {
+  const out: InvitationRevocation[] = []
+  for (const [id, revocation] of doc
+    .getMap<InvitationRevocation>("directory:invitation-revocations")
+    .entries()) {
+    if (revocation?.invitationId === id) out.push(revocation)
+  }
+  return out
+}
+
+/** Invitations an admin has taken back, verified against the owner. */
+export async function withdrawnInvitations(
+  doc: Y.Doc,
+  owner: string,
+): Promise<Set<string>> {
+  return revokedInvitationIds(invitationRevocationsInDoc(doc), invitationsInDoc(doc), [owner])
+}
+
+export interface CancelInvitationOptions {
+  doc: Y.Doc
+  admin: { signingKey: SigningKey; did: string }
+  invitation: Invitation
+  reason?: string
+  now?: number
+}
+
+/**
+ * Take an invitation back.
+ *
+ * The recovery path when a code is lost, and the reason losing one is not
+ * permanent: the secret cannot be recovered by anybody, so the only safe answer
+ * is to make the old invitation unusable and issue a new one.
+ */
+export async function cancelInvitation(
+  options: CancelInvitationOptions,
+): Promise<InvitationRevocation> {
+  const revocation = await revokeInvitation({
+    signingKey: options.admin.signingKey,
+    admin: options.admin.did,
+    invitation: options.invitation,
+    ...(options.reason === undefined ? {} : { reason: options.reason }),
+    ...(options.now === undefined ? {} : { revokedAt: options.now }),
+  })
+  putInvitationRevocation(options.doc, revocation)
+  return revocation
+}
+
+export interface InvitationMatch {
+  invitation: Invitation
+  /** The admin who signed it. What the notebook's genesis must agree with. */
+  expectedOwner: string
+}
+
+/**
+ * Find the invitation a code belongs to, and take the owner from it.
+ *
+ * The lookup is what makes this trustworthy: the invitation's id is *derived
+ * from the secret*, so only the holder of that code can compute which record to
+ * look for, and only the admin who issued it could have signed a record filed
+ * there. A joiner arriving by link therefore learns the expected owner from the
+ * invitation itself rather than taking the notebook's word for it.
+ *
+ * What it does not do is make the code an anchor for ownership. Somebody
+ * holding both the link and the code could overwrite the record and name
+ * themselves - but somebody holding both could already redeem as the invitee,
+ * so this grants them nothing new. What it buys is that a *disagreement*
+ * between the invitation and the genesis becomes visible instead of silently
+ * resolving in the document's favour.
+ */
+export async function matchInvitation(
+  doc: Y.Doc,
+  secret: Bytes,
+  now: number = Date.now(),
+): Promise<InvitationMatch | null> {
+  const invitationId = await invitationIdFromSecret(secret)
+  const invitation = invitationsInDoc(doc).find(
+    (candidate) => candidate.invitationId === invitationId,
+  )
+  if (!invitation) return null
+
+  // Signed by the admin it names. Not a claim about who the owner is yet -
+  // that is settled by checking the genesis against it.
+  if (!(await verifyInvitation(invitation, [invitation.admin], { now }))) return null
+  return { invitation, expectedOwner: invitation.admin }
+}
+
 /** The owner's root, which a member's capability is issued against. */
 export async function findOwnerRoot(
   doc: Y.Doc,
@@ -152,6 +246,13 @@ export async function admitFromRedemption(options: AdmitOptions): Promise<Admiss
   const root = await findOwnerRoot(options.doc, ownerDid, resource, now)
   if (!root) {
     throw new Error("the owner holds no valid root capability for this notebook")
+  }
+
+  // Checked here rather than left to `grantFromRedemption`, which knows about
+  // signatures and expiry but nothing about withdrawal.
+  const withdrawn = await withdrawnInvitations(options.doc, ownerDid)
+  if (withdrawn.has(options.invitation.invitationId)) {
+    throw new Error("this invitation was cancelled; issue a new one instead")
   }
 
   // Identity: admin-gated, and refuses a spent invitation.
@@ -233,6 +334,52 @@ export function pendingRedemptions(doc: Y.Doc): Redemption[] {
   return allRedemptions(doc).filter(
     (redemption) => redemption.did && !admitted.has(redemption.did),
   )
+}
+
+/**
+ * Is anyone still expected to join?
+ *
+ * True while an unexpired invitation has not yet produced an admitted device.
+ * The notebook's index room has to be connected for that whole window, because
+ * the redemption and the grant both travel through it - and link sharing, which
+ * is what otherwise decides whether the room is joined, has nothing to do with
+ * whether someone was invited.
+ */
+export function hasOutstandingInvitations(doc: Y.Doc, now: number = Date.now()): boolean {
+  const admitted = new Set(doc.getMap("directory:admissions").keys())
+  const cancelled = new Set(
+    invitationRevocationsInDoc(doc).map((revocation) => revocation.invitationId),
+  )
+  for (const invitation of invitationsInDoc(doc)) {
+    if (isInvitationExpired(invitation, now)) continue
+    if (cancelled.has(invitation.invitationId)) continue
+    const redemptions = redemptionsInDoc(doc, invitation.invitationId)
+    if (redemptions.length === 0) return true
+    if (redemptions.some((redemption) => !admitted.has(redemption.did))) return true
+  }
+  return false
+}
+
+/**
+ * Invitations that have done their job: redeemed, and the redeeming device
+ * admitted.
+ *
+ * Distinct from cancelled and from expired, because all three stop an
+ * invitation being outstanding for different reasons and a person reading the
+ * list wants to know which. This one means someone joined, and the record of
+ * that is the member list.
+ */
+export function grantedInvitationIds(doc: Y.Doc): Set<string> {
+  const admitted = new Set(doc.getMap("directory:admissions").keys())
+  const granted = new Set<string>()
+  for (const invitation of invitationsInDoc(doc)) {
+    const redemptions = redemptionsInDoc(doc, invitation.invitationId)
+    if (redemptions.length === 0) continue
+    if (redemptions.every((redemption) => admitted.has(redemption.did))) {
+      granted.add(invitation.invitationId)
+    }
+  }
+  return granted
 }
 
 /** Invitations this notebook has issued, newest first. */

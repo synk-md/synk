@@ -7,8 +7,14 @@ import type { Invitation, Redemption } from "@/lib/directory"
 import { currentDevice } from "@/lib/identity"
 import {
   admitFromRedemption,
+  cancelInvitation,
+  forgetInvitationCode,
+  grantedInvitationIds,
+  invitationRevocationsInDoc,
   invitationsInDoc,
   inviteToNotebook,
+  recallInvitationCode,
+  rememberInvitationCode,
   pendingRedemptions,
   readNotebookWorkspace,
   type NotebookWorkspace,
@@ -29,9 +35,18 @@ export interface NotebookMembers {
   loading: boolean
   /** True when this device is the owner, so it may invite and admit. */
   canAdmit: boolean
-  invite: (request: { secret: Uint8Array; member: string; label: string }) => Promise<Invitation>
+  invite: (request: {
+    secret: Uint8Array
+    text: string
+    member: string
+    label: string
+  }) => Promise<Invitation>
   admit: (pending: PendingJoin, ability?: Ability) => Promise<void>
   reject: (pending: PendingJoin) => void
+  /** Withdraw an invitation. Also forgets its stored code. */
+  cancel: (invitation: Invitation) => Promise<void>
+  /** The code for an outstanding invitation, if this device issued it. */
+  codeFor: (invitation: Invitation) => string | null
 }
 
 /**
@@ -59,7 +74,20 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
       return
     }
     const { doc } = createNotebookIndexDoc(notebookId)
-    const issued = invitationsInDoc(doc)
+    const cancelled = new Set(
+      invitationRevocationsInDoc(doc).map((revocation) => revocation.invitationId),
+    )
+    // A withdrawn invitation stops being offered, and so does anything redeemed
+    // against it - approving one would fail at the grant anyway.
+    //
+    // A granted one goes too. It is no longer outstanding, and leaving it under
+    // "Sent" would read as somebody still expected when they have already
+    // joined - the member list above is where they are now recorded.
+    const granted = grantedInvitationIds(doc)
+    const issued = invitationsInDoc(doc).filter(
+      (invitation) =>
+        !cancelled.has(invitation.invitationId) && !granted.has(invitation.invitationId),
+    )
     const byId = new Map(issued.map((invitation) => [invitation.invitationId, invitation]))
 
     setInvitations(issued)
@@ -103,7 +131,7 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
   )
 
   const invite = React.useCallback(
-    async (request: { secret: Uint8Array; member: string; label: string }) => {
+    async (request: { secret: Uint8Array; text: string; member: string; label: string }) => {
       if (!notebookId || !device) throw new Error("no notebook or device identity")
       const { doc } = createNotebookIndexDoc(notebookId)
       const invitation = await inviteToNotebook({
@@ -114,6 +142,10 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
         label: request.label,
         member: request.member,
       })
+      // Kept on this device only. It is never written to the notebook, which
+      // syncs to everyone and would hand the code to the very people it is
+      // meant to distinguish between.
+      rememberInvitationCode(notebookId, invitation.invitationId, request.text)
       refresh()
       return invitation
     },
@@ -132,6 +164,7 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
         redemption: pending.redemption,
         ability,
       })
+      forgetInvitationCode(notebookId, pending.invitation.invitationId)
       refresh()
     },
     [notebookId, device, refresh],
@@ -144,6 +177,23 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
     setRejected((previous) => new Set(previous).add(pending.redemption.did))
   }, [])
 
+  const cancel = React.useCallback(
+    async (invitation: Invitation) => {
+      if (!notebookId || !device) throw new Error("no notebook or device identity")
+      const { doc } = createNotebookIndexDoc(notebookId)
+      await cancelInvitation({
+        doc,
+        admin: { signingKey: device.identity.signingKey, did: device.identity.did },
+        invitation,
+      })
+      // Past this point the code can do nothing, and keeping it is the only
+      // version of storing it that has a downside and no upside.
+      forgetInvitationCode(notebookId, invitation.invitationId)
+      refresh()
+    },
+    [notebookId, device, refresh],
+  )
+
   return {
     workspace,
     invitations,
@@ -153,5 +203,8 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
     invite,
     admit,
     reject,
+    cancel,
+    codeFor: (invitation: Invitation) =>
+      notebookId ? recallInvitationCode(notebookId, invitation.invitationId) : null,
   }
 }

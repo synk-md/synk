@@ -17,6 +17,8 @@ export type PendingInvitesProps = {
   awaiting: readonly PendingRedemption[]
   onReview: (pending: PendingRedemption) => void
   onRevoke?: (invitation: Invitation) => void
+  /** The code this device issued, when it still has it. */
+  codeFor?: (invitation: Invitation) => string | null
   now?: number
   className?: string
 }
@@ -34,6 +36,7 @@ export function PendingInvites({
   awaiting,
   onReview,
   onRevoke,
+  codeFor,
   now = Date.now(),
   className,
 }: PendingInvitesProps) {
@@ -88,6 +91,7 @@ export function PendingInvites({
           <h4 id="inv-sent-heading" className="inv-section-heading">
             Sent
           </h4>
+
           <ul className="inv-list">
             {unanswered.map((invitation) => {
               const expired = isInvitationExpired(invitation, now)
@@ -109,6 +113,16 @@ export function PendingInvites({
                         ? `Expired ${new Date(invitation.expiresAt).toLocaleDateString()}`
                         : `Expires ${new Date(invitation.expiresAt).toLocaleDateString()}`}
                     </span>
+                    {/* Readable again on the device that issued it, so losing
+                        the message it was sent in is not a dead end. */}
+                    {!expired && codeFor?.(invitation) && (
+                      <span className="inv-row-code">
+                        <span className="inv-row-code-label">Code</span>
+                        <code aria-label={`One-time code for ${invitation.label}`}>
+                          {codeFor(invitation)}
+                        </code>
+                      </span>
+                    )}
                   </span>
                   {onRevoke && (
                     <Button

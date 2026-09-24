@@ -4,8 +4,13 @@ import { WebrtcProvider } from "y-webrtc"
 
 import { Button } from "@/components/tiptap-ui-primitive/button"
 import { parseInvitationSecret } from "@/lib/directory"
-import { currentDevice } from "@/lib/identity"
-import { readNotebookKeys, readNotebookWorkspace, redeemIntoNotebook } from "@/lib/workspace"
+import { currentDevice, deviceFingerprint } from "@/lib/identity"
+import {
+  matchInvitation,
+  readNotebookKeys,
+  readNotebookWorkspace,
+  redeemIntoNotebook,
+} from "@/lib/workspace"
 import { createNotebookIndexDoc, keyForIndex, SIGNALING_SERVERS } from "@/lib/yjs-utils"
 
 import "./join-notebook-page.scss"
@@ -31,6 +36,24 @@ export function JoinNotebookPage() {
   const [stage, setStage] = React.useState<Stage>("entering")
   const [error, setError] = React.useState<string | null>(null)
   const [label, setLabel] = React.useState<string | null>(null)
+  const [fingerprint, setFingerprint] = React.useState<string | null>(null)
+  // Learned from the invitation the code points at, not from the notebook.
+  const [expectedOwner, setExpectedOwner] = React.useState<string | null>(null)
+
+  // The owner is asked to compare this against what their screen derives from
+  // the redemption. Without it on screen here there is nothing to compare, and
+  // the check they are being asked to make would be theatre.
+  React.useEffect(() => {
+    const device = currentDevice()
+    if (!device) return
+    let cancelled = false
+    void deviceFingerprint(device.identity.did).then((code) => {
+      if (!cancelled) setFingerprint(code)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Connect to the notebook's index room so the redemption reaches the owner
   // and their grant reaches back.
@@ -56,7 +79,12 @@ export function JoinNotebookPage() {
 
     const { doc } = createNotebookIndexDoc(notebookId)
     const check = () => {
-      void readNotebookWorkspace({ doc, notebookId, selfDid: device.identity.did })
+      void readNotebookWorkspace({
+        doc,
+        notebookId,
+        selfDid: device.identity.did,
+        ...(expectedOwner === null ? {} : { expectedOwner }),
+      })
         .then(async (workspace) => {
           if (!workspace.self || !workspace.ownership.owner) return
           const keys = await readNotebookKeys({
@@ -75,7 +103,7 @@ export function JoinNotebookPage() {
     return () => {
       doc.off("update", check)
     }
-  }, [stage, notebookId])
+  }, [stage, notebookId, expectedOwner])
 
   const redeem = async () => {
     const device = currentDevice()
@@ -89,6 +117,29 @@ export function JoinNotebookPage() {
     try {
       const secret = parseInvitationSecret(secretText.trim())
       const { doc } = createNotebookIndexDoc(notebookId)
+
+      // The code names an invitation, and the invitation names the admin who
+      // signed it. Checking the notebook's own genesis against that is what
+      // stops this being trust-on-first-use in whatever document turned up.
+      const match = await matchInvitation(doc, secret)
+      if (!match) {
+        throw new Error(
+          "That code does not match an invitation to this notebook. Check the link and the code came from the same person.",
+        )
+      }
+
+      const workspace = await readNotebookWorkspace({
+        doc,
+        notebookId,
+        expectedOwner: match.expectedOwner,
+      })
+      if (workspace.ownership.status !== "established") {
+        throw new Error(
+          "This notebook does not agree about who owns it. The invitation was signed by someone the notebook does not name as its owner — do not continue.",
+        )
+      }
+
+      setExpectedOwner(match.expectedOwner)
       await redeemIntoNotebook({ doc, secret, device: device.identity })
       setStage("waiting")
     } catch (cause) {
@@ -131,12 +182,22 @@ export function JoinNotebookPage() {
         <>
           <h1>Waiting to be let in</h1>
           <p>
-            Your request has been sent. Whoever invited you has to approve it — they will be asked
-            to check a short code against the one your device shows, so they know it is you.
+            Your request has been sent. Whoever invited you now has to approve it, and they will
+            ask you for the code below — read it out to them over a call or in person, not in the
+            same place you were sent the link.
           </p>
+
+          <span className="join-label">Your device code</span>
+          <code className="join-fingerprint" aria-label="Your device code">
+            {fingerprint ?? "…"}
+          </code>
           <p className="join-note">
-            You can close this page. Come back to the same link and you will see where things
-            stand.
+            It identifies this device specifically. If the code they see does not match this one,
+            they are not talking to you and should refuse.
+          </p>
+
+          <p className="join-note">
+            You can leave this page open. It will say so here once you have been let in.
           </p>
         </>
       ) : (

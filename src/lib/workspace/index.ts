@@ -63,14 +63,29 @@ export {
 } from "./notebook-keys"
 
 export type { Admission, AdmitOptions, InviteOptions, RedeemOptions } from "./admission"
+export type { CancelInvitationOptions, InvitationMatch } from "./admission"
 export {
   admitFromRedemption,
+  cancelInvitation,
   findOwnerRoot,
+  grantedInvitationIds,
+  hasOutstandingInvitations,
+  invitationRevocationsInDoc,
+  withdrawnInvitations,
   INVITATION_TTL_MS,
   invitationsInDoc,
   inviteToNotebook,
+  matchInvitation,
   MEMBER_GRANT_TTL_MS,
   pendingRedemptions,
   redeemIntoNotebook,
   redemptionsInDoc,
 } from "./admission"
+
+export {
+  forgetInvitationCode,
+  forgetNotebookCodes,
+  pruneInvitationCodes,
+  recallInvitationCode,
+  rememberInvitationCode,
+} from "./invitation-secrets"

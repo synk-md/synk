@@ -34,6 +34,10 @@ import {
   type Invitation,
   type Redemption,
 } from "./invitation"
+import {
+  revokedInvitationIds,
+  type InvitationRevocation,
+} from "./invitation-revocation"
 
 /** Sub-maps of the directory document. */
 export const DIRECTORY_MAPS = {
@@ -42,6 +46,7 @@ export const DIRECTORY_MAPS = {
   links: "directory:links",
   prekeys: "directory:prekeys",
   invitations: "directory:invitations",
+  invitationRevocations: "directory:invitation-revocations",
   redemptions: "directory:redemptions",
 } as const
 
@@ -57,7 +62,10 @@ export interface DirectoryReadOptions extends VerifyAdmissionOptions {
 export interface VerifiedDirectory {
   devices: MemberDevice[]
   prekeys: Map<string, PrekeyBundle>
+  /** Verified and not withdrawn. */
   invitations: Invitation[]
+  /** Ids an admin has taken back, so a caller can say why one vanished. */
+  revokedInvitations: Set<string>
   redemptions: Map<string, Redemption[]>
   rejected: number
 }
@@ -84,6 +92,13 @@ export function putLink(doc: Y.Doc, link: DeviceLink): void {
 
 export function putPrekeyBundle(doc: Y.Doc, bundle: PrekeyBundle): void {
   map<PrekeyBundle>(doc, DIRECTORY_MAPS.prekeys).set(bundle.did, bundle)
+}
+
+export function putInvitationRevocation(doc: Y.Doc, revocation: InvitationRevocation): void {
+  map<InvitationRevocation>(doc, DIRECTORY_MAPS.invitationRevocations).set(
+    revocation.invitationId,
+    revocation,
+  )
 }
 
 export function putInvitation(doc: Y.Doc, invitation: Invitation): void {
@@ -169,15 +184,26 @@ export async function readDirectory(
     else rejected += 1
   }
 
-  const invitations: Invitation[] = []
+  const signedInvitations: Invitation[] = []
   for (const [id, invitation] of map<Invitation>(doc, DIRECTORY_MAPS.invitations).entries()) {
     if (
       invitation?.invitationId === id &&
       (await verifyInvitation(invitation, trustedAdminDids, { ...options, now }))
     ) {
-      invitations.push(invitation)
+      signedInvitations.push(invitation)
     } else rejected += 1
   }
+
+  // A withdrawn invitation is not a rejected record - it verified, and an admin
+  // took it back. It simply stops being offered.
+  const revoked = await revokedInvitationIds(
+    [...map<InvitationRevocation>(doc, DIRECTORY_MAPS.invitationRevocations).values()],
+    signedInvitations,
+    trustedAdminDids,
+  )
+  const invitations = signedInvitations.filter(
+    (invitation) => !revoked.has(invitation.invitationId),
+  )
 
   const byId = new Map(invitations.map((invitation) => [invitation.invitationId, invitation]))
   const redemptions = new Map<string, Redemption[]>()
@@ -195,7 +221,7 @@ export async function readDirectory(
     if (valid.length > 0) redemptions.set(id, valid)
   }
 
-  return { devices, prekeys, invitations, redemptions, rejected }
+  return { devices, prekeys, invitations, revokedInvitations: revoked, redemptions, rejected }
 }
 
 /**

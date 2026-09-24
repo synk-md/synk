@@ -61,6 +61,7 @@ export {
   putAdmission,
   putDeviceRecord,
   putInvitation,
+  putInvitationRevocation,
   putLink,
   putPrekeyBundle,
   putRedemption,
@@ -77,3 +78,16 @@ export {
   DEFAULT_WINDOW_MS,
   recordRedemptionAttempt,
 } from "./rate-limit"
+
+export type {
+  InvitationRevocation,
+  InvitationRevocationBody,
+  RevokeInvitationOptions,
+} from "./invitation-revocation"
+export {
+  INVITATION_REVOCATION_VERSION,
+  invitationRevocationBytes,
+  revokedInvitationIds,
+  revokeInvitation,
+  verifyInvitationRevocation,
+} from "./invitation-revocation"

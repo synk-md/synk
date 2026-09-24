@@ -1675,7 +1675,6 @@ export function SimpleEditor({
             </div>
           </div>
           <MembersButton onOpen={() => setMembersOpen(true)} />
-          <MembersButton onOpen={() => setMembersOpen(true)} />
           <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} />
         </div>
       )}

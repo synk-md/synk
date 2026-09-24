@@ -18,6 +18,8 @@ import "./invitations.scss"
 export type CreateInviteRequest = {
   /** The raw secret. Never leaves this dialog except through the caller. */
   secret: Uint8Array
+  /** The same secret as the person reads it. Handed on so it can be shown again. */
+  text: string
   member: string
   label: string
 }
@@ -97,6 +99,7 @@ export function CreateInviteDialog({
       const { secret, text } = generateInvitationSecret()
       const created = await onCreate({
         secret,
+        text,
         member: member.trim() || `member:${label.trim().toLowerCase().replace(/\s+/g, "-")}`,
         label: label.trim(),
       })
@@ -249,7 +252,7 @@ export function CreateInviteDialog({
               </div>
             </div>
 
-            <div className={["inv-share-step", copiedLink ? "" : "is-waiting"].join(" ")}>
+            <div className="inv-share-step">
               <span className="inv-step-number" aria-hidden="true">
                 2
               </span>
@@ -258,44 +261,37 @@ export function CreateInviteDialog({
                   <RiKey2Line aria-hidden="true" /> One-time code
                 </span>
 
-                {copiedLink ? (
-                  <>
-                    <code className="inv-share-value inv-secret" aria-label="One-time code">
-                      {secretText}
-                    </code>
-                    <p className="inv-hint">
-                      This is the part that proves it is them. Never send it alongside the link.
-                    </p>
-                    <Button
-                      data-style="ghost"
-                      onClick={() => void copy(secretText ?? "", setCopiedSecret)}
-                    >
-                      {copiedSecret ? (
-                        <>
-                          <RiCheckLine className="tiptap-button-icon" />
-                          <span className="tiptap-button-text">Copied code</span>
-                        </>
-                      ) : (
-                        <>
-                          <RiFileCopyLine className="tiptap-button-icon" />
-                          <span className="tiptap-button-text">Copy code</span>
-                        </>
-                      )}
-                    </Button>
-                  </>
-                ) : (
-                  <p className="inv-hint" role="status">
-                    Send the link first — the code is revealed once you have, so the two do not end
-                    up in the same message.
-                  </p>
-                )}
+                <code className="inv-share-value inv-secret" aria-label="One-time code">
+                  {secretText}
+                </code>
+                <p className="inv-hint">
+                  This is the part that proves it is them. Send it by a different route than the
+                  link — not in the same message.
+                </p>
+                <Button
+                  data-style="ghost"
+                  onClick={() => void copy(secretText ?? "", setCopiedSecret)}
+                >
+                  {copiedSecret ? (
+                    <>
+                      <RiCheckLine className="tiptap-button-icon" />
+                      <span className="tiptap-button-text">Copied code</span>
+                    </>
+                  ) : (
+                    <>
+                      <RiFileCopyLine className="tiptap-button-icon" />
+                      <span className="tiptap-button-text">Copy code</span>
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
 
             <p className="inv-body-text inv-muted">
               The code works once and expires
               {invitation ? ` on ${new Date(invitation.expiresAt).toLocaleDateString()}` : ""}. You
-              will still be asked to confirm their device fingerprint before they are let in.
+              will still be asked to confirm their device fingerprint before they are let in, and
+              you can read this code again from the invitation list.
             </p>
 
             <div className="inv-actions">

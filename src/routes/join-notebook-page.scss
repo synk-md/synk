@@ -54,6 +54,21 @@
   }
 }
 
+.join-fingerprint {
+  align-self: flex-start;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--tt-card-border-color);
+  font-family: var(--tt-font-mono, monospace);
+  font-size: 20px;
+  letter-spacing: 0.14em;
+  color: var(--tt-gray-light-900);
+
+  .dark & {
+    color: var(--tt-gray-dark-900);
+  }
+}
+
 .join-error {
   color: #c53030;
   font-size: 13px;

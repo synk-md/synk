@@ -104,6 +104,8 @@ export function NotebookMembersDialog({
                 invitations={members.invitations}
                 awaiting={members.awaiting}
                 onReview={setReviewing}
+                onRevoke={(invitation) => void members.cancel(invitation)}
+                codeFor={members.codeFor}
               />
 
               <div className="mem-actions">

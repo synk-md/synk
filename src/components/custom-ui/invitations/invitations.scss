@@ -350,3 +350,30 @@
     opacity: 1;
   }
 }
+
+/* The code, readable again from the list on the device that issued it. */
+.inv-row-code {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 3px;
+
+  code {
+    font-family: var(--tt-font-mono, monospace);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--tt-gray-light-900);
+
+    .dark & {
+      color: var(--tt-gray-dark-900);
+    }
+  }
+}
+
+.inv-row-code-label {
+  font-family: var(--tt-font-mono, monospace);
+  font-size: 9px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--tt-color-text-gray);
+}
