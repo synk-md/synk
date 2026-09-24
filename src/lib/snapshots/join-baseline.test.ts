@@ -11,6 +11,7 @@
 
 import { describe, expect, it } from "vitest"
 import * as Y from "yjs"
+import { unwrapSnapshotKey } from "./key-wrap"
 import { generateSealingKey, type SealingKey, type SigningKey } from "@/lib/crypto"
 import { bindDocumentClientId, didFromSealingKey } from "@/lib/identity"
 import { putAdmission, putDeviceRecord } from "@/lib/directory"
@@ -186,7 +187,10 @@ describe("the joiner snapshot re-establishes a per-author causal baseline", () =
     })
 
     // It re-baselines all three founders, not just its producer.
-    const state = await openSnapshot(snapshot, (await dave.source.keyFor(epoch))!)
+    const state = await openSnapshot(
+      snapshot,
+      await unwrapSnapshotKey(snapshot.wraps[0], (await dave.source.keyFor(epoch))!),
+    )
     expect(rebaselinedAuthors(state)).toEqual(
       founders.map((f) => f.clientId).sort((a, b) => a - b),
     )

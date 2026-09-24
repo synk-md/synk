@@ -104,8 +104,8 @@ export async function admitMemberWithSnapshot(
 
   let snapshot: Snapshot | null = null
   if (needsJoinSnapshot(options.doc)) {
-    // Sealed under the NEW epoch key - the only one the joiner holds. Built
-    // before `commit`, so a failure here leaves no epoch published.
+    // The content key is sealed under the NEW epoch - the only one the joiner
+    // holds. Built before `commit`, so a failure here leaves no epoch published.
     snapshot = await createJoinSnapshot({
       doc: options.doc,
       signingKey: options.signingKey,

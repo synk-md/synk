@@ -19,7 +19,7 @@ import {
 import { EnvelopeLog, type DeliveryVector } from "./envelope-log"
 import { checkUpdateAuthorship } from "./update-guard"
 import type { Transport } from "./transport"
-import { openSnapshot, type Snapshot } from "@/lib/snapshots/snapshot"
+import { openSnapshotWith, type Snapshot } from "@/lib/snapshots/snapshot"
 
 /** Tags a transaction as an applied remote update. Closes the feedback loop. */
 export const REMOTE_ORIGIN = Symbol("synk/remote")
@@ -279,15 +279,19 @@ export class SyncEngine {
     if (!(await this.options.policy.canWrite(snapshot.resourceId, snapshot.author)))
       return this.reject("unauthorized")
 
-    const dek = await this.options.keys.forEpoch(snapshot.epoch)
-    if (!dek) return this.reject("unknown-epoch")
-
-    let state: Bytes
+    // Which epochs can open this is decided by its wraps, not by the epoch it
+    // was created under: a snapshot re-sealed for a new member is reachable
+    // under theirs without having been rebuilt.
+    let state: Bytes | undefined
     try {
-      state = await openSnapshot(snapshot, dek)
+      state = await openSnapshotWith(snapshot, {
+        keyFor: (epoch) => this.options.keys.forEpoch(epoch),
+        readableEpochs: () => snapshot.wraps.map((wrap) => wrap.epoch),
+      })
     } catch {
       return this.reject("undecryptable")
     }
+    if (!state) return this.reject("unknown-epoch")
 
     Y.applyUpdate(this.options.doc, state, REMOTE_ORIGIN)
     this.log.markCovered(snapshot.covers)

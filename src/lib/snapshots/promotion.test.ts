@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest"
 import * as Y from "yjs"
+import { unwrapSnapshotKey } from "./key-wrap"
 import { generateSigningKey, toHex } from "@/lib/crypto"
 import { didFromSigningKey } from "@/lib/identity"
 import { promoteNote, readKeysFor } from "@/lib/keys"
@@ -79,7 +80,10 @@ describe("createPromotionSnapshot", () => {
       outsider.sealingDid,
       outsider.sealingKey,
     )
-    const state = await openSnapshot(snapshot, (await outsiderView.keyFor(1))!)
+    const state = await openSnapshot(
+      snapshot,
+      await unwrapSnapshotKey(snapshot.wraps[0], (await outsiderView.keyFor(1))!),
+    )
     expect(toHex(state)).toBe(toHex(Y.encodeStateAsUpdate(doc)))
 
     // And the notebook remains closed to them.
@@ -113,7 +117,13 @@ describe("createPromotionSnapshot", () => {
     })
 
     const reader = new Y.Doc()
-    Y.applyUpdate(reader, await openSnapshot(snapshot, await promotion.admin.currentKey()))
+    Y.applyUpdate(
+      reader,
+      await openSnapshot(
+        snapshot,
+        await unwrapSnapshotKey(snapshot.wraps[0], await promotion.admin.currentKey()),
+      ),
+    )
     expect(reader.getText("content").toJSON()).toBe("content")
 
     // A later edit from the note's original author places cleanly.

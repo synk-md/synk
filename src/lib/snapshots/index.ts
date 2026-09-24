@@ -8,6 +8,7 @@
  */
 
 export type {
+  EpochKeySource,
   CreateSnapshotOptions,
   Snapshot,
   SnapshotHeader,
@@ -17,6 +18,8 @@ export {
   chainFrom,
   createSnapshot,
   openSnapshot,
+  openSnapshotWith,
+  rewrapSnapshot,
   snapshotHeader,
   snapshotHeaderBytes,
   snapshotIdOf,
@@ -53,3 +56,17 @@ export {
   SnapshotStore,
   toMarker,
 } from "./store"
+
+export type { SnapshotKeyWrap, SnapshotKeyWrapBody, WrapOptions } from "./key-wrap"
+export {
+  coversCurrentState,
+  generateSnapshotKey,
+  reachableWraps,
+  rewrapForEpoch,
+  SNAPSHOT_WRAP_VERSION,
+  unwrapSnapshotKey,
+  verifySnapshotWrap,
+  wrapAad,
+  wrapBytes,
+  wrapSnapshotKey,
+} from "./key-wrap"

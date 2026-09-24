@@ -10,8 +10,15 @@ import {
   verifySnapshot,
   type Snapshot,
 } from "./snapshot"
+import { unwrapSnapshotKey } from "./key-wrap"
 
 const DOMAIN = "notebook:1"
+
+/** Opens the way a holder does: find a reachable wrap, unwrap, then decrypt. */
+async function open(snapshot: Snapshot, epochKey: Uint8Array): Promise<Uint8Array> {
+  return openSnapshot(snapshot, await unwrapSnapshotKey(snapshot.wraps[0], epochKey))
+}
+
 
 function state(text: string): Uint8Array {
   const doc = new Y.Doc()
@@ -42,7 +49,7 @@ async function snap(overrides: Partial<Parameters<typeof createSnapshot>[0]> = {
 describe("createSnapshot", () => {
   it("round-trips the state to a holder of the epoch key", async () => {
     const { dek, snapshot } = await snap()
-    expect(toHex(await openSnapshot(snapshot, dek))).toBe(toHex(state("hello")))
+    expect(toHex(await open(snapshot, dek))).toBe(toHex(state("hello")))
   })
 
   it("verifies under the producing author's key", async () => {
@@ -61,7 +68,7 @@ describe("createSnapshot", () => {
   it("is JSON-serialisable end to end", async () => {
     const { dek, snapshot } = await snap()
     const revived = JSON.parse(JSON.stringify(snapshot)) as Snapshot
-    expect(toHex(await openSnapshot(revived, dek))).toBe(toHex(state("hello")))
+    expect(toHex(await open(revived, dek))).toBe(toHex(state("hello")))
   })
 
   it("gives different content different ids", async () => {
@@ -107,7 +114,8 @@ describe("tamper resistance", () => {
 
   it("refuses to open under the wrong epoch key", async () => {
     const { snapshot } = await snap()
-    await expect(openSnapshot(snapshot, generateAeadKey())).rejects.toThrow(/AEAD open failed/)
+    // A wrong epoch key cannot even unwrap the content key.
+    await expect(open(snapshot, generateAeadKey())).rejects.toThrow(/AEAD open failed/)
   })
 
   // The stateHash is checked after decryption, so a payload swapped by someone
@@ -116,7 +124,7 @@ describe("tamper resistance", () => {
     const { dek, snapshot } = await snap()
     const other = await snap({ state: state("swapped"), dek })
     const swapped = { ...snapshot, ct: other.snapshot.ct, nonce: other.snapshot.nonce }
-    await expect(openSnapshot(swapped, dek)).rejects.toThrow()
+    await expect(open(swapped, dek)).rejects.toThrow()
   })
 
   it("returns false rather than throwing on nonsense", async () => {
@@ -188,7 +196,7 @@ describe("what verification does and does not establish", () => {
   it("accepts a correctly signed snapshot of arbitrary content", async () => {
     const { signingKey, dek, snapshot } = await snap({ state: state("whatever the author liked") })
     expect(await verifySnapshot(snapshot, signingKey.publicKey)).toBe(true)
-    expect(toHex(await openSnapshot(snapshot, dek))).toBe(
+    expect(toHex(await open(snapshot, dek))).toBe(
       toHex(state("whatever the author liked")),
     )
   })

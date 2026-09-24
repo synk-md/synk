@@ -9,6 +9,12 @@
  * So the inputs are verifiable and merge correctness rests on attestation - an
  * accepted residual. The sharp edge is truncation: never drop the envelopes a
  * snapshot covers until its correctness is established to you.
+ *
+ * Content is encrypted under the snapshot's **own** random key, which is then
+ * sealed under an epoch key by a separate wrap - see `key-wrap.ts`. `epoch` in
+ * the header records which epoch it was created under and is signed; what
+ * governs who can open it is which wraps exist, which is what lets an unchanged
+ * snapshot be handed to a new member without being rebuilt.
  */
 
 import {
@@ -23,6 +29,14 @@ import {
   type SigningKey,
 } from "@/lib/crypto"
 import type { DeliveryVector } from "@/lib/sync"
+import {
+  generateSnapshotKey,
+  reachableWraps,
+  rewrapForEpoch,
+  unwrapSnapshotKey,
+  wrapSnapshotKey,
+  type SnapshotKeyWrap,
+} from "./key-wrap"
 
 export const SNAPSHOT_VERSION = 1
 
@@ -36,7 +50,7 @@ export interface SnapshotHeader {
   kind: SnapshotKind
   /** `did:key` of the producing device. */
   author: string
-  /** Epoch whose key seals the payload. */
+  /** Epoch this was created under. Signed; opening is governed by wraps. */
   epoch: number
   /**
    * The point in the log this covers: highest envelope sequence per author
@@ -63,6 +77,15 @@ export interface Snapshot extends SnapshotHeader {
   sig: string
   /** SHA-256 over header and ciphertext. The hash-link anchor. */
   id: string
+  /**
+   * How to reach the content key, one entry per epoch it has been sealed under.
+   *
+   * Deliberately outside the signed material. The signature covers the header
+   * and the ciphertext, which never change; a rewrap appends here and leaves
+   * both alone, which is exactly what makes handing an unchanged snapshot to a
+   * new member cheap. Each wrap carries its own signature.
+   */
+  wraps: SnapshotKeyWrap[]
 }
 
 async function sha256(bytes: Bytes): Promise<string> {
@@ -108,7 +131,10 @@ export interface CreateSnapshotOptions {
   resourceId: string
   kind: SnapshotKind
   epoch: number
+  /** Epoch key. Seals the content key, never the content itself. */
   dek: Bytes
+  /** Supply one to make the result deterministic in a test. */
+  contentKey?: Bytes
   /** `Y.encodeStateAsUpdate(doc)` - the full materialised state. */
   state: Bytes
   covers: DeliveryVector
@@ -121,6 +147,7 @@ export interface CreateSnapshotOptions {
 
 export async function createSnapshot(options: CreateSnapshotOptions): Promise<Snapshot> {
   const nonce = options.nonce ?? randomNonce()
+  const contentKey = options.contentKey ?? generateSnapshotKey()
   const header: SnapshotHeader = {
     v: SNAPSHOT_VERSION,
     domain: options.domain,
@@ -140,9 +167,22 @@ export async function createSnapshot(options: CreateSnapshotOptions): Promise<Sn
   if (options.label !== undefined) header.label = options.label
 
   const headerBytes = snapshotHeaderBytes(header)
-  const ct = toBase64Url(await aeadEncrypt(options.dek, nonce, options.state, headerBytes))
+  const ct = toBase64Url(await aeadEncrypt(contentKey, nonce, options.state, headerBytes))
   const sig = toBase64Url(await options.signingKey.sign(snapshotSignedBytes(header, ct)))
-  return { ...header, ct, sig, id: await sha256(utf8(`${toBase64Url(headerBytes)}\n${ct}`)) }
+  const id = await sha256(utf8(`${toBase64Url(headerBytes)}\n${ct}`))
+
+  const wrap = await wrapSnapshotKey({
+    snapshotId: id,
+    domain: options.domain,
+    epoch: options.epoch,
+    epochKey: options.dek,
+    contentKey,
+    signingKey: options.signingKey,
+    wrapper: options.author,
+    ...(options.createdAt === undefined ? {} : { createdAt: options.createdAt }),
+  })
+
+  return { ...header, ct, sig, id, wraps: [wrap] }
 }
 
 export function snapshotHeader(snapshot: Snapshot): SnapshotHeader {
@@ -199,10 +239,13 @@ export async function verifySnapshot(
   }
 }
 
-/** Decrypt, and confirm the plaintext is what the producer hashed. */
-export async function openSnapshot(snapshot: Snapshot, dek: Bytes): Promise<Bytes> {
+/**
+ * Decrypt with the snapshot's content key, and confirm the plaintext is what
+ * the producer hashed. The key comes from a wrap - see `openSnapshotWith`.
+ */
+export async function openSnapshot(snapshot: Snapshot, contentKey: Bytes): Promise<Bytes> {
   const state = await aeadDecrypt(
-    dek,
+    contentKey,
     fromBase64Url(snapshot.nonce),
     fromBase64Url(snapshot.ct),
     snapshotHeaderBytes(snapshotHeader(snapshot)),
@@ -232,4 +275,67 @@ export function chainFrom(
     cursor = snapshot.parent
   }
   return { chain: chain.reverse(), complete: true }
+}
+
+export interface EpochKeySource {
+  keyFor(epoch: number): Promise<Bytes | undefined>
+  readableEpochs(): number[]
+}
+
+/**
+ * Open a snapshot using whichever wrap this holder can reach.
+ *
+ * Tries the newest reachable epoch first, because a rewrapped snapshot is
+ * reachable under several and the newest is the one a recent joiner holds.
+ * Returns undefined rather than throwing when none is reachable: not holding a
+ * key is an ordinary state, not an error.
+ */
+export async function openSnapshotWith(
+  snapshot: Snapshot,
+  keys: EpochKeySource,
+): Promise<Bytes | undefined> {
+  for (const wrap of reachableWraps(snapshot.wraps, snapshot.id, keys.readableEpochs())) {
+    const epochKey = await keys.keyFor(wrap.epoch)
+    if (!epochKey) continue
+    try {
+      return await openSnapshot(snapshot, await unwrapSnapshotKey(wrap, epochKey))
+    } catch {
+      // A wrap that does not yield the right key. Another may.
+    }
+  }
+  return undefined
+}
+
+/**
+ * The same snapshot, reachable under another epoch.
+ *
+ * Nothing is opened and nothing is re-encrypted: the ciphertext, the header,
+ * the signature and the id are all unchanged, and only the wrap list grows.
+ * That is the whole saving - handing an untouched note to a new member costs
+ * one small wrap instead of materialising and resealing the document.
+ */
+export async function rewrapSnapshot(
+  snapshot: Snapshot,
+  options: {
+    fromEpochKey: Bytes
+    toEpoch: number
+    toEpochKey: Bytes
+    signingKey: SigningKey
+    wrapper: string
+    createdAt?: number
+  },
+): Promise<Snapshot> {
+  const existing = snapshot.wraps.find((wrap) => wrap.epoch !== options.toEpoch)
+  if (!existing) throw new Error(`snapshot ${snapshot.id} has no wrap to re-seal from`)
+
+  const wrap = await rewrapForEpoch({
+    wrap: existing,
+    fromEpochKey: options.fromEpochKey,
+    toEpoch: options.toEpoch,
+    toEpochKey: options.toEpochKey,
+    signingKey: options.signingKey,
+    wrapper: options.wrapper,
+    ...(options.createdAt === undefined ? {} : { createdAt: options.createdAt }),
+  })
+  return { ...snapshot, wraps: [...snapshot.wraps, wrap] }
 }

@@ -89,3 +89,37 @@ export {
   recallInvitationCode,
   rememberInvitationCode,
 } from "./invitation-secrets"
+
+export type { NoteSyncOptions } from "./note-sync"
+export { createNoteSyncEngine, noteResourceId, notebookKeyProvider } from "./note-sync"
+
+export type { JoinSnapshotOptions, NoteSource } from "./note-snapshots"
+export { snapshotNotesForJoiner, snapshotsForNote } from "./note-snapshots"
+
+export type {
+  AdmissionPlan,
+  NoteLoader,
+  NoteRef,
+  NoteTask,
+  NoteTaskState,
+  PlanOptions,
+  PlanProgress,
+  RunOptions,
+} from "./admission-plan"
+export {
+  clearPlan,
+  completeTask,
+  domainsOf,
+  isComplete,
+  loadPlan,
+  notesNeedingMaterialisation,
+  pendingTasks,
+  planAdmission,
+  progressOf,
+  runAdmissionPlan,
+  savePlan,
+  unreadableNotes,
+} from "./admission-plan"
+
+export type { JoinSnapshotResult } from "./note-snapshots"
+export { hasNoOperations } from "./note-snapshots"

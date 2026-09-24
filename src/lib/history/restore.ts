@@ -32,7 +32,7 @@ import {
 } from "@/lib/crypto"
 import { publicKeyFromDid } from "@/lib/identity"
 import type { ReadKeySource } from "@/lib/keys"
-import { openSnapshot, type Snapshot } from "@/lib/snapshots"
+import { openSnapshotWith, type Snapshot } from "@/lib/snapshots"
 import type { DeliveryVector } from "@/lib/sync"
 
 export const RESTORE_VERSION = 1
@@ -134,6 +134,29 @@ function regionsOf(doc: Y.Doc, roots: readonly string[]): RestoredRegion[] {
   return [...totals]
     .map(([originClientId, length]) => ({ originClientId, length }))
     .sort((a, b) => b.length - a.length)
+}
+
+/**
+ * Open the restore target, or refuse.
+ *
+ * Reachability is decided by the snapshot's wraps rather than the epoch it was
+ * created under, so a point re-sealed for this member opens even though they
+ * never held the epoch it was made in.
+ */
+async function openTarget(
+  target: Snapshot,
+  keys: Pick<ReadKeySource, "keyFor">,
+): Promise<Bytes> {
+  const state = await openSnapshotWith(target, {
+    keyFor: (epoch) => keys.keyFor(epoch),
+    readableEpochs: () => target.wraps.map((wrap) => wrap.epoch),
+  })
+  if (!state) {
+    throw new Error(
+      `restore target is outside your visible history (epoch ${String(target.epoch)})`,
+    )
+  }
+  return state
 }
 
 /* ---- the diff ------------------------------------------------------------ */
@@ -307,13 +330,7 @@ export async function planRestore(options: {
   target: Snapshot
   keys: Pick<ReadKeySource, "keyFor">
 }): Promise<RestorePlan> {
-  const dek = await options.keys.keyFor(options.target.epoch)
-  if (!dek) {
-    throw new Error(
-      `restore target is outside your visible history (epoch ${String(options.target.epoch)})`,
-    )
-  }
-  const state = await openSnapshot(options.target, dek)
+  const state = await openTarget(options.target, options.keys)
 
   const targetDoc = new Y.Doc()
   Y.applyUpdate(targetDoc, state)
@@ -393,10 +410,8 @@ export async function applyRestore(options: {
 
   const plan = await planRestore({ doc: options.doc, target: options.target, keys: options.keys })
 
-  const dek = await options.keys.keyFor(options.target.epoch)
-  if (!dek) throw new Error("restore target is outside your visible history")
   const targetDoc = new Y.Doc()
-  Y.applyUpdate(targetDoc, await openSnapshot(options.target, dek))
+  Y.applyUpdate(targetDoc, await openTarget(options.target, options.keys))
   mirrorRoots(options.doc, targetDoc)
 
   options.transact(() => {

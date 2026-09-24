@@ -87,6 +87,9 @@ function stripMarker(entry: { materialised: true } & Snapshot): Snapshot {
       ? {}
       : { supersedesNotebookEpoch: entry.supersedesNotebookEpoch }),
     ...(entry.label === undefined ? {} : { label: entry.label }),
+    // Carried, not signed: a rewrap appends here and the snapshot is otherwise
+    // untouched, so dropping them would make a retained snapshot unopenable.
+    wraps: entry.wraps,
   }
 }
 
