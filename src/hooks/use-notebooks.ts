@@ -18,6 +18,7 @@ import { seedWelcomeNote } from "@/lib/seed-welcome-note"
 import { forgetLastOpenedNoteId, setLastOpenedNoteId } from "@/lib/notebook-settings"
 import { deleteImageAsset } from "@/lib/image-assets"
 import { importNotebookArchive } from "@/lib/notebook-import"
+import { claimNewNotebook } from "@/lib/workspace/claim"
 
 const LS_KEY = "notebooks:v1"
 
@@ -104,6 +105,11 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
     const nb: Notebook = { id: nb_id, name: trimmed || "Untitled Notebook", root, createdAt: Date.now() }
 
     persist(s => ({ notebooks: [nb, ...s.notebooks], currentId: nb_id }))
+
+    // Establish who owns this notebook, at the only moment it is unambiguous.
+    // Doing it later - on first open, say - would let whichever device opened
+    // an already-shared notebook first claim it.
+    await claimNewNotebook(nb_id, trimmed || "Untitled Notebook")
 
     // Seed the welcome note's Y.Doc with initial content + meta
     await seedWelcomeNote(nb_id, welcomeId)
