@@ -161,6 +161,16 @@
   /* Amber, not red. Offline is a supported state, not a fault. */
   background: color-mix(in srgb, #b7791f 9%, transparent);
   border: 1px solid color-mix(in srgb, #b7791f 26%, transparent);
+
+  /* A rewound clock is a real fault, unlike being offline. */
+  &.is-critical {
+    background: color-mix(in srgb, #c53030 9%, transparent);
+    border-color: color-mix(in srgb, #c53030 30%, transparent);
+
+    .cx-banner-icon {
+      color: #c53030;
+    }
+  }
 }
 
 .cx-banner-icon {

@@ -41,6 +41,14 @@ export {
   verifyDeviceRecord,
 } from "./device-record"
 
+export type { CurrentDevice } from "./current-device"
+export {
+  currentDevice,
+  currentDeviceError,
+  initCurrentDevice,
+  resetCurrentDevice,
+} from "./current-device"
+
 export type { DeviceIdentity } from "./device-identity"
 export {
   forgetDeviceIdentity,

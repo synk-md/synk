@@ -10,9 +10,41 @@ import {
   type FlatNodeRecord,
   type TreeNode,
 } from "@/components/custom-ui/file-browser/tree";
+import { bindDoc, type BoundDoc, type DocBinding } from "./doc-binding";
 
 
-const docs = new Map<string, { doc: Y.Doc, idb: IndexeddbPersistence }>()
+const docs = new Map<string, { doc: Y.Doc, idb: IndexeddbPersistence, bound: BoundDoc }>()
+
+/** Listeners on a document's binding, so the editor can react to a change. */
+const bindingListeners = new Map<string, Set<(binding: DocBinding) => void>>()
+
+function announceBinding(key: string, binding: DocBinding) {
+  for (const listener of bindingListeners.get(key) ?? []) listener(binding)
+}
+
+/**
+ * Watch a note's binding to this device. Fires immediately with what is known
+ * and again once the check behind IndexedDB has settled.
+ */
+export function onDocBinding(
+  notebookId: string,
+  noteId: string,
+  listener: (binding: DocBinding) => void,
+): () => void {
+  const key = keyFor(notebookId, noteId)
+  const listeners = bindingListeners.get(key) ?? new Set()
+  listeners.add(listener)
+  bindingListeners.set(key, listeners)
+
+  const entry = docs.get(key)
+  if (entry) {
+    listener(entry.bound.current())
+    void entry.bound.binding.then(listener)
+  }
+  return () => {
+    listeners.delete(listener)
+  }
+}
 
 // build a unique key so different notebooks/notes are isolated
 const keyFor = (notebookId: string, noteId: string) => `nb:${notebookId}:n:${noteId}`;
@@ -43,7 +75,17 @@ export function getOrCreateYDoc(notebookId: string, noteId: string) {
   if (!entry) {
     const doc = new Y.Doc()
     const idb = new IndexeddbPersistence(key, doc)
-    entry = { doc, idb }
+    // Pins this device's derived client id before anything can be typed, and
+    // takes the writer lock so a second tab does not author under the same id.
+    const bound = bindDoc(doc, key, idb.whenSynced, {
+      onError: (error) => {
+        console.error(`Could not keep the clock watermark for ${key}`, error)
+      },
+    })
+    void bound.binding.then((binding) => {
+      announceBinding(key, binding)
+    })
+    entry = { doc, idb, bound }
     docs.set(key, entry)
     trackNoteLinks(notebookId, noteId, doc, idb.whenSynced)
   }
@@ -171,7 +213,15 @@ export async function deleteNoteFromIndexedDB(notebookId: string, noteId: string
   const index = getNoteLinkIndex(notebookId)
   await index.idb.whenSynced
   index.links.delete(noteId)
-  return deleteIndexedDbDatabase(keyFor(notebookId, noteId));
+
+  // Give up the writer lock and stop tracking the clock: holding either for a
+  // note that no longer exists keeps another tab a follower forever.
+  const key = keyFor(notebookId, noteId)
+  docs.get(key)?.bound.release()
+  docs.delete(key)
+  bindingListeners.delete(key)
+
+  return deleteIndexedDbDatabase(key);
 }
 
 // Deletes a notebook's own index Y.Doc from IndexedDB (not its notes —

@@ -65,6 +65,8 @@ import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 
 // --- Custom UI ---
 import { CollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
+import { WriterNotice } from "@/components/custom-ui/connection/writer-notice"
+import { canWriteWith, useDocBinding } from "@/hooks/use-doc-binding"
 import { SidePanelButton } from "@/components/custom-ui/side-panel-button"
 import { MoreActionsButton } from "@/components/custom-ui/more-actions-button"
 import { SidePanel } from "@/components/custom-ui/side-panel"
@@ -661,7 +663,11 @@ export function SimpleEditor({
   // noteContentSynced keeps the note read-only for the window between mount
   // and its IndexedDB replay, so nothing can be typed into - or deleted from -
   // a document whose stored content hasn't loaded yet.
-  const isEditable = sharedPermission === "edit" && noteContentSynced
+  // A second tab of the same browser holds the same derived client id, so only
+  // one of them may author. Blocked here rather than letting its edits be
+  // rejected later, which would look like typing vanishing.
+  const docBinding = useDocBinding(notebookId ?? null, noteId ?? null)
+  const isEditable = sharedPermission === "edit" && noteContentSynced && canWriteWith(docBinding)
   // Read mode is a user preference layered on top of permission: it only
   // ever takes editing away, never grants it.
   const readMode = useReadMode()
@@ -1935,6 +1941,7 @@ export function SimpleEditor({
                         }}
                       />
                     )}
+                    <WriterNotice binding={docBinding} className="simple-editor-writer-notice" />
                     <EditorContent
                       editor={editor}
                       role="presentation"

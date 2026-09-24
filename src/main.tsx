@@ -7,10 +7,19 @@ import { BrowserRouter } from "react-router-dom"
 import { AppRoutes } from './app-routes.tsx'
 import { UpdateToast } from './components/custom-ui/update-toast/update-toast.tsx'
 import { flushPersistedDocs } from './lib/yjs-utils.ts'
+import { initCurrentDevice } from './lib/identity'
 import { registerSW } from 'virtual:pwa-register'
 
 bootTheme();
 applyZoom();
+
+// Resolved before the first render so every document created afterwards can be
+// pinned to this device's client id synchronously. A failure here is reported
+// and not fatal: editing locally never depended on having an identity.
+const deviceReady = initCurrentDevice().catch((error: unknown) => {
+  console.error('Could not load this device identity', error)
+  return null
+})
 
 let notifyNeedRefresh: () => void = () => {}
 
@@ -48,9 +57,11 @@ function Root() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(
-  // <StrictMode>
+void deviceReady.then(() => {
+  createRoot(document.getElementById('root')!).render(
+    // <StrictMode>
     <Root />
-  // </StrictMode>,
-)
+    // </StrictMode>,
+  )
+})
 
