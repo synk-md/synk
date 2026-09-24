@@ -1,0 +1,72 @@
+.join-page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 64px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--tt-gray-light-900);
+
+    .dark & {
+      color: var(--tt-gray-dark-900);
+    }
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--tt-color-text-gray);
+  }
+}
+
+.join-note {
+  font-size: 12px;
+}
+
+.join-label {
+  margin-top: 8px;
+  font-family: var(--tt-font-mono, monospace);
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--tt-color-text-gray);
+}
+
+.join-input {
+  width: 100%;
+  padding: 11px 13px;
+  border-radius: 10px;
+  border: 1px solid var(--tt-card-border-color);
+  background: transparent;
+  font-family: var(--tt-font-mono, monospace);
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: var(--tt-gray-light-900);
+
+  .dark & {
+    color: var(--tt-gray-dark-900);
+  }
+}
+
+.join-error {
+  color: #c53030;
+  font-size: 13px;
+}
+
+.join-button {
+  align-self: flex-start;
+  margin-top: 8px;
+}
+
+.join-link {
+  align-self: flex-start;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--tt-brand-color-500, #4a7dff);
+}

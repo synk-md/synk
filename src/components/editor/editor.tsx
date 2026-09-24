@@ -66,6 +66,8 @@ import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 // --- Custom UI ---
 import { CollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
 import { WriterNotice } from "@/components/custom-ui/connection/writer-notice"
+import { NotebookMembersDialog } from "@/components/custom-ui/members/notebook-members-dialog"
+import { MembersButton } from "@/components/custom-ui/members/members-button"
 import { canWriteWith, useDocBinding } from "@/hooks/use-doc-binding"
 import { SidePanelButton } from "@/components/custom-ui/side-panel-button"
 import { MoreActionsButton } from "@/components/custom-ui/more-actions-button"
@@ -666,6 +668,7 @@ export function SimpleEditor({
   // A second tab of the same browser holds the same derived client id, so only
   // one of them may author. Blocked here rather than letting its edits be
   // rejected later, which would look like typing vanishing.
+  const [membersOpen, setMembersOpen] = React.useState(false)
   const docBinding = useDocBinding(notebookId ?? null, noteId ?? null)
   const isEditable = sharedPermission === "edit" && noteContentSynced && canWriteWith(docBinding)
   // Read mode is a user preference layered on top of permission: it only
@@ -1671,9 +1674,17 @@ export function SimpleEditor({
               />
             </div>
           </div>
+          <MembersButton onOpen={() => setMembersOpen(true)} />
+          <MembersButton onOpen={() => setMembersOpen(true)} />
           <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} />
         </div>
       )}
+      <NotebookMembersDialog
+        open={membersOpen}
+        onClose={() => setMembersOpen(false)}
+        notebookId={notebookId ?? null}
+        joinLinkFor={(id) => `${window.location.origin}/join/${id}`}
+      />
       <div className="editor-wrapper">
         <div className="horizontal-main-container">
           {/* <div className={`side-panel-row ${isSidePanelOpen ? "is-open" : ""}`}>

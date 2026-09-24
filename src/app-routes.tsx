@@ -5,6 +5,7 @@ import { NoteEditorPage } from "@/routes/note-editor-page"
 import { NotFound } from "@/routes/not-found"
 import { SharedNotePage } from "@/routes/shared-note-page"
 import { SharedNotebookPage } from "@/routes/shared-notebook-page"
+import { JoinNotebookPage } from "@/routes/join-notebook-page"
 import { NotebooksProvider } from "@/hooks/use-notebooks"
 
 function WorkspaceLayout() {
@@ -26,6 +27,9 @@ export function AppRoutes() {
       </Route>
 
       <Route path="/s/:notebookId/:noteId" element={<SharedNotePage />} />
+
+      {/* The invitation link. The one-time code arrives separately. */}
+      <Route path="/join/:notebookId" element={<JoinNotebookPage />} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>
