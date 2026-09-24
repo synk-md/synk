@@ -14,6 +14,7 @@
 import { currentDevice } from "@/lib/identity"
 import { createNotebookIndexDoc } from "@/lib/yjs-utils"
 
+import { foundNotebookKeys } from "./notebook-keys"
 import { foundNotebookWorkspace } from "./notebook-workspace"
 
 export async function claimNewNotebook(
@@ -33,4 +34,8 @@ export async function claimNewNotebook(
     device: device.identity,
     label,
   })
+  // The key domain comes with the workspace: a notebook whose owner is
+  // established but which has no genesis epoch has nothing to seal content
+  // under, and every later membership change would have no timeline to cut.
+  await foundNotebookKeys({ doc, notebookId, device: device.identity })
 }

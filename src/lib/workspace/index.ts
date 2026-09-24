@@ -35,3 +35,29 @@ export {
   resourceIdFor,
   workspaceIdFor,
 } from "./notebook-workspace"
+
+export {
+  authorizationContext,
+  CAPABILITY_MAP,
+  issueOwnerRoot,
+  OWNER_ROOT_DEPTH,
+  OWNER_ROOT_TTL_MS,
+  ownerHoldsRoot,
+  putCapability,
+  readCapabilities,
+} from "./capabilities"
+
+export type { FoundedKeys, FoundKeysOptions, KeyAccess, NotebookKeys, ReadKeysOptions } from "./notebook-keys"
+export {
+  EPOCH_MAP,
+  foundNotebookKeys,
+  KEYRING_MAP,
+  keyDomainFor,
+  putEpochRecord,
+  putSealedKeys,
+  readNotebookKeys,
+  restoreDomainAdmin,
+  sealedKeyId,
+  storedEpochRecords,
+  storedSealedKeys,
+} from "./notebook-keys"
