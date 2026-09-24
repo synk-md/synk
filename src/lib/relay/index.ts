@@ -33,6 +33,9 @@ export { AUTH_VERSION, challengeBytes, newChallenge, signChallenge, verifyChalle
 export type { Link, LinkState, WebSocketLinkOptions } from "./link"
 export { LoopbackLink, WebSocketLink } from "./link"
 
+export type { SocketLike } from "./socket-link"
+export { SocketLink } from "./socket-link"
+
 export type { RelayQuota } from "./server-store"
 export { DEFAULT_QUOTA, RelayStore } from "./server-store"
 
