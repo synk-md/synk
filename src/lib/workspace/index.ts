@@ -123,3 +123,11 @@ export {
 
 export type { JoinSnapshotResult } from "./note-snapshots"
 export { hasNoOperations } from "./note-snapshots"
+
+export type { NoteEngineOptions } from "./note-relay"
+export {
+  closeRelayConnection,
+  createNoteEngine,
+  encryptedSyncEnabled,
+  relayConnection,
+} from "./note-relay"

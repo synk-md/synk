@@ -42,8 +42,11 @@ export { DEFAULT_QUOTA, RelayStore } from "./server-store"
 export type { RelayMetrics, RelayServerOptions, RelayWriteHint, TurnIssuer } from "./server"
 export { EphemeralTurnIssuer, RelayServer } from "./server"
 
-export type { RelayClientOptions, RelayConnection } from "./client"
+export type { RelayClientOptions } from "./client"
 export { RelayClient } from "./client"
+
+export type { RelayConnectionOptions, RelayConnectionState } from "./connection"
+export { RelayConnection } from "./connection"
 
 export type { FailoverOptions, RankedTransport, TransportHealth } from "./failover"
 export { FailoverTransport } from "./failover"
