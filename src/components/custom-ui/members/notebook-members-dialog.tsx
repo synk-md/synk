@@ -8,8 +8,12 @@ import { ApproveRedemptionDialog } from "@/components/custom-ui/invitations/appr
 import { CreateInviteDialog } from "@/components/custom-ui/invitations/create-invite-dialog"
 import { PendingInvites } from "@/components/custom-ui/invitations/pending-invites"
 import { WorkspacePanel } from "@/components/custom-ui/workspace/workspace-panel"
+import { useNoteAdmission } from "@/hooks/use-note-admission"
 import { useNotebookMembers, type PendingJoin } from "@/hooks/use-notebook-members"
 import { currentDevice } from "@/lib/identity"
+import { encryptedSyncEnabled } from "@/lib/workspace"
+
+import { AdmissionProgress } from "./admission-progress"
 
 import "./members.scss"
 
@@ -40,6 +44,7 @@ export function NotebookMembersDialog({
   joinLinkFor,
 }: NotebookMembersDialogProps) {
   const members = useNotebookMembers(open ? notebookId : null)
+  const admission = useNoteAdmission(notebookId)
   const [inviting, setInviting] = React.useState(false)
   const [reviewing, setReviewing] = React.useState<PendingJoin | null>(null)
   const selfDid = currentDevice()?.identity.did
@@ -92,6 +97,8 @@ export function NotebookMembersDialog({
             </Button>
           </div>
 
+          <AdmissionProgress run={admission.run} onCancel={admission.cancel} />
+
           <WorkspacePanel
             workspace={members.workspace}
             loading={members.loading}
@@ -136,7 +143,15 @@ export function NotebookMembersDialog({
         open={reviewing !== null}
         pending={reviewing}
         onClose={() => setReviewing(null)}
-        onGrant={(pending) => members.admit(pending)}
+        onGrant={async (pending) => {
+          const granted = await members.admit(pending)
+          // Reported rather than awaited: the grant is published and valid, and
+          // covering the notes is what makes it useful. Blocking the dialog on
+          // a notebook's worth of documents would look broken.
+          if (granted && encryptedSyncEnabled()) {
+            void admission.cover(pending.redemption.did, granted.epoch)
+          }
+        }}
         onReject={members.reject}
       />
     </>

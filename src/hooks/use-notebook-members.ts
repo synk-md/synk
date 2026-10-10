@@ -41,7 +41,7 @@ export interface NotebookMembers {
     member: string
     label: string
   }) => Promise<Invitation>
-  admit: (pending: PendingJoin, ability?: Ability) => Promise<void>
+  admit: (pending: PendingJoin, ability?: Ability) => Promise<{ epoch: number } | null>
   reject: (pending: PendingJoin) => void
   /** Withdraw an invitation. Also forgets its stored code. */
   cancel: (invitation: Invitation) => Promise<void>
@@ -156,7 +156,7 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
     async (pending: PendingJoin, ability: Ability = "write") => {
       if (!notebookId || !device) throw new Error("no notebook or device identity")
       const { doc } = createNotebookIndexDoc(notebookId)
-      await admitFromRedemption({
+      const granted = await admitFromRedemption({
         doc,
         notebookId,
         owner: device.identity,
@@ -166,6 +166,7 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
       })
       forgetInvitationCode(notebookId, pending.invitation.invitationId)
       refresh()
+      return { epoch: granted.epoch }
     },
     [notebookId, device, refresh],
   )

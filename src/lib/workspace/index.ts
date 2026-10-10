@@ -134,3 +134,6 @@ export {
 
 export type { NoteAdmissionOptions, NoteAdmissionResult, NoteOutcome } from "./admit-notes"
 export { markCovered, noteRefsFor, runNoteAdmission } from "./admit-notes"
+
+export type { RewrapNoteOptions, Sealer, SealNoteOptions } from "./admission-sealer"
+export { createSealer, inlineSealer, workerSealer } from "./admission-sealer"

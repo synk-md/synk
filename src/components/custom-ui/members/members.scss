@@ -63,3 +63,68 @@
   line-height: 1.5;
   color: var(--tt-color-text-gray);
 }
+
+/* Covering a notebook's notes for a new member. */
+.mem-admission {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tt-brand-color-500, #4a7dff) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--tt-brand-color-500, #4a7dff) 24%, transparent);
+
+  &.is-error {
+    background: color-mix(in srgb, #c53030 8%, transparent);
+    border-color: color-mix(in srgb, #c53030 30%, transparent);
+  }
+
+  strong {
+    display: block;
+    font-size: 13px;
+    color: var(--tt-gray-light-900);
+
+    .dark & {
+      color: var(--tt-gray-dark-900);
+    }
+  }
+}
+
+.mem-admission-icon {
+  display: flex;
+  flex: none;
+  margin-top: 1px;
+  color: var(--tt-brand-color-500, #4a7dff);
+
+  svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .is-error & {
+    color: #c53030;
+  }
+}
+
+.mem-admission-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.mem-admission-cancel {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--tt-card-border-color);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--tt-color-text-gray);
+}
+
+.mem-note.is-loud {
+  color: #c53030;
+}
