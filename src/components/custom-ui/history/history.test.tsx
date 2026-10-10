@@ -38,10 +38,24 @@ async function timeline(
     materialised: true as const,
   }
 
+  // A materialised snapshot carries its wraps, and reachability is read from
+  // them rather than from the epoch it was created under. Each fixture is
+  // wrapped under its own epoch, which is what an un-rewrapped one looks like.
+  const wrapped = (epoch: number) => ({ wraps: [{ epoch }] as never })
+
   const entries = [
-    { ...base, id: "old", kind: "automatic" as const, epoch: 1, covers: {}, createdAt: T0 },
     {
       ...base,
+      ...wrapped(1),
+      id: "old",
+      kind: "automatic" as const,
+      epoch: 1,
+      covers: {},
+      createdAt: T0,
+    },
+    {
+      ...base,
+      ...wrapped(2),
       id: "named",
       kind: "checkpoint" as const,
       epoch: 2,
@@ -49,7 +63,15 @@ async function timeline(
       createdAt: T0 + MINUTE,
       label: "Before the rewrite",
     },
-    { ...base, id: "join", kind: "join" as const, epoch: 2, covers: {}, createdAt: T0 + 2 * MINUTE },
+    {
+      ...base,
+      ...wrapped(2),
+      id: "join",
+      kind: "join" as const,
+      epoch: 2,
+      covers: {},
+      createdAt: T0 + 2 * MINUTE,
+    },
   ]
 
   return {

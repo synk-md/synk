@@ -131,3 +131,6 @@ export {
   encryptedSyncEnabled,
   relayConnection,
 } from "./note-relay"
+
+export type { NoteAdmissionOptions, NoteAdmissionResult, NoteOutcome } from "./admit-notes"
+export { markCovered, noteRefsFor, runNoteAdmission } from "./admit-notes"

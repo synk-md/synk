@@ -156,6 +156,20 @@ export class SyncEngine {
   }
 
   private enqueueOutbound(update: Uint8Array): void {
+    // Yjs reassigns `clientID` when it sees what looks like a collision, and a
+    // reassigned document authors operations no peer will accept - the
+    // attribution check rejects them remotely, so the writer sees nothing at
+    // all. Failing loudly here beats publishing into a void.
+    if (this.options.doc.clientID !== this.options.clientId) {
+      this.options.onError?.(
+        new Error(
+          `refusing to publish: document client id is ${String(this.options.doc.clientID)} ` +
+            `but this device may only author as ${String(this.options.clientId)}`,
+        ),
+      )
+      return
+    }
+
     const seq = ++this.localSeq // synchronous: pins this edit's place in order
     this.outbound = this.outbound
       .then(async () => {

@@ -446,3 +446,24 @@ describe("lifecycle", () => {
     expect(alice.engine.stats.published).toBe(0)
   })
 })
+
+describe("a document whose client id was reassigned", () => {
+  /**
+   * Yjs reassigns `clientID` when it sees an apparent collision. A reassigned
+   * document authors operations the attribution check rejects remotely, so the
+   * writer would see nothing at all - publishing into a void.
+   */
+  it("refuses to publish rather than sending what every peer will reject", async () => {
+    const workspace = await newWorkspace()
+    const alice = await joinWorkspace(workspace, "alice")
+
+    alice.doc.clientID = alice.doc.clientID + 1
+    alice.engine.transact(() => alice.text.insert(0, "orphaned"))
+    await settle(alice)
+
+    expect(alice.engine.stats.published).toBe(0)
+    expect(workspace.relay.stored()).toHaveLength(0)
+    // The text is still in the local document; only sharing it is refused.
+    expect(textOf(alice)).toBe("orphaned")
+  })
+})

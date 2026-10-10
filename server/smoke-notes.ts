@@ -21,9 +21,12 @@ import {
   type DeviceIdentity,
 } from "../src/lib/identity/index.ts"
 import { RelayConnection, SocketLink } from "../src/lib/relay/index.ts"
+import { collectJoinSnapshot, verifySnapshot } from "../src/lib/snapshots/index.ts"
 import {
   admitFromRedemption,
   createNoteSyncEngine,
+  noteRefsFor,
+  runNoteAdmission,
   foundNotebookKeys,
   foundNotebookWorkspace,
   inviteToNotebook,
@@ -107,8 +110,29 @@ async function keyringFor(device: DeviceIdentity) {
 const ownerConnection = await connect(owner)
 const joinerConnection = await connect(joiner)
 
+// Content that predates the joiner, authored directly rather than through an
+// engine - so it exists in the document and not in the relay, which is what
+// makes a baseline necessary. Written into ownerDoc itself: applying an update
+// authored under a document's own client id makes Yjs reassign it.
 const ownerDoc = new Y.Doc()
 ownerDoc.clientID = owner.clientId
+ownerDoc.getText("body").insert(0, "written before anyone joined. ")
+
+const ownerKeyring = await keyringFor(owner)
+const covered = await runNoteAdmission({
+  notebookId: NOTEBOOK,
+  joiner: joiner.did,
+  epochs: { [`notebook:${NOTEBOOK}`]: granted.epoch },
+  notes: noteRefsFor(NOTEBOOK, [NOTE]),
+  loadNote: () => Promise.resolve(ownerDoc),
+  keyFor: (_domain, epoch) => ownerKeyring.keyFor(epoch),
+  signingKey: owner.signingKey,
+  author: owner.did,
+  deposit: (snapshot) =>
+    ownerConnection.transportFor(`notebook:${NOTEBOOK}/note:${NOTE}`).depositSnapshot(snapshot),
+})
+console.log(`notes covered: built=${JSON.stringify(covered.built)} skipped=${JSON.stringify(covered.skipped)}`)
+
 const joinerDoc = new Y.Doc()
 joinerDoc.clientID = joiner.clientId
 
@@ -138,6 +162,19 @@ const joinerEngine = createNoteSyncEngine({
 // Subscriptions must be live before anything is published.
 await new Promise((resolve) => setTimeout(resolve, 300))
 
+// The joiner collects its baseline, exactly as the app would on first open.
+const joinerKeyring = await keyringFor(joiner)
+const baseline = await collectJoinSnapshot({
+  transport: joinerConnection.transportFor(resource),
+  resourceId: resource,
+  readableEpochs: joinerKeyring.readableEpochs(),
+})
+if (!baseline) throw new Error("joiner found no baseline it could open")
+const applied = await joinerEngine.applySnapshot(baseline, (snapshot, author) =>
+  verifySnapshot(snapshot, author.publicKey),
+)
+console.log(`joiner applied baseline: ${String(applied)}`)
+
 ownerEngine.transact(() => {
   ownerDoc.getText("body").insert(0, "written by the owner. ")
 })
@@ -158,7 +195,11 @@ console.log("owner sees: ", JSON.stringify(ownerText))
 console.log("joiner sees:", JSON.stringify(joinerText))
 console.log("owner applied:", ownerEngine.stats.applied, "rejected:", JSON.stringify(ownerEngine.stats.rejected).slice(0, 80))
 
-const converged = ownerText === joinerText && ownerText.includes("owner") && ownerText.includes("joiner")
+const converged =
+  ownerText === joinerText &&
+  ownerText.includes("before anyone joined") &&
+  ownerText.includes("owner") &&
+  ownerText.includes("joiner")
 
 ownerEngine.close()
 joinerEngine.close()

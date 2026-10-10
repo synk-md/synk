@@ -154,8 +154,12 @@ export async function collectJoinSnapshot(
 ): Promise<Snapshot | undefined> {
   const readable = new Set(options.readableEpochs)
   const archived = await options.transport.fetchSnapshots(options.resourceId)
+  // Reachability is decided by the wraps, not by the epoch the snapshot was
+  // created under. A snapshot re-sealed for this member opens under theirs
+  // while still recording the epoch it was built in - filtering on that field
+  // would reject exactly the snapshots rewrapped for the joiner.
   return [...archived]
-    .filter((snapshot) => readable.has(snapshot.epoch))
+    .filter((snapshot) => snapshot.wraps.some((wrap) => readable.has(wrap.epoch)))
     .sort((a, b) => a.createdAt - b.createdAt)
     .at(-1)
 }

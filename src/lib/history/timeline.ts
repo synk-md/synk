@@ -63,7 +63,13 @@ export function buildTimeline(options: BuildTimelineOptions): RestorePoint[] {
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((entry): RestorePoint => {
       const materialised = isMaterialised(entry)
-      const blocker: RestoreBlocker | null = !readable.has(entry.epoch)
+      // A snapshot re-sealed for this member opens under their epoch while
+      // still recording the one it was built in, so reachability comes from
+      // its wraps. A marker has none, because it has no payload to open.
+      const reachable = materialised
+        ? entry.wraps.some((wrap) => readable.has(wrap.epoch))
+        : readable.has(entry.epoch)
+      const blocker: RestoreBlocker | null = !reachable
         ? "outside-visible-history"
         : entry.id === options.currentId
           ? "current"
