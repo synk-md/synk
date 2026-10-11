@@ -44,7 +44,8 @@ export type {
   SyncStats,
   WritePolicy,
 } from "./sync-engine"
-export { LOCAL_ORIGIN, REMOTE_ORIGIN, SyncEngine } from "./sync-engine"
+export { LOCAL_ORIGIN, memoryCursorStore, REMOTE_ORIGIN, SyncEngine } from "./sync-engine"
+export type { ResumeResult, SyncCursor, SyncCursorStore } from "./sync-engine"
 
 export type { DirectoryAuthorityOptions } from "./directory-resolver"
 export { DirectoryAuthorResolver, DirectoryMembershipPolicy } from "./directory-resolver"

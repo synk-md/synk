@@ -69,6 +69,7 @@ import { WriterNotice } from "@/components/custom-ui/connection/writer-notice"
 import { NotebookMembersDialog } from "@/components/custom-ui/members/notebook-members-dialog"
 import { MembersButton } from "@/components/custom-ui/members/members-button"
 import { canWriteWith, useDocBinding } from "@/hooks/use-doc-binding"
+import { useEncryptedNoteSync } from "@/hooks/use-encrypted-note-sync"
 import { SidePanelButton } from "@/components/custom-ui/side-panel-button"
 import { MoreActionsButton } from "@/components/custom-ui/more-actions-button"
 import { SidePanel } from "@/components/custom-ui/side-panel"
@@ -97,6 +98,7 @@ import { headingSpec, imageSpec, noteLinkSpec, tableSpec, defaultSpec, editorSpe
 import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCaret from '@tiptap/extension-collaboration-caret'
 import { WebrtcProvider } from "y-webrtc"
+import * as Y from "yjs"
 
 // --- Icons ---
 import { ArrowLeftIcon } from "@/components/tiptap-icons/arrow-left-icon"
@@ -653,7 +655,6 @@ export function SimpleEditor({
   // looking at empty notes.
   const collaborationActive =
     collaborationEnabled && (linkAccess !== "restricted" || (fs.sharedWithMembers ?? false))
-  collaborationActiveRef.current = collaborationActive
   const notePresence = useNotePresence(collaborationActive ? (fileSystem.indexProvider ?? null) : null)
   const unreadNoteIds = useUnreadNoteIds(fs.tree, noteId)
   const rootId = rootNodeId
@@ -675,6 +676,37 @@ export function SimpleEditor({
   // rejected later, which would look like typing vanishing.
   const [membersOpen, setMembersOpen] = React.useState(false)
   const docBinding = useDocBinding(notebookId ?? null, noteId ?? null)
+
+  // Members get content as encrypted envelopes through the relay. The open
+  // WebRTC room then carries only presence, so cursors keep working without
+  // the text crossing it.
+  const encryptedNote = useEncryptedNoteSync({
+    notebookId: notebookId ?? null,
+    noteId: noteId ?? null,
+    doc: note?.doc ?? null,
+    wanted: collaborationActive && !isSharedView && (fs.sharedWithMembers ?? false),
+    canAuthor: docBinding.status === "writer",
+  })
+  const webrtcCarries: "content" | "presence" | "nothing" = !collaborationActive
+    ? "nothing"
+    : // A link is readable by whoever holds it, so link sharing stays plaintext.
+      linkAccess !== "restricted" || encryptedNote.state === "off"
+      ? "content"
+      : encryptedNote.state === "running"
+        ? "presence"
+        : // Never fall back to plaintext while the keys are being read, or for
+          // a device that cannot read them: that is what removal relies on.
+          "nothing"
+  collaborationActiveRef.current = webrtcCarries !== "nothing"
+  const shownSyncStatus: SyncStatus =
+    encryptedNote.state === "off"
+      ? syncStatus
+      : encryptedNote.state === "running"
+        ? encryptedNote.status
+        : encryptedNote.state === "pending"
+          ? "connecting"
+          : "offline"
+  const shownLastSyncedAt = encryptedNote.state === "off" ? lastSyncedAt : encryptedNote.lastSyncedAt
   const isEditable = sharedPermission === "edit" && noteContentSynced && canWriteWith(docBinding)
   // Read mode is a user preference layered on top of permission: it only
   // ever takes editing away, never grants it.
@@ -737,7 +769,7 @@ export function SimpleEditor({
 
   // Create the Y-WebRTC provider AFTER mount (StrictMode safe)
   React.useEffect(() => {
-    if (!collaborationActive) {
+    if (webrtcCarries === "nothing") {
       imageTransferRef.current?.destroy()
       imageTransferRef.current = null
       imageRefIndexRef.current?.destroy()
@@ -762,8 +794,13 @@ export function SimpleEditor({
 
     // provider is tied to this note's Y.Doc
     if (!providerRef.current) {
-      const room = `nb:${notebookId}:n:${noteId}`
-      const provider = new WebrtcProvider(room, doc, {
+      // A separate room and an empty document sharing the note's client id, so
+      // the cursor plugin still recognises the local user's own cursor.
+      const presenceOnly = webrtcCarries === "presence"
+      const room = `nb:${notebookId}:n:${noteId}${presenceOnly ? ":presence" : ""}`
+      const roomDoc = presenceOnly ? new Y.Doc() : doc
+      roomDoc.clientID = doc.clientID
+      const provider = new WebrtcProvider(room, roomDoc, {
         signaling: SIGNALING_SERVERS,
         password: room
       })
@@ -845,7 +882,7 @@ export function SimpleEditor({
       setSyncStatus("offline")
     }
     // only when the doc/ids truly change
-  }, [note?.doc, notebookId, noteId, collaborationActive, reconnectNonce])
+  }, [note?.doc, notebookId, noteId, webrtcCarries, reconnectNonce])
 
   // The public signaling servers (and the WebRTC handshake itself) are flaky
   // enough that the initial connection sometimes never completes — it sits
@@ -855,7 +892,7 @@ export function SimpleEditor({
   // automatically instead: if we're still not live after a while, tear down
   // and recreate the provider to give the handshake a fresh attempt.
   React.useEffect(() => {
-    if (!collaborationActive || syncStatus !== "connecting") return
+    if (webrtcCarries === "nothing" || syncStatus !== "connecting") return
 
     const timeout = setTimeout(() => {
       forceReconnectRef.current = true
@@ -867,7 +904,7 @@ export function SimpleEditor({
     // syncStatus alone can flip offline->connecting within the same batched
     // commit as a reconnect, landing back on "connecting" without this effect
     // ever seeing it change.
-  }, [collaborationActive, syncStatus, noteId, reconnectNonce])
+  }, [webrtcCarries, syncStatus, noteId, reconnectNonce])
 
   const collaborationScopeKey = collaborationActive && noteId
     ? `${notebookId}:${noteId}`
@@ -1775,9 +1812,9 @@ export function SimpleEditor({
                       <SharedNoteBar
                         ownerName={ownerName}
                         users={users}
-                        syncStatus={syncStatus}
+                        syncStatus={shownSyncStatus}
                         permission={sharedPermission}
-                        lastSyncedAt={lastSyncedAt}
+                        lastSyncedAt={shownLastSyncedAt}
                       />
                     ) : (isSharedView || (showNoteTabs && !!onCloseLastNote)) ? (
                       <NoteTabBar
@@ -1835,9 +1872,9 @@ export function SimpleEditor({
                             <SharedNoteBar
                               ownerName={ownerName}
                               users={users}
-                              syncStatus={syncStatus}
+                              syncStatus={shownSyncStatus}
                               permission={sharedPermission}
-                              lastSyncedAt={lastSyncedAt}
+                              lastSyncedAt={shownLastSyncedAt}
                               embedded
                             />
                           ) : undefined}
@@ -1851,7 +1888,7 @@ export function SimpleEditor({
                       {!isSharedView && (
                         <ToolbarGroup>
                           {collaborationActive && (
-                            <SyncStatusIndicator syncStatus={syncStatus} lastSyncedAt={lastSyncedAt} />
+                            <SyncStatusIndicator syncStatus={shownSyncStatus} lastSyncedAt={shownLastSyncedAt} />
                           )}
                           <CollaborationStatusMenu
                             users={users}

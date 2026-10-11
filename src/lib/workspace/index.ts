@@ -132,9 +132,23 @@ export {
   configureRelay,
   createNoteEngine,
   encryptedSyncEnabled,
+  liveKeys,
   relayConnection,
   relaySettings,
+  relayWatch,
+  storedBaseline,
+  storedCursor,
 } from "./note-relay"
+
+export type {
+  BaselineMemo,
+  NoteSession,
+  NoteSessionOptions,
+  NoteSessionStatus,
+  RelayReachability,
+  RelayWatch,
+} from "./note-session"
+export { openNoteSession } from "./note-session"
 
 export type { NoteAdmissionOptions, NoteAdmissionResult, NoteOutcome } from "./admit-notes"
 export { markCovered, noteRefsFor, runNoteAdmission } from "./admit-notes"

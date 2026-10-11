@@ -12,10 +12,11 @@
 import type * as Y from "yjs"
 
 import { currentDevice } from "@/lib/identity"
-import type { FlatKeyring } from "@/lib/keys"
-import { RelayConnection, WebSocketLink } from "@/lib/relay"
-import type { SyncEngine } from "@/lib/sync"
+import type { ReadKeySource } from "@/lib/keys"
+import { RelayConnection, WebSocketLink, type RelayConnectionState } from "@/lib/relay"
+import type { SyncCursor, SyncCursorStore, SyncEngine } from "@/lib/sync"
 
+import type { BaselineMemo, RelayWatch } from "./note-session"
 import { createNoteSyncEngine, noteResourceId } from "./note-sync"
 
 // Read defensively: `import.meta.env` is Vite's, and this module is also
@@ -60,6 +61,8 @@ export function encryptedSyncEnabled(): boolean {
 
 let connection: RelayConnection | null = null
 let link: WebSocketLink | null = null
+// The connection takes one callback; every open note needs to hear it.
+const stateListeners = new Set<(state: RelayConnectionState) => void>()
 
 /**
  * The shared connection, opened on first use.
@@ -79,6 +82,9 @@ export function relayConnection(): RelayConnection | null {
       relayId: settings.relayId,
       did: device.identity.did,
       signingKey: device.identity.signingKey,
+      onConnectionChange: (state) => {
+        for (const listener of stateListeners) listener(state)
+      },
       onError: (error) => {
         console.warn("relay", error)
       },
@@ -94,13 +100,87 @@ export function closeRelayConnection(): void {
   link = null
 }
 
+/** Whether the relay is reachable, for anything that has to react to it. */
+export const relayWatch: RelayWatch = {
+  state: () => relayConnection()?.state ?? "offline",
+  onChange: (listener) => {
+    stateListeners.add(listener)
+    return () => {
+      stateListeners.delete(listener)
+    }
+  },
+}
+
+function stored<T>(key: string, fallback: T, valid: (value: unknown) => value is T) {
+  return {
+    load: (): T => {
+      try {
+        const raw = localStorage.getItem(key)
+        const value: unknown = raw === null ? null : JSON.parse(raw)
+        return valid(value) ? value : fallback
+      } catch {
+        return fallback
+      }
+    },
+    save: (value: T): void => {
+      try {
+        localStorage.setItem(key, JSON.stringify(value))
+      } catch {
+        // Unavailable storage degrades to memory. `resume` still refuses to
+        // reuse anything the relay already holds.
+      }
+    },
+  }
+}
+
+const isCursor = (value: unknown): value is SyncCursor =>
+  typeof value === "object" &&
+  value !== null &&
+  Number.isSafeInteger((value as SyncCursor).seq) &&
+  Number.isSafeInteger((value as SyncCursor).clock)
+
+/** Per device and note: two devices never share numbering, two tabs always do. */
+export function storedCursor(did: string, resourceId: string): SyncCursorStore {
+  return stored(`synk:cursor:${did}:${resourceId}`, { seq: 0, clock: 0 }, isCursor)
+}
+
+export function storedBaseline(did: string, resourceId: string): BaselineMemo {
+  const slot = stored(
+    `synk:baseline:${did}:${resourceId}`,
+    null,
+    (value): value is string | null => value === null || typeof value === "string",
+  )
+  return { applied: slot.load, record: slot.save }
+}
+
+/**
+ * A keyring that is always the latest one read.
+ *
+ * The notebook's keys are re-read on every directory change, and an engine
+ * rebuilt each time would re-run its whole catch-up. This lets one engine see
+ * a new epoch the moment it is cut.
+ */
+export function liveKeys(read: () => ReadKeySource): ReadKeySource {
+  return {
+    get domain() {
+      return read().domain
+    },
+    get currentEpoch() {
+      return read().currentEpoch
+    },
+    keyFor: (epoch) => read().keyFor(epoch),
+    readableEpochs: () => read().readableEpochs(),
+  }
+}
+
 export interface NoteEngineOptions {
   doc: Y.Doc
   index: Y.Doc
   notebookId: string
   noteId: string
   owner: string
-  keys: FlatKeyring
+  keys: ReadKeySource
+  cursor: SyncCursorStore
   onDenied?: (author: string, reason: string) => void
 }
 
@@ -126,6 +206,7 @@ export function createNoteEngine(options: NoteEngineOptions): SyncEngine | null 
     signingKey: device.identity.signingKey,
     clientId: device.clientId,
     keys: options.keys,
+    cursor: options.cursor,
     transport: shared.transportFor(noteResourceId(options.notebookId, options.noteId)),
     ...(options.onDenied ? { onDenied: options.onDenied } : {}),
     onError: (error) => {

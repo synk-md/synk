@@ -99,6 +99,57 @@ function emptyStats(): SyncStats {
   }
 }
 
+/** Where this device's own authoring stands for one resource. */
+export interface SyncCursor {
+  /** Highest sequence number handed out. Never reused. */
+  seq: number
+  /** This device's own Yjs clock when that number was handed out. */
+  clock: number
+}
+
+/**
+ * Persists the cursor across reloads.
+ *
+ * Without it a reload restarts at seq 1, and the relay and every peer answer a
+ * duplicate (author, seq) with success and keep the old one - so every edit
+ * after the reload looks published and reaches nobody.
+ */
+export interface SyncCursorStore {
+  load(): SyncCursor
+  save(cursor: SyncCursor): void
+}
+
+export function memoryCursorStore(): SyncCursorStore {
+  let cursor: SyncCursor = { seq: 0, clock: 0 }
+  return {
+    load: () => cursor,
+    save: (next) => {
+      cursor = next
+    },
+  }
+}
+
+export interface ResumeResult {
+  /** Sequence numbers the relay lacked and nothing here could resend. */
+  filled: number
+  /** Whether this device's own content was published again. */
+  republished: boolean
+}
+
+/** A valid update containing nothing: fills a sequence number without content. */
+const EMPTY_UPDATE = Y.encodeStateAsUpdate(new Y.Doc())
+
+function ownClock(doc: Y.Doc, clientId: number): number {
+  return Y.decodeStateVector(Y.encodeStateVector(doc)).get(clientId) ?? 0
+}
+
+/** This client's own operations past `since`, and nobody else's. */
+function ownUpdateSince(doc: Y.Doc, clientId: number, since: number): Uint8Array {
+  const target = Y.decodeStateVector(Y.encodeStateVector(doc))
+  target.set(clientId, since)
+  return Y.encodeStateAsUpdate(doc, Y.encodeStateVector(target))
+}
+
 export interface SyncEngineOptions {
   doc: Y.Doc
   resourceId: string
@@ -111,6 +162,8 @@ export interface SyncEngineOptions {
   authors: AuthorResolver
   policy: WritePolicy
   keys: EpochKeyProvider
+  /** Defaults to memory, which is only correct for a document that never reloads. */
+  cursor?: SyncCursorStore
   /** Surfaced rather than thrown - an outbound failure must not break editing. */
   onError?: (error: unknown) => void
 }
@@ -131,10 +184,17 @@ export class SyncEngine {
   /** Serialised so check-then-append is atomic across concurrent receives. */
   private inbound: Promise<void> = Promise.resolve()
   private localSeq = 0
+  /** Own clock as of `localSeq`. */
+  private localClock = 0
+  private readonly cursor: SyncCursorStore
   private closed = false
 
   constructor(options: SyncEngineOptions) {
     this.options = options
+    this.cursor = options.cursor ?? memoryCursorStore()
+    const saved = this.cursor.load()
+    this.localSeq = saved.seq
+    this.localClock = saved.clock
 
     this.updateHandler = (update, origin, _doc, transaction) => {
       // Loop guard, on the origin rather than content: a remote update can be
@@ -155,42 +215,132 @@ export class SyncEngine {
     this.options.doc.transact(fn, LOCAL_ORIGIN)
   }
 
-  private enqueueOutbound(update: Uint8Array): void {
-    // Yjs reassigns `clientID` when it sees what looks like a collision, and a
-    // reassigned document authors operations no peer will accept - the
-    // attribution check rejects them remotely, so the writer sees nothing at
-    // all. Failing loudly here beats publishing into a void.
-    if (this.options.doc.clientID !== this.options.clientId) {
-      this.options.onError?.(
-        new Error(
-          `refusing to publish: document client id is ${String(this.options.doc.clientID)} ` +
-            `but this device may only author as ${String(this.options.clientId)}`,
-        ),
-      )
-      return
-    }
+  /**
+   * Yjs reassigns `clientID` when it sees what looks like a collision, and a
+   * reassigned document authors operations no peer will accept - the
+   * attribution check rejects them remotely, so the writer sees nothing at
+   * all. Failing loudly here beats publishing into a void.
+   */
+  private mayAuthor(): boolean {
+    if (this.options.doc.clientID === this.options.clientId) return true
+    this.options.onError?.(
+      new Error(
+        `refusing to publish: document client id is ${String(this.options.doc.clientID)} ` +
+          `but this device may only author as ${String(this.options.clientId)}`,
+      ),
+    )
+    return false
+  }
 
-    const seq = ++this.localSeq // synchronous: pins this edit's place in order
+  /**
+   * Hand out the next number, persisted before any envelope exists. A number
+   * lost to a crash is a gap, which `resume` fills; a number reused is an edit
+   * every peer drops as a duplicate, which nothing can recover.
+   */
+  private reserve(): number {
+    // Re-read rather than trusted from memory: another tab on this device may
+    // have been the writer since this engine loaded it.
+    const stored = this.cursor.load()
+    if (stored.seq > this.localSeq) {
+      this.localSeq = stored.seq
+      this.localClock = stored.clock
+    }
+    const seq = ++this.localSeq
+    this.localClock = ownClock(this.options.doc, this.options.clientId)
+    this.cursor.save({ seq, clock: this.localClock })
+    return seq
+  }
+
+  private async seal(seq: number, update: Uint8Array): Promise<Envelope> {
+    const { epoch, dek } = await this.options.keys.current()
+    const envelope = await makeEnvelope({
+      signingKey: this.options.signingKey,
+      author: this.options.author,
+      seq,
+      resourceId: this.options.resourceId,
+      epoch,
+      dek,
+      update,
+    })
+    this.log.append(envelope)
+    this.stats.published += 1
+    await this.options.transport.publish(envelope)
+    return envelope
+  }
+
+  private enqueueOutbound(update: Uint8Array): void {
+    if (!this.mayAuthor()) return
+    const seq = this.reserve() // synchronous: pins this edit's place in order
     this.outbound = this.outbound
       .then(async () => {
         if (this.closed) return
-        const { epoch, dek } = await this.options.keys.current()
-        const envelope = await makeEnvelope({
-          signingKey: this.options.signingKey,
-          author: this.options.author,
-          seq,
-          resourceId: this.options.resourceId,
-          epoch,
-          dek,
-          update,
-        })
-        this.log.append(envelope)
-        this.stats.published += 1
-        await this.options.transport.publish(envelope)
+        await this.seal(seq, update)
       })
       .catch((error: unknown) => {
         this.options.onError?.(error)
       })
+  }
+
+  /**
+   * Put right whatever an earlier session left undelivered. Run on start and
+   * whenever the relay comes back.
+   *
+   * Three things can be wrong, and each has one remedy:
+   *
+   *   the relay has seen higher numbers than this device remembers
+   *     (site data cleared) - skip past them, never reuse one
+   *   numbers were handed out that the relay never received (a publish lost
+   *     to an outage, then the tab closed) - fill each so catch-up is not
+   *     stuck behind the gap, and republish all own content, since which
+   *     edits were lost is unknowable
+   *   own operations exist that never had a number at all (written before
+   *     any engine was attached) - publish them
+   *
+   * All of it is idempotent for receivers, so a wrong guess costs bandwidth,
+   * not content.
+   */
+  async resume(): Promise<ResumeResult> {
+    const result: ResumeResult = { filled: 0, republished: false }
+    // Captured now: edits made while this runs get later numbers and their own
+    // envelopes, and must not be mistaken for a gap.
+    const reserved = this.localSeq
+    const reservedClock = this.localClock
+
+    const step = this.outbound.then(async () => {
+      if (this.closed || !this.mayAuthor()) return
+      const author = this.options.author
+      const theirs = await this.options.transport.vector()
+      const relayHas = theirs[author] ?? 0
+
+      if (relayHas > this.localSeq) {
+        this.localSeq = relayHas
+        this.cursor.save({ seq: this.localSeq, clock: this.localClock })
+      }
+
+      let lost = false
+      for (let seq = relayHas + 1; seq <= reserved; seq += 1) {
+        const held = this.log.get(author, seq)
+        if (held) {
+          await this.options.transport.publish(held)
+          continue
+        }
+        lost = true
+        await this.seal(seq, EMPTY_UPDATE)
+        result.filled += 1
+      }
+
+      const clock = ownClock(this.options.doc, this.options.clientId)
+      const since = lost ? 0 : reservedClock
+      if (clock > since) {
+        await this.seal(this.reserve(), ownUpdateSince(this.options.doc, this.options.clientId, since))
+        result.republished = true
+      }
+    })
+    this.outbound = step.catch((error: unknown) => {
+      this.options.onError?.(error)
+    })
+    await step
+    return result
   }
 
   private enqueueInbound(envelope: Envelope): void {

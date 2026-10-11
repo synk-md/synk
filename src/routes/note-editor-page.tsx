@@ -7,6 +7,7 @@ import { findNode, isNoteNode } from "@/components/custom-ui/file-browser/tree"
 import { useBackgroundNoteSync } from "@/hooks/use-background-note-sync"
 import { setLastOpenedNoteId } from "@/lib/notebook-settings"
 import { pickNotebookTargetNote } from "@/lib/resolve-notebook-target"
+import { encryptedSyncEnabled } from "@/lib/workspace"
 
 export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; noteId?: string }) {
   const navigate = useNavigate()
@@ -56,7 +57,14 @@ export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; no
   // has no one to relay through otherwise. This watches peers' awareness for
   // notes they have open and background-syncs those into IndexedDB so the
   // content isn't stuck stale/dirty until both sides view it at once.
-  useBackgroundNoteSync(notebookId ?? "", effectiveNoteId ?? null, fileSystem.indexProvider ?? null)
+  // A plaintext room per note. With encrypted sync on, the relay holds what
+  // was written while a note was closed, so it is only needed for link shares.
+  const plaintextNotes = !encryptedSyncEnabled() || fileSystem.linkAccess !== "restricted"
+  useBackgroundNoteSync(
+    notebookId ?? "",
+    effectiveNoteId ?? null,
+    plaintextNotes ? (fileSystem.indexProvider ?? null) : null,
+  )
 
   React.useEffect(() => {
     // No notebook id at all: always 404

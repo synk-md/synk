@@ -18,6 +18,7 @@ import {
   MemoryRelay,
   SyncEngine,
   type EpochKeyProvider,
+  type SyncCursorStore,
 } from "@/lib/sync"
 import { admitDevice, newAdmin, type Admin } from "./identity-fixtures"
 
@@ -57,6 +58,7 @@ export interface Client {
   text: Y.Text
   engine: SyncEngine
   transport: ReturnType<MemoryRelay["attach"]>
+  keys: EpochKeyProvider
 }
 
 /**
@@ -66,7 +68,7 @@ export interface Client {
 export async function joinWorkspace(
   workspace: Workspace,
   name: string,
-  options: { member?: string; keys?: EpochKeyProvider } = {},
+  options: { member?: string; keys?: EpochKeyProvider; cursor?: SyncCursorStore } = {},
 ): Promise<Client> {
   const device = await admitDevice(workspace.admin, {
     member: options.member ?? `member:${name}`,
@@ -78,33 +80,58 @@ export async function joinWorkspace(
   const doc = new Y.Doc()
   const clientId = await bindDocumentClientId(doc, device.key.publicKey)
 
-  const authority = {
-    directory: workspace.directory,
-    trustedAdminDids: [workspace.admin.did],
-  }
+  const keys = options.keys ?? staticKeys(workspace.dek)
   const transport = workspace.relay.attach(name)
-  const engine = new SyncEngine({
-    doc,
-    resourceId: RESOURCE,
-    author: device.record.did,
-    signingKey: device.key,
-    clientId,
-    transport,
-    authors: new DirectoryAuthorResolver(authority),
-    policy: new DirectoryMembershipPolicy(authority),
-    keys: options.keys ?? staticKeys(workspace.dek),
-  })
-
-  return {
+  const client = {
     name,
     did: device.record.did,
     clientId,
     signingKey: device.key,
     doc,
     text: doc.getText("content"),
-    engine,
     transport,
+    keys,
   }
+  return { ...client, engine: engineFor(workspace, client, transport, options.cursor) }
+}
+
+function engineFor(
+  workspace: Workspace,
+  client: Omit<Client, "engine" | "transport">,
+  transport: Client["transport"],
+  cursor?: SyncCursorStore,
+): SyncEngine {
+  const authority = {
+    directory: workspace.directory,
+    trustedAdminDids: [workspace.admin.did],
+  }
+  return new SyncEngine({
+    doc: client.doc,
+    resourceId: RESOURCE,
+    author: client.did,
+    signingKey: client.signingKey,
+    clientId: client.clientId,
+    transport,
+    authors: new DirectoryAuthorResolver(authority),
+    policy: new DirectoryMembershipPolicy(authority),
+    keys: client.keys,
+    ...(cursor ? { cursor } : {}),
+  })
+}
+
+/**
+ * A reload: same device, same document (it lives in IndexedDB), but a fresh
+ * engine and connection. Everything the old engine held in memory is gone.
+ */
+export function restartClient(
+  workspace: Workspace,
+  client: Client,
+  options: { cursor?: SyncCursorStore } = {},
+): Client {
+  client.engine.close()
+  client.transport.close()
+  const transport = workspace.relay.attach(client.name)
+  return { ...client, transport, engine: engineFor(workspace, client, transport, options.cursor) }
 }
 
 /**

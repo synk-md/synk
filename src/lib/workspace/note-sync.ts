@@ -20,11 +20,12 @@ import type * as Y from "yjs"
 
 import { CapabilityWritePolicy, type AuthorizationContext } from "@/lib/authz"
 import type { Bytes, SigningKey } from "@/lib/crypto"
-import type { FlatKeyring } from "@/lib/keys"
+import type { ReadKeySource } from "@/lib/keys"
 import {
   DirectoryAuthorResolver,
   SyncEngine,
   type EpochKeyProvider,
+  type SyncCursorStore,
   type Transport,
 } from "@/lib/sync"
 
@@ -43,7 +44,7 @@ export function noteResourceId(notebookId: string, noteId: string): string {
  * epoch this device can no longer prove is current is how a writer produces
  * content that recent joiners cannot read.
  */
-export function notebookKeyProvider(keys: FlatKeyring): EpochKeyProvider {
+export function notebookKeyProvider(keys: ReadKeySource): EpochKeyProvider {
   return {
     async current(): Promise<{ epoch: number; dek: Bytes }> {
       const epoch = keys.currentEpoch
@@ -70,8 +71,10 @@ export interface NoteSyncOptions {
   author: string
   signingKey: SigningKey
   clientId: number
-  keys: FlatKeyring
+  keys: ReadKeySource
   transport: Transport
+  /** Where this device's numbering stands. Must persist, or a reload loses edits. */
+  cursor?: SyncCursorStore
   now?: () => number
   onError?: (error: unknown) => void
   onDenied?: (author: string, reason: string) => void
@@ -107,6 +110,7 @@ export function createNoteSyncEngine(options: NoteSyncOptions): SyncEngine {
       options.onDenied?.(did, result.reason ?? "unauthorized")
     }),
     keys: notebookKeyProvider(options.keys),
+    ...(options.cursor ? { cursor: options.cursor } : {}),
     ...(options.onError ? { onError: options.onError } : {}),
   })
 }

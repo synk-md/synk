@@ -13,6 +13,7 @@
     "relay": "tsx --tsconfig tsconfig.app.json server/relay.ts",
     "relay:smoke": "tsx --tsconfig tsconfig.app.json server/smoke.ts",
     "relay:smoke-notes": "tsx --tsconfig tsconfig.app.json server/smoke-notes.ts",
+    "relay:smoke-session": "tsx --tsconfig tsconfig.app.json server/smoke-session.ts",
     "typecheck": "tsc -b --noEmit",
     "build": "pnpm run typecheck && vite build",
     "lint": "eslint .",
