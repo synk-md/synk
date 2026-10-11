@@ -128,6 +128,9 @@ export function SharedNotePage() {
       importNotebook: async () => {
         throw new Error("Cannot import notebooks from a shared note view")
       },
+      adoptNotebook: () => {
+        throw new Error("Cannot adopt notebooks from a shared note view")
+      },
       setCurrent: () => {},
       updateNotebookRoot: () => {},
       renameNotebook: () => {},

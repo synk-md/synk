@@ -15,11 +15,18 @@ import {
   type DeviceIdentity,
 } from "@/lib/identity"
 import {
+  admitFromRedemption,
   foundNotebookKeys,
   foundNotebookWorkspace,
   inviteToNotebook,
+  pendingRedemptions,
 } from "@/lib/workspace"
-import { createNotebookIndexDoc, evictNotebookIndexDoc } from "@/lib/yjs-utils"
+import {
+  createNotebookIndexDoc,
+  evictNotebookIndexDoc,
+  writeNotebookIndexTree,
+} from "@/lib/yjs-utils"
+import { NotebooksProvider } from "@/hooks/use-notebooks"
 
 import { JoinNotebookPage } from "./join-notebook-page"
 import { waitingMessage } from "./join-waiting-message"
@@ -77,9 +84,11 @@ async function anotherDevice(): Promise<DeviceIdentity> {
 function mount() {
   render(
     <MemoryRouter initialEntries={[`/join/${NOTEBOOK}`]}>
-      <Routes>
-        <Route path="/join/:notebookId" element={<JoinNotebookPage />} />
-      </Routes>
+      <NotebooksProvider>
+        <Routes>
+          <Route path="/join/:notebookId" element={<JoinNotebookPage />} />
+        </Routes>
+      </NotebooksProvider>
     </MemoryRouter>,
   )
 }
@@ -288,4 +297,77 @@ describe("waitingMessage", () => {
   it("reports the cause, not the symptom, when both are true", () => {
     expect(state({ signaling: false, peers: 0 })).toMatch(/cannot reach the service/)
   })
+})
+
+/* ---- being let in --------------------------------------------------------- */
+
+describe("being let in", () => {
+  /**
+   * The editor resolves `/nb/:id` against this device's own notebook list and
+   * sends anything missing to 404, so a member could hold the keys and still
+   * have nowhere to go.
+   *
+   * Unlike the tests above, the owner here is a different device: this device
+   * has to be somebody the owner admits, not the owner.
+   */
+  it("adds the notebook to this device's own list", async () => {
+    localStorage.removeItem("notebooks:v1")
+    const owner = await anotherDevice()
+    const handle = createNotebookIndexDoc(NOTEBOOK)
+    const { doc } = handle
+    await handle.idb.whenSynced
+    await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+    await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: owner })
+
+    const { secret } = generateInvitationSecret()
+    const invitation = await inviteToNotebook({
+      doc,
+      notebookId: NOTEBOOK,
+      admin: { signingKey: owner.signingKey, did: owner.did },
+      secret,
+      label: "Ada",
+    })
+
+    // The owner's tree is what there is to adopt.
+    writeNotebookIndexTree(handle, new Map(), {
+      id: `root_${NOTEBOOK}`,
+      name: "Trip planning",
+      isFolder: true,
+      children: [{ id: "note_1", name: "Flights", isFolder: false }],
+    }, "owner-seed")
+
+    mount()
+    fireEvent.change(screen.getByLabelText("One-time code"), {
+      target: { value: formatInvitationSecret(secret) },
+    })
+    fireEvent.click(screen.getByRole("button", { name: "Ask to join" }))
+    await waitFor(() => {
+      expect(pendingRedemptions(doc)).toHaveLength(1)
+    })
+
+    // The separate act by the separate person.
+    await admitFromRedemption({
+      doc,
+      notebookId: NOTEBOOK,
+      owner,
+      invitation,
+      redemption: pendingRedemptions(doc)[0],
+    })
+
+    expect(await screen.findByText("You are in.")).toBeInTheDocument()
+
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem("notebooks:v1") ?? "{}") as {
+        notebooks?: { id: string; name: string; root: { name: string } }[]
+      }
+      const adopted = stored.notebooks?.find((nb) => nb.id === NOTEBOOK)
+      expect(adopted).toBeDefined()
+      // Under the notebook's own id, carrying the owner's tree: a fresh id
+      // would point the editor at a notebook nobody else has.
+      expect(adopted?.root.name).toBe("Trip planning")
+    })
+
+    // And only now is there somewhere to go.
+    expect(screen.getByText("Open the notebook")).toHaveAttribute("href", `/nb/${NOTEBOOK}`)
+  }, 20_000)
 })

@@ -65,6 +65,7 @@ export type NotebooksCtx = {
   currentId: string | null
   createNotebook: (name: string) => Promise<CreateNotebookResult>
   importNotebook: (file: File) => Promise<Notebook>
+  adoptNotebook: (id: string, root: TreeNode) => void
   setCurrent: (id: string | null) => void,
   updateNotebookRoot: (id: string, root: TreeNode) => void
   renameNotebook: (id: string, name: string) => void
@@ -137,6 +138,24 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
     return nb
   }, [persist, state.notebooks])
 
+  // Registers a notebook this device was admitted to, so it appears in the
+  // local list like any other. Without this a member is granted keys and then
+  // sent to a notebook their own browser has never heard of.
+  //
+  // Keeps the notebook's own id - it names the shared key domain, and a fresh
+  // one would point the editor at a notebook nobody else has. The tree is
+  // taken as it arrived rather than seeded, since the owner's is the real one.
+  // Only the local display name is de-duplicated; renaming `root` would write
+  // that rename into the shared tree for everybody.
+  const adoptNotebook = React.useCallback((id: string, root: TreeNode) => {
+    persist(s => {
+      if (s.notebooks.some(nb => nb.id === id)) return { ...s, currentId: id }
+      const name = uniqueName(s.notebooks, root.name)
+      const nb: Notebook = { id, name, root, createdAt: Date.now() }
+      return { notebooks: [nb, ...s.notebooks], currentId: id }
+    })
+  }, [persist])
+
   // Sets the current notebook by ID.
   const setCurrent = React.useCallback((id: string | null) => {
     persist(s => ({ ...s, currentId: id }))
@@ -206,11 +225,12 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
     currentId: state.currentId,
     createNotebook,
     importNotebook,
+    adoptNotebook,
     setCurrent,
     updateNotebookRoot,
     renameNotebook,
     deleteNotebook,
-  }), [state.notebooks, currentNotebook, state.currentId, createNotebook, importNotebook, setCurrent, updateNotebookRoot, renameNotebook, deleteNotebook])
+  }), [state.notebooks, currentNotebook, state.currentId, createNotebook, importNotebook, adoptNotebook, setCurrent, updateNotebookRoot, renameNotebook, deleteNotebook])
 
   return React.createElement(Ctx.Provider, { value }, children)
 }

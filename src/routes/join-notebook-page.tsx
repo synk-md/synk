@@ -12,7 +12,13 @@ import {
   readNotebookWorkspace,
   redeemIntoNotebook,
 } from "@/lib/workspace"
-import { createNotebookIndexDoc, keyForIndex, SIGNALING_SERVERS } from "@/lib/yjs-utils"
+import {
+  createNotebookIndexDoc,
+  keyForIndex,
+  readNotebookIndexTree,
+  SIGNALING_SERVERS,
+} from "@/lib/yjs-utils"
+import { useNotebooks } from "@/hooks/use-notebooks"
 
 import { waitingMessage } from "./join-waiting-message"
 
@@ -51,6 +57,10 @@ export function JoinNotebookPage() {
   // anything has. Unreachable signaling and an absent owner both look like
   // waiting, and only one of them is the waiting person's problem.
   const [transport, setTransport] = React.useState({ signaling: false, peers: 0 })
+  // Whether the notebook is in this device's own list yet. Being granted keys
+  // is not the same as having the notebook, and the editor only knows the list.
+  const [adopted, setAdopted] = React.useState(false)
+  const { adoptNotebook } = useNotebooks()
 
   // The owner is asked to compare this against what their screen derives from
   // the redemption. Without it on screen here there is nothing to compare, and
@@ -165,6 +175,37 @@ export function JoinNotebookPage() {
     }
   }, [stage, notebookId, expectedOwner])
 
+  /**
+   * Put the notebook in this device's own list once we are in.
+   *
+   * The editor resolves `/nb/:id` against that list and sends anything missing
+   * to 404, so without this a member holds the keys and still cannot open it.
+   */
+  React.useEffect(() => {
+    if (stage !== "joined" || !notebookId || adopted) return
+    const handle = createNotebookIndexDoc(notebookId)
+    let cancelled = false
+
+    const adopt = () => {
+      if (cancelled) return
+      const { root } = readNotebookIndexTree(handle)
+      // No tree yet: adopting a placeholder would race the owner's real one
+      // and could be persisted over it.
+      if (!root) return
+      adoptNotebook(notebookId, root)
+      setAdopted(true)
+    }
+
+    void handle.idb.whenSynced.then(adopt)
+    handle.nodes.observe(adopt)
+    adopt()
+
+    return () => {
+      cancelled = true
+      handle.nodes.unobserve(adopt)
+    }
+  }, [stage, notebookId, adopted, adoptNotebook])
+
   const redeem = async () => {
     const device = currentDevice()
     if (!notebookId || !device) {
@@ -240,9 +281,15 @@ export function JoinNotebookPage() {
             You now have the keys to this notebook. Anything written from here on is readable to
             you; anything written before you joined is not.
           </p>
-          <a className="join-link" href={`/nb/${notebookId}`}>
-            Open the notebook
-          </a>
+          {adopted ? (
+            <a className="join-link" href={`/nb/${notebookId}`}>
+              Open the notebook
+            </a>
+          ) : (
+            <p className="join-note" role="status">
+              Collecting the notebook's contents…
+            </p>
+          )}
         </>
       ) : stage === "waiting" ? (
         <>

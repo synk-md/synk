@@ -24,12 +24,14 @@ export function AppRoutes() {
         <Route path="/nb/:notebookId" element={<NoteEditorPage />} />
         <Route path="/nb/:notebookId/n/:noteId" element={<NoteEditorPage/>} />
         <Route path="/s/:notebookId" element={<SharedNotebookPage />} />
+
+        {/* The invitation link. The one-time code arrives separately. Inside
+            the workspace layout because being let in has to add the notebook
+            to this device's own list. */}
+        <Route path="/join/:notebookId" element={<JoinNotebookPage />} />
       </Route>
 
       <Route path="/s/:notebookId/:noteId" element={<SharedNotePage />} />
-
-      {/* The invitation link. The one-time code arrives separately. */}
-      <Route path="/join/:notebookId" element={<JoinNotebookPage />} />
 
       <Route path="*" element={<NotFound />} />
     </Routes>
