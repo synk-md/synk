@@ -69,6 +69,7 @@ export {
   cancelInvitation,
   findOwnerRoot,
   grantedInvitationIds,
+  hasAdmittedMembers,
   hasOutstandingInvitations,
   invitationRevocationsInDoc,
   withdrawnInvitations,

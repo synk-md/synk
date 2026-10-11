@@ -14,6 +14,7 @@ import {
   cancelInvitation,
   findOwnerRoot,
   grantedInvitationIds,
+  hasAdmittedMembers,
   hasOutstandingInvitations,
   withdrawnInvitations,
   invitationsInDoc,
@@ -399,6 +400,38 @@ describe("a third person", () => {
       now: T0 + 4000,
     })
     expect(workspace.users).toHaveLength(3)
+  })
+})
+
+/* ---- knowing the notebook is collaborative ------------------------------- */
+
+describe("knowing somebody has been admitted", () => {
+  /**
+   * What decides whether the collaboration transport runs. Gating that on link
+   * access instead left members of a private notebook looking at empty notes,
+   * because the rooms carrying note content were never joined.
+   */
+  it("is false for a notebook only its founder holds", async () => {
+    const { doc } = await aNotebook()
+    expect(hasAdmittedMembers(doc)).toBe(false)
+  })
+
+  it("is still false while an invitation is only outstanding", async () => {
+    const { doc } = await upToRedemption()
+    expect(hasAdmittedMembers(doc)).toBe(false)
+  })
+
+  it("becomes true once a grant lands", async () => {
+    const { doc, owner, invitation, redemption } = await upToRedemption()
+    await admitFromRedemption({
+      doc,
+      notebookId: NOTEBOOK,
+      owner,
+      invitation,
+      redemption,
+      now: T0 + 2000,
+    })
+    expect(hasAdmittedMembers(doc)).toBe(true)
   })
 })
 

@@ -647,7 +647,12 @@ export function SimpleEditor({
     }
   }, [note?.doc, noteId, syncNoteLinkAccessToTree, isSharedView, viewOnly, currentUser.name])
 
-  const collaborationActive = collaborationEnabled && linkAccess !== "restricted"
+  // Link access is about strangers with a URL; membership is about named
+  // people who hold keys. A private notebook shared with members still has
+  // to sync to them, and gating only on the link left every admitted member
+  // looking at empty notes.
+  const collaborationActive =
+    collaborationEnabled && (linkAccess !== "restricted" || (fs.sharedWithMembers ?? false))
   collaborationActiveRef.current = collaborationActive
   const notePresence = useNotePresence(collaborationActive ? (fileSystem.indexProvider ?? null) : null)
   const unreadNoteIds = useUnreadNoteIds(fs.tree, noteId)

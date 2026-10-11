@@ -288,6 +288,50 @@ describe("useNotebookFileSystem: WebRTC provider gating", () => {
     expect(result.current.indexProvider).toBeNull()
   })
 
+  /**
+   * Membership is not link sharing. A private notebook shared with named
+   * people still has to reach them, and gating the transport on the link left
+   * every admitted member looking at an empty notebook.
+   */
+  it("connects a provider for a private notebook that has members", async () => {
+    const id = uniqueNotebookId()
+    const nb = notebook(id, folder("root", []))
+    const handle = createNotebookIndexDoc(id)
+    const { result } = renderHook(() => useNotebookFileSystem(nb, vi.fn()))
+    await waitFor(() => expect(result.current.treeReady).toBe(true))
+    expect(result.current.indexProvider).toBeNull()
+
+    // The founder plus somebody they admitted.
+    act(() => {
+      handle.doc.transact(() => {
+        const admissions = handle.doc.getMap("directory:admissions")
+        admissions.set("did:key:zOwner", { member: "member:owner" })
+        admissions.set("did:key:zAda", { member: "member:ada" })
+      })
+    })
+
+    await waitFor(() => expect(result.current.sharedWithMembers).toBe(true))
+    expect(providerInstances).toHaveLength(1)
+    expect(providerInstances[0].roomName).toBe(`nb:${id}:index`)
+    expect(result.current.linkAccess).toBe("restricted")
+  })
+
+  it("stays disconnected for a private notebook whose only admission is its founder", async () => {
+    const id = uniqueNotebookId()
+    const nb = notebook(id, folder("root", []))
+    const handle = createNotebookIndexDoc(id)
+    const { result } = renderHook(() => useNotebookFileSystem(nb, vi.fn()))
+    await waitFor(() => expect(result.current.treeReady).toBe(true))
+
+    act(() => {
+      handle.doc.getMap("directory:admissions").set("did:key:zOwner", { member: "member:owner" })
+    })
+
+    await waitFor(() => expect(result.current.treeReady).toBe(true))
+    expect(result.current.sharedWithMembers).toBe(false)
+    expect(providerInstances).toHaveLength(0)
+  })
+
   it("disconnects the provider on unmount", async () => {
     const id = uniqueNotebookId()
     const nb = notebook(id, folder("root", []))

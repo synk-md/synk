@@ -361,6 +361,20 @@ export function hasOutstandingInvitations(doc: Y.Doc, now: number = Date.now()):
 }
 
 /**
+ * Has anybody besides the founder been admitted?
+ *
+ * Membership and link sharing are different questions. A private notebook
+ * shared with named members still has to sync - to them - so this is what
+ * decides whether the collaboration transport runs, not the link setting.
+ *
+ * Counts devices, since the founder self-admits when the notebook is created:
+ * one admission is a notebook nobody has joined.
+ */
+export function hasAdmittedMembers(doc: Y.Doc): boolean {
+  return doc.getMap("directory:admissions").size > 1
+}
+
+/**
  * Invitations that have done their job: redeemed, and the redeeming device
  * admitted.
  *

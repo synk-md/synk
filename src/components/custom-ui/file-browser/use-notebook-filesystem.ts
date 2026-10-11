@@ -12,7 +12,7 @@ import {
 } from "@/lib/yjs-utils"
 import type { LinkAccess } from "@/lib/note-meta"
 import { getNotebookLinkAccess, setNotebookLinkAccess } from "@/lib/notebook-meta"
-import { hasOutstandingInvitations } from "@/lib/workspace"
+import { hasAdmittedMembers, hasOutstandingInvitations } from "@/lib/workspace"
 
 /** How long to stay in the index room after the last invitation is settled. */
 const JOIN_LINGER_MS = 30_000
@@ -25,6 +25,8 @@ export type NotebookFileSystemApi = ReturnType<typeof useFileSystem> & {
   setLinkAccess?: (access: LinkAccess) => void
   treeReady?: boolean
   indexProvider?: WebrtcProvider | null
+  /** Somebody other than the founder has been admitted. */
+  sharedWithMembers?: boolean
 }
 
 // How long a share page waits for a peer to deliver the real tree before
@@ -81,6 +83,9 @@ export function useNotebookFileSystem(
   // the grant both travel through the index room, so it has to be joined for
   // that whole window regardless of whether the notebook is link-shared.
   const [awaitingJoiners, setAwaitingJoiners] = React.useState(false)
+  // Membership, as opposed to link sharing. A private notebook with members
+  // still has to sync to them, so this gates the transport too.
+  const [sharedWithMembers, setSharedWithMembers] = React.useState(false)
   // True once it's safe to persist local tree edits: either the real tree
   // has been observed (from this browser's IndexedDB or a peer), or — only
   // when seedIfEmpty is false — the grace window closed with nothing found.
@@ -223,12 +228,14 @@ export function useNotebookFileSystem(
     const indexHandle = indexDocRef.current
     if (!activeNotebookId || !indexHandle) {
       setAwaitingJoiners(false)
+      setSharedWithMembers(false)
       return
     }
     const doc = indexHandle.doc
     let linger: ReturnType<typeof setTimeout> | undefined
 
     const recompute = () => {
+      setSharedWithMembers(hasAdmittedMembers(doc))
       if (hasOutstandingInvitations(doc)) {
         clearTimeout(linger)
         linger = undefined
@@ -257,7 +264,7 @@ export function useNotebookFileSystem(
     const indexHandle = indexDocRef.current
     if (!activeNotebookId || !indexHandle) return
 
-    if (linkAccess === "restricted" && !awaitingJoiners) {
+    if (linkAccess === "restricted" && !awaitingJoiners && !sharedWithMembers) {
       providerRef.current?.disconnect()
       providerRef.current?.destroy()
       providerRef.current = null
@@ -284,7 +291,7 @@ export function useNotebookFileSystem(
     // flips away from "restricted" — indexDocRef.current itself isn't a dep
     // since refs aren't reactive, but it's set synchronously in the effect
     // above, which always runs before this one on the same commit.
-  }, [activeNotebookId, linkAccess, awaitingJoiners])
+  }, [activeNotebookId, linkAccess, awaitingJoiners, sharedWithMembers])
 
   const setLinkAccess = React.useCallback((access: LinkAccess) => {
     const indexHandle = indexDocRef.current
@@ -292,5 +299,5 @@ export function useNotebookFileSystem(
     setNotebookLinkAccess(indexHandle.meta, access)
   }, [])
 
-  return { ...fs, linkAccess, setLinkAccess, treeReady, indexProvider }
+  return { ...fs, linkAccess, setLinkAccess, treeReady, indexProvider, sharedWithMembers }
 }
