@@ -167,7 +167,7 @@ function flushPersistence(idb: IndexeddbPersistence): Promise<void> {
 export async function flushPersistedDocs(): Promise<void> {
   const persistences = [
     ...[...docs.values()].map(entry => entry.idb),
-    ...[...indexDocs.values()].map(entry => entry.idb),
+    ...[...indexDocs.values()].flatMap(entry => entry.persistences),
     ...noteLinkIndexPersistences(),
   ]
   await Promise.all(persistences.map(flushPersistence))
@@ -230,20 +230,62 @@ export async function deleteNotebookMetaFromIndexedDB(notebookId: string) {
   await Promise.all([
     deleteNoteLinkIndex(notebookId),
     deleteIndexedDbDatabase(keyForIndex(notebookId)),
+    deleteIndexedDbDatabase(keyForDirectory(notebookId)),
   ]);
+}
+
+export function keyForDirectory(notebookId: string) {
+  return `nb:${notebookId}:directory`
+}
+
+/** Top-level maps holding signed records rather than content. */
+export function isDirectoryMap(name: string): boolean {
+  return name.startsWith("directory:") || name.startsWith("workspace:")
+}
+
+/**
+ * Copy directory records still held in the tree document into the directory
+ * document, where they live now.
+ *
+ * Safe to repeat and safe to race: the records are signed, keyed by stable
+ * ids and never deleted, so a copy can only ever add what was missing.
+ */
+export function migrateDirectoryRecords(from: Y.Doc, to: Y.Doc): number {
+  let copied = 0
+  to.transact(() => {
+    for (const name of from.share.keys()) {
+      if (!isDirectoryMap(name)) continue
+      const target = to.getMap(name)
+      from.getMap(name).forEach((value, key) => {
+        if (target.has(key)) return
+        target.set(key, value)
+        copied += 1
+      })
+    }
+  })
+  return copied
 }
 
 
 const indexDocs = new Map<string, {
   doc: Y.Doc
-  idb: IndexeddbPersistence
+  tree: Y.Doc
+  idb: { whenSynced: Promise<unknown> }
+  persistences: IndexeddbPersistence[]
   nodes: Y.Map<FlatNodeRecord>
   meta: Y.Map<any>
 }>()
 
-// Creates or loads a Y.Doc for the notebook's index (e.g. file tree).
-// `meta` carries the notebook's own link-sharing state (see notebook-meta.ts),
-// living in the same doc as the tree so a single WebRTC room covers both.
+// Creates or loads a notebook's two shared documents.
+//
+// `doc` is the directory: genesis, devices, invitations, admissions, epochs and
+// capabilities - signed records an invitee must be able to reach before holding
+// any key. `tree` is content: `nodes` and `meta` (the notebook's own
+// link-sharing state, see notebook-meta.ts), sealed like a note's. They were
+// one document until the tree had to be encrypted and the directory could not
+// be; the tree keeps the original storage so existing trees are untouched.
+// `idb.whenSynced` covers both, and the copy of any records the tree document
+// still holds.
 // Cached per notebookId (like getOrCreateYDoc) so a write from one caller —
 // e.g. the share dialog toggling link access — is immediately visible to any
 // other caller already holding this doc, such as a live editor session's
@@ -258,11 +300,16 @@ export function createNotebookIndexDoc(notebookId: string) {
   const key = keyForIndex(notebookId)
   let entry = indexDocs.get(key)
   if (!entry) {
+    const tree = new Y.Doc()
     const doc = new Y.Doc()
-    const idb = new IndexeddbPersistence(key, doc)
-    const nodes = doc.getMap<FlatNodeRecord>('nodes')
-    const meta = doc.getMap<any>('meta')
-    entry = { doc, idb, nodes, meta }
+    const treeIdb = new IndexeddbPersistence(key, tree)
+    const directoryIdb = new IndexeddbPersistence(keyForDirectory(notebookId), doc)
+    const whenSynced = Promise.all([treeIdb.whenSynced, directoryIdb.whenSynced]).then(() => {
+      migrateDirectoryRecords(tree, doc)
+    })
+    const nodes = tree.getMap<FlatNodeRecord>('nodes')
+    const meta = tree.getMap<any>('meta')
+    entry = { doc, tree, idb: { whenSynced }, persistences: [treeIdb, directoryIdb], nodes, meta }
     indexDocs.set(key, entry)
   }
   return entry
@@ -291,11 +338,11 @@ export function writeNotebookIndexTree(
   nextRoot: TreeNode,
   origin: unknown,
 ): { flat: Map<string, FlatNodeRecord> } {
-  const { nodes, doc } = indexHandle
+  const { nodes, tree } = indexHandle
   const nextFlat = flattenTree(nextRoot)
   const { upserts, deletes } = diffFlatTrees(prevFlat, nextFlat)
   if (upserts.length || deletes.length) {
-    doc.transact(() => {
+    tree.transact(() => {
       for (const [id, record] of upserts) nodes.set(id, record)
       for (const id of deletes) nodes.delete(id)
     }, origin)
@@ -310,5 +357,6 @@ export function evictNotebookIndexDoc(notebookId: string) {
   const entry = indexDocs.get(key)
   if (!entry) return
   entry.doc.destroy()
+  entry.tree.destroy()
   indexDocs.delete(key)
 }

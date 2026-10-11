@@ -23,3 +23,21 @@ export function waitingMessage(state: WaitingState): string {
   }
   return "Connected to whoever invited you. Still waiting for the notebook itself to come across."
 }
+
+/**
+ * The same question when the notebook comes through the relay.
+ *
+ * Nobody else has to be online, so an empty room is not a reason. Caught up
+ * and still nothing means nothing was ever published - which is something the
+ * inviter can fix at any time, not something both of them must fix together.
+ */
+export function relayWaitingMessage(state: {
+  waitedTooLong: boolean
+  status: "offline" | "connecting" | "live"
+}): string {
+  if (state.status === "live") {
+    return "Nothing has been published for this notebook yet. Whoever invited you has to open it once with sync switched on — you do not both need to be online."
+  }
+  if (!state.waitedTooLong) return "Connecting to the notebook…"
+  return "This device cannot reach the sync service, so there is no way to find the notebook. Nothing you can do from here will fix it — tell whoever invited you."
+}

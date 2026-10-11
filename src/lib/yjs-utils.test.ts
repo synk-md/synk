@@ -15,6 +15,7 @@ import {
   readNotebookIndexTree,
   writeNotebookIndexTree,
   flushPersistedDocs,
+  migrateDirectoryRecords,
 } from "./yjs-utils"
 
 function note(id: string): TreeNode {
@@ -229,5 +230,52 @@ describe("flushPersistedDocs", () => {
 
   it("resolves when nothing has been persisted yet", async () => {
     await expect(flushPersistedDocs()).resolves.toBeUndefined()
+  })
+})
+
+describe("splitting the directory out of the tree document", () => {
+  /** What an existing notebook looks like: one document holding both. */
+  async function aNotebookFromBeforeTheSplit(id: string) {
+    const old = new Y.Doc()
+    const persistence = new IndexeddbPersistence(keyForIndex(id), old)
+    await persistence.whenSynced
+    old.getMap("directory:admissions").set("did:key:zOwner", { member: "member:owner" })
+    old.getMap("workspace:genesis").set("did:key:zOwner", { owner: "did:key:zOwner" })
+    old.getMap("nodes").set("note_1", { name: "Flights" })
+    await persistence.destroy()
+    old.destroy()
+  }
+
+  it("moves an existing notebook's records into the directory document", async () => {
+    const id = newNotebookId()
+    await aNotebookFromBeforeTheSplit(id)
+
+    const handle = createNotebookIndexDoc(id)
+    await handle.idb.whenSynced
+
+    expect(handle.doc.getMap("directory:admissions").get("did:key:zOwner")).toEqual({
+      member: "member:owner",
+    })
+    expect(handle.doc.getMap("workspace:genesis").size).toBe(1)
+    // Content stays where it was, and does not follow into the directory.
+    expect(handle.nodes.get("note_1")).toEqual({ name: "Flights" })
+    expect(handle.doc.getMap("nodes").size).toBe(0)
+    evictNotebookIndexDoc(id)
+  })
+
+  /** Signed records are never deleted, so copying can only add what is missing. */
+  it("never overwrites a record the directory already holds", () => {
+    const from = new Y.Doc()
+    const to = new Y.Doc()
+    from.getMap("directory:admissions").set("a", { v: "old" })
+    from.getMap("directory:admissions").set("b", { v: "only in the old document" })
+    to.getMap("directory:admissions").set("a", { v: "current" })
+
+    expect(migrateDirectoryRecords(from, to)).toBe(1)
+    expect(to.getMap("directory:admissions").toJSON()).toEqual({
+      a: { v: "current" },
+      b: { v: "only in the old document" },
+    })
+    expect(migrateDirectoryRecords(from, to)).toBe(0)
   })
 })

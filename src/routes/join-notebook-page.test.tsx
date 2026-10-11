@@ -20,6 +20,7 @@ import {
   foundNotebookWorkspace,
   inviteToNotebook,
   pendingRedemptions,
+  redeemIntoNotebook,
 } from "@/lib/workspace"
 import {
   createNotebookIndexDoc,
@@ -29,7 +30,7 @@ import {
 import { NotebooksProvider } from "@/hooks/use-notebooks"
 
 import { JoinNotebookPage } from "./join-notebook-page"
-import { waitingMessage } from "./join-waiting-message"
+import { relayWaitingMessage, waitingMessage } from "./join-waiting-message"
 
 // jsdom has no WebRTC, and a real provider reaches the public signaling servers
 // over the network. The page's job here is the redemption, not the transport.
@@ -370,4 +371,66 @@ describe("being let in", () => {
     // And only now is there somewhere to go.
     expect(screen.getByText("Open the notebook")).toHaveAttribute("href", `/nb/${NOTEBOOK}`)
   }, 20_000)
+})
+
+/* ---- coming back to the link ---------------------------------------------- */
+
+describe("coming back to the link", () => {
+  /** A notebook owned by another device, with an invitation this one redeemed. */
+  async function alreadyAsked() {
+    const owner = await anotherDevice()
+    const handle = createNotebookIndexDoc(NOTEBOOK)
+    await handle.idb.whenSynced
+    const { doc } = handle
+    await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+    await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: owner })
+    const { secret } = generateInvitationSecret()
+    const invitation = await inviteToNotebook({
+      doc,
+      notebookId: NOTEBOOK,
+      admin: { signingKey: owner.signingKey, did: owner.did },
+      secret,
+      label: "Ada",
+    })
+    const redemption = await redeemIntoNotebook({ doc, secret, device: currentDevice()!.identity })
+    return { owner, doc, invitation, redemption, handle }
+  }
+
+  /** Asking again would send a second request for the same thing. */
+  it("does not ask for the code again from somebody who already asked", async () => {
+    await alreadyAsked()
+    mount()
+
+    expect(await screen.findByText("Waiting to be let in")).toBeInTheDocument()
+    expect(screen.queryByLabelText("One-time code")).not.toBeInTheDocument()
+  })
+
+  it("lets somebody already let in straight through", async () => {
+    localStorage.removeItem("notebooks:v1")
+    const { owner, doc, invitation, redemption, handle } = await alreadyAsked()
+    await admitFromRedemption({ doc, notebookId: NOTEBOOK, owner, invitation, redemption })
+    writeNotebookIndexTree(handle, new Map(), { id: `root_${NOTEBOOK}`, name: "Trip planning", isFolder: true, children: [] }, "owner-seed")
+
+    mount()
+
+    expect(await screen.findByText("You are in.")).toBeInTheDocument()
+    expect(await screen.findByText("Open the notebook")).toBeInTheDocument()
+  }, 20_000)
+})
+
+describe("relayWaitingMessage", () => {
+  /** Nobody else has to be online, so an empty room is never the reason. */
+  it("says nothing was published, not that nobody is here, once caught up", () => {
+    const message = relayWaitingMessage({ waitedTooLong: false, status: "live" })
+    expect(message).toMatch(/Nothing has been published/)
+    expect(message).toMatch(/do not both need to be online/)
+  })
+
+  it("waits quietly at first", () => {
+    expect(relayWaitingMessage({ waitedTooLong: false, status: "connecting" })).toMatch(/Connecting/)
+  })
+
+  it("blames the unreachable service once the wait is long", () => {
+    expect(relayWaitingMessage({ waitedTooLong: true, status: "offline" })).toMatch(/cannot reach the sync service/)
+  })
 })

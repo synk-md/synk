@@ -66,6 +66,7 @@ export type { Admission, AdmitOptions, InviteOptions, RedeemOptions } from "./ad
 export type { CancelInvitationOptions, InvitationMatch } from "./admission"
 export {
   admitFromRedemption,
+  findOwnRedemption,
   cancelInvitation,
   findOwnerRoot,
   grantedInvitationIds,
@@ -142,13 +143,26 @@ export {
 
 export type {
   BaselineMemo,
-  NoteSession,
-  NoteSessionOptions,
-  NoteSessionStatus,
+  SyncSession,
+  SyncSessionOptions,
+  SyncSessionStatus,
   RelayReachability,
   RelayWatch,
-} from "./note-session"
-export { openNoteSession } from "./note-session"
+} from "./sync-session"
+export { openSyncSession } from "./sync-session"
+
+export type {
+  DirectoryChannel,
+  DirectoryReplicaOptions,
+  ReplicaDevice,
+  TreeReplicaOptions,
+} from "./replicas"
+export {
+  createDirectoryReplica,
+  createTreeReplica,
+  directoryChannel,
+  treeResourceId,
+} from "./replicas"
 
 export type { NoteAdmissionOptions, NoteAdmissionResult, NoteOutcome } from "./admit-notes"
 export { markCovered, noteRefsFor, runNoteAdmission } from "./admit-notes"

@@ -13,7 +13,7 @@ import {
   encryptedSyncEnabled,
   liveKeys,
   noteResourceId,
-  openNoteSession,
+  openSyncSession,
   relayConnection,
   relayWatch,
   storedBaseline,
@@ -104,7 +104,7 @@ export function useEncryptedNoteSync(options: UseEncryptedNoteSyncOptions): Encr
       return
     }
 
-    const session = openNoteSession({
+    const session = openSyncSession({
       engine,
       doc,
       transport,

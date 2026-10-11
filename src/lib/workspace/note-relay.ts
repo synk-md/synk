@@ -16,7 +16,7 @@ import type { ReadKeySource } from "@/lib/keys"
 import { RelayConnection, WebSocketLink, type RelayConnectionState } from "@/lib/relay"
 import type { SyncCursor, SyncCursorStore, SyncEngine } from "@/lib/sync"
 
-import type { BaselineMemo, RelayWatch } from "./note-session"
+import type { BaselineMemo, RelayWatch } from "./sync-session"
 import { createNoteSyncEngine, noteResourceId } from "./note-sync"
 
 // Read defensively: `import.meta.env` is Vite's, and this module is also

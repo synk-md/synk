@@ -164,6 +164,12 @@ export interface SyncEngineOptions {
   keys: EpochKeyProvider
   /** Defaults to memory, which is only correct for a document that never reloads. */
   cursor?: SyncCursorStore
+  /**
+   * Whether every operation must carry its author's derived client id. Off
+   * only for documents whose records carry their own signatures, where who
+   * typed an operation means nothing and a pinned id would need a writer lock.
+   */
+  attributeOperations?: boolean
   /** Surfaced rather than thrown - an outbound failure must not break editing. */
   onError?: (error: unknown) => void
 }
@@ -222,6 +228,7 @@ export class SyncEngine {
    * all. Failing loudly here beats publishing into a void.
    */
   private mayAuthor(): boolean {
+    if (this.options.attributeOperations === false) return true
     if (this.options.doc.clientID === this.options.clientId) return true
     this.options.onError?.(
       new Error(
@@ -352,6 +359,29 @@ export class SyncEngine {
       })
   }
 
+  /**
+   * Publish the whole document as one envelope.
+   *
+   * For small documents synced without per-device cursors: whatever an earlier
+   * session failed to deliver is in here, sealed under the current epoch, so a
+   * member who joined since can read all of it.
+   */
+  async publishState(): Promise<boolean> {
+    if (Y.encodeStateVector(this.options.doc).length <= 1) return false
+    const step = this.outbound.then(async () => {
+      if (this.closed || !this.mayAuthor()) return false
+      await this.seal(this.reserve(), Y.encodeStateAsUpdate(this.options.doc))
+      return true
+    })
+    this.outbound = step.then(
+      () => undefined,
+      (error: unknown) => {
+        this.options.onError?.(error)
+      },
+    )
+    return step
+  }
+
   /** Outbound first, then inbound, then outbound again for what it scheduled. */
   async flush(): Promise<void> {
     await this.outbound
@@ -410,7 +440,7 @@ export class SyncEngine {
     }
 
     // Attribution integrity: operations claiming another author's client id.
-    if (!checkUpdateAuthorship(update, author.clientId).ok)
+    if (this.options.attributeOperations !== false && !checkUpdateAuthorship(update, author.clientId).ok)
       return this.reject("forged-client-id")
 
     // Stored before applying, so a peer can serve it on even if apply throws.

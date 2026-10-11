@@ -1,10 +1,14 @@
 /**
- * Keeping one note's engine caught up with the relay for as long as it is open.
+ * Keeping one document's engine caught up with the relay while it is open.
  *
  * An engine on its own only relays edits made while it is connected. Opening a
- * note also has to collect a baseline it can read, put right whatever an
+ * document also has to collect a baseline it can read, put right whatever an
  * earlier session left undelivered, and pull what arrived while it was away -
  * and do the last two again every time the relay comes back.
+ *
+ * Notes recover with `resume`, which needs a per-device cursor and so a writer
+ * lock. The directory and the tree are small and written from any tab, so they
+ * recover by publishing their whole state instead.
  */
 
 import * as Y from "yjs"
@@ -12,7 +16,7 @@ import * as Y from "yjs"
 import { collectJoinSnapshot, verifySnapshot } from "@/lib/snapshots"
 import { REMOTE_ORIGIN, type SyncEngine, type Transport } from "@/lib/sync"
 
-export type NoteSessionStatus = "offline" | "connecting" | "live"
+export type SyncSessionStatus = "offline" | "connecting" | "live"
 
 export type RelayReachability = "offline" | "connecting" | "authenticating" | "online"
 
@@ -27,7 +31,7 @@ export interface BaselineMemo {
   record(snapshotId: string): void
 }
 
-export interface NoteSessionOptions {
+export interface SyncSessionOptions {
   engine: SyncEngine
   doc: Y.Doc
   transport: Transport
@@ -40,24 +44,28 @@ export interface NoteSessionOptions {
    * hand out numbers from the cursor the writing tab is using.
    */
   canAuthor: boolean
-  onStatus?: (status: NoteSessionStatus) => void
+  /** Defaults to `resume`. */
+  recover?: "resume" | "publish-state"
+  onStatus?: (status: SyncSessionStatus) => void
   onSynced?: (at: Date) => void
   onError?: (error: unknown) => void
   retryMs?: number
 }
 
-export interface NoteSession {
+export interface SyncSession {
   /** Resolves when the catch-up in flight, if any, has finished. */
   settled(): Promise<void>
+  /** Catch up again now, for a change the relay has no way to signal. */
+  refresh(): void
   close(): void
 }
 
-export function openNoteSession(options: NoteSessionOptions): NoteSession {
+export function openSyncSession(options: SyncSessionOptions): SyncSession {
   let closed = false
   let running: Promise<void> = Promise.resolve()
   let retry: ReturnType<typeof setTimeout> | undefined
 
-  const report = (status: NoteSessionStatus) => {
+  const report = (status: SyncSessionStatus) => {
     if (!closed) options.onStatus?.(status)
   }
 
@@ -80,8 +88,13 @@ export function openNoteSession(options: NoteSessionOptions): NoteSession {
     report("connecting")
     try {
       await applyBaseline()
-      if (options.canAuthor) await options.engine.resume()
-      await options.engine.sync()
+      if (options.recover === "publish-state") {
+        await options.engine.sync()
+        if (options.canAuthor) await options.engine.publishState()
+      } else {
+        if (options.canAuthor) await options.engine.resume()
+        await options.engine.sync()
+      }
       if (closed) return
       report("live")
       options.onSynced?.(new Date())
@@ -121,6 +134,9 @@ export function openNoteSession(options: NoteSessionOptions): NoteSession {
 
   return {
     settled: () => running,
+    refresh: () => {
+      if (options.relay.state() === "online") schedule()
+    },
     close: () => {
       closed = true
       clearTimeout(retry)

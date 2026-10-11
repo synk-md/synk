@@ -46,6 +46,7 @@ export type {
 } from "./sync-engine"
 export { LOCAL_ORIGIN, memoryCursorStore, REMOTE_ORIGIN, SyncEngine } from "./sync-engine"
 export type { ResumeResult, SyncCursor, SyncCursorStore } from "./sync-engine"
+export { lanedAuthors, lanedPolicy, laneOwner, newLane } from "./lanes"
 
 export type { DirectoryAuthorityOptions } from "./directory-resolver"
 export { DirectoryAuthorResolver, DirectoryMembershipPolicy } from "./directory-resolver"

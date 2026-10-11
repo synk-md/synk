@@ -28,10 +28,10 @@ import {
   foundNotebookWorkspace,
   inviteToNotebook,
   noteResourceId,
-  openNoteSession,
+  openSyncSession,
   readNotebookKeys,
   redeemIntoNotebook,
-  type NoteSessionStatus,
+  type SyncSessionStatus,
 } from "../src/lib/workspace/index.ts"
 
 const URL = process.env.RELAY_URL ?? "ws://localhost:4455"
@@ -67,7 +67,7 @@ console.log("notebook founded, member admitted")
 
 interface Open {
   doc: Y.Doc
-  statuses: NoteSessionStatus[]
+  statuses: SyncSessionStatus[]
   close(): void
 }
 
@@ -110,8 +110,8 @@ async function openNote(device: DeviceIdentity, doc: Y.Doc, cursor: SyncCursorSt
     cursor,
     onError: (error) => console.error("engine error", error),
   })
-  const statuses: NoteSessionStatus[] = []
-  const session = openNoteSession({
+  const statuses: SyncSessionStatus[] = []
+  const session = openSyncSession({
     engine,
     doc,
     transport,

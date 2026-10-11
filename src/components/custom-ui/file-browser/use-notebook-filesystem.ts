@@ -1,10 +1,12 @@
 import * as React from "react"
 import { WebrtcProvider } from "y-webrtc"
+import * as Y from "yjs"
 
 import type { FlatNodeRecord, Notebook, TreeNode } from "./tree"
 import { useFileSystem } from "./use-file-system"
 import {
   createNotebookIndexDoc,
+  keyForDirectory,
   keyForIndex,
   readNotebookIndexTree,
   writeNotebookIndexTree,
@@ -12,6 +14,7 @@ import {
 } from "@/lib/yjs-utils"
 import type { LinkAccess } from "@/lib/note-meta"
 import { getNotebookLinkAccess, setNotebookLinkAccess } from "@/lib/notebook-meta"
+import { useNotebookReplication } from "@/hooks/use-notebook-replication"
 import { hasAdmittedMembers, hasOutstandingInvitations } from "@/lib/workspace"
 
 /** How long to stay in the index room after the last invitation is settled. */
@@ -64,6 +67,13 @@ export type UseNotebookFileSystemOptions = {
    * @default true
    */
   seedIfEmpty?: boolean
+  /**
+   * Sync the directory and tree through the relay, when one is configured.
+   * Only for a notebook that is this device's own; a link guest's page must
+   * not start publishing a directory it merely looked at.
+   * @default false
+   */
+  replicate?: boolean
 }
 
 export function useNotebookFileSystem(
@@ -71,7 +81,7 @@ export function useNotebookFileSystem(
   updateNotebookRoot: (id: string, root: TreeNode) => void,
   options: UseNotebookFileSystemOptions = {},
 ) {
-  const { optimisticLinkAccess = "restricted", seedIfEmpty = true } = options
+  const { optimisticLinkAccess = "restricted", seedIfEmpty = true, replicate = false } = options
   const activeNotebookId = notebook?.id ?? null
   const initialNotebookRoot = React.useMemo(() => notebook?.root, [activeNotebookId])
   type NotebookIndexHandle = ReturnType<typeof createNotebookIndexDoc>
@@ -260,11 +270,30 @@ export function useNotebookFileSystem(
     }
   }, [activeNotebookId, treeReady])
 
+  const replication = useNotebookReplication(replicate ? activeNotebookId : null, {
+    tree: sharedWithMembers,
+  })
+  const linkShared = linkAccess !== "restricted"
+  // With a relay, the directory and the members' tree go through it, and the
+  // WebRTC room carries the tree only for link guests - who can read it by
+  // definition - or else just presence. Without one, the rooms carry both, as
+  // they always did.
+  const treeRoom: "content" | "presence" | "none" = replication.relay
+    ? linkShared
+      ? "content"
+      : sharedWithMembers
+        ? "presence"
+        : "none"
+    : linkShared || awaitingJoiners || sharedWithMembers
+      ? "content"
+      : "none"
+  const directoryRoom = !replication.relay && treeRoom === "content"
+
   React.useEffect(() => {
     const indexHandle = indexDocRef.current
     if (!activeNotebookId || !indexHandle) return
 
-    if (linkAccess === "restricted" && !awaitingJoiners && !sharedWithMembers) {
+    if (treeRoom === "none") {
       providerRef.current?.disconnect()
       providerRef.current?.destroy()
       providerRef.current = null
@@ -273,17 +302,28 @@ export function useNotebookFileSystem(
 
     if (providerRef.current) return
 
-    const room = keyForIndex(activeNotebookId)
-    const provider = new WebrtcProvider(room, indexHandle.doc, {
+    // The tree keeps the room it always had, which is where link guests look.
+    // Presence gets its own, with an empty document, so text never enters it.
+    const room = `${keyForIndex(activeNotebookId)}${treeRoom === "presence" ? ":presence" : ""}`
+    const provider = new WebrtcProvider(room, treeRoom === "presence" ? new Y.Doc() : indexHandle.tree, {
       signaling: SIGNALING_SERVERS,
       password: room,
     })
+    const directoryName = keyForDirectory(activeNotebookId)
+    const directory = directoryRoom
+      ? new WebrtcProvider(directoryName, indexHandle.doc, {
+          signaling: SIGNALING_SERVERS,
+          password: directoryName,
+        })
+      : null
     providerRef.current = provider
     setIndexProvider(provider)
 
     return () => {
       provider.disconnect()
       provider.destroy()
+      directory?.disconnect()
+      directory?.destroy()
       if (providerRef.current === provider) providerRef.current = null
       setIndexProvider(null)
     }
@@ -291,7 +331,7 @@ export function useNotebookFileSystem(
     // flips away from "restricted" — indexDocRef.current itself isn't a dep
     // since refs aren't reactive, but it's set synchronously in the effect
     // above, which always runs before this one on the same commit.
-  }, [activeNotebookId, linkAccess, awaitingJoiners, sharedWithMembers])
+  }, [activeNotebookId, treeRoom, directoryRoom])
 
   const setLinkAccess = React.useCallback((access: LinkAccess) => {
     const indexHandle = indexDocRef.current

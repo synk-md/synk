@@ -6,6 +6,8 @@ import { Button } from "@/components/tiptap-ui-primitive/button"
 import { parseInvitationSecret } from "@/lib/directory"
 import { currentDevice, deviceFingerprint } from "@/lib/identity"
 import {
+  encryptedSyncEnabled,
+  findOwnRedemption,
   genesisClaims,
   matchInvitation,
   readNotebookKeys,
@@ -14,13 +16,15 @@ import {
 } from "@/lib/workspace"
 import {
   createNotebookIndexDoc,
+  keyForDirectory,
   keyForIndex,
   readNotebookIndexTree,
   SIGNALING_SERVERS,
 } from "@/lib/yjs-utils"
+import { useNotebookReplication } from "@/hooks/use-notebook-replication"
 import { useNotebooks } from "@/hooks/use-notebooks"
 
-import { waitingMessage } from "./join-waiting-message"
+import { relayWaitingMessage, waitingMessage } from "./join-waiting-message"
 
 import "./join-notebook-page.scss"
 
@@ -61,6 +65,12 @@ export function JoinNotebookPage() {
   // is not the same as having the notebook, and the editor only knows the list.
   const [adopted, setAdopted] = React.useState(false)
   const { adoptNotebook } = useNotebooks()
+  // With a relay the invitation, the redemption and the grant each wait there,
+  // so neither side has to be online when the other is.
+  const relayed = encryptedSyncEnabled()
+  const replication = useNotebookReplication(relayed ? (notebookId ?? null) : null, {
+    tree: stage === "joined",
+  })
 
   // The owner is asked to compare this against what their screen derives from
   // the redemption. Without it on screen here there is nothing to compare, and
@@ -112,12 +122,19 @@ export function JoinNotebookPage() {
   // Connect to the notebook's index room so the redemption reaches the owner
   // and their grant reaches back.
   React.useEffect(() => {
-    if (!notebookId) return
-    const { doc } = createNotebookIndexDoc(notebookId)
-    const room = keyForIndex(notebookId)
-    const provider = new WebrtcProvider(room, doc, {
+    if (!notebookId || relayed) return
+    const handle = createNotebookIndexDoc(notebookId)
+    // The directory carries the invitation, the redemption and the grant.
+    const room = keyForDirectory(notebookId)
+    const provider = new WebrtcProvider(room, handle.doc, {
       signaling: SIGNALING_SERVERS,
       password: room,
+    })
+    // The tree, which is what there is to adopt once in.
+    const treeRoom = keyForIndex(notebookId)
+    const tree = new WebrtcProvider(treeRoom, handle.tree, {
+      signaling: SIGNALING_SERVERS,
+      password: treeRoom,
     })
 
     const onPeers = (event: { webrtcPeers: string[]; bcPeers: string[] }) => {
@@ -138,8 +155,29 @@ export function JoinNotebookPage() {
       provider.off("peers", onPeers)
       provider.disconnect()
       provider.destroy()
+      tree.disconnect()
+      tree.destroy()
     }
-  }, [notebookId])
+  }, [notebookId, relayed])
+
+  // Somebody coming back to the link has already asked, and may already be in.
+  // Asking for the code again would send a second request for the same thing.
+  React.useEffect(() => {
+    if (!notebookReady || !notebookId || stage !== "entering") return
+    const device = currentDevice()
+    if (!device) return
+    let cancelled = false
+    void findOwnRedemption(createNotebookIndexDoc(notebookId).doc, device.identity.did).then(
+      (match) => {
+        if (cancelled || !match) return
+        setExpectedOwner(match.expectedOwner)
+        setStage("waiting")
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [notebookReady, notebookId, stage])
 
   // Once redeemed, watch for the grant rather than asking the person to reload.
   React.useEffect(() => {
@@ -262,7 +300,9 @@ export function JoinNotebookPage() {
     if (invited) setLabel(invited)
   }, [params])
 
-  const waitingReason = waitingMessage({ waitedTooLong, ...transport })
+  const waitingReason = relayed
+    ? relayWaitingMessage({ waitedTooLong, status: replication.directory })
+    : waitingMessage({ waitedTooLong, ...transport })
 
   if (!notebookId) {
     return (
@@ -295,9 +335,10 @@ export function JoinNotebookPage() {
         <>
           <h1>Waiting to be let in</h1>
           <p>
-            Your request has been sent. Whoever invited you now has to approve it, and they will
-            ask you for the code below — read it out to them over a call or in person, not in the
-            same place you were sent the link.
+            Your request has been sent. Whoever invited you now has to approve it
+            {relayed ? ", which they can do the next time they open the notebook" : ""}, and they
+            will ask you for the code below — read it out to them over a call or in person, not in
+            the same place you were sent the link.
           </p>
 
           <span className="join-label">Your device code</span>
@@ -310,7 +351,9 @@ export function JoinNotebookPage() {
           </p>
 
           <p className="join-note">
-            You can leave this page open. It will say so here once you have been let in.
+            {relayed
+              ? "You can close this page. Open the same link again later and it will pick up where you left off."
+              : "You can leave this page open. It will say so here once you have been let in."}
           </p>
         </>
       ) : (

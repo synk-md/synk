@@ -9,7 +9,7 @@ import { MemoryRelay, memoryCursorStore, type SyncCursorStore } from "@/lib/sync
 import { admitFromRedemption, inviteToNotebook, redeemIntoNotebook } from "./admission"
 import { foundNotebookKeys, readNotebookKeys } from "./notebook-keys"
 import { foundNotebookWorkspace } from "./notebook-workspace"
-import { openNoteSession, type NoteSessionStatus, type RelayReachability } from "./note-session"
+import { openSyncSession, type SyncSessionStatus, type RelayReachability } from "./sync-session"
 import { snapshotNotesForJoiner } from "./note-snapshots"
 import { createNoteSyncEngine, noteResourceId } from "./note-sync"
 
@@ -126,8 +126,8 @@ async function open(
     cursor: options.cursor ?? memoryCursorStore(),
     now: () => T0 + 10_000,
   })
-  const statuses: NoteSessionStatus[] = []
-  const session = openNoteSession({
+  const statuses: SyncSessionStatus[] = []
+  const session = openSyncSession({
     engine,
     doc,
     transport,

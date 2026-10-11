@@ -50,6 +50,20 @@ function notebook(id: string, root: TreeNode): Notebook {
   return { id, name: id, root, createdAt: Date.now() }
 }
 
+/**
+ * The tree in the room it always had - where link guests look - and the
+ * directory in its own, each carrying its own document.
+ */
+function expectRooms(id: string) {
+  const handle = createNotebookIndexDoc(id)
+  expect(providerInstances.map((provider) => provider.roomName)).toEqual([
+    `nb:${id}:index`,
+    `nb:${id}:directory`,
+  ])
+  expect(providerInstances[0].doc).toBe(handle.tree)
+  expect(providerInstances[1].doc).toBe(handle.doc)
+}
+
 let idCounter = 0
 function uniqueNotebookId(): string {
   idCounter += 1
@@ -266,8 +280,7 @@ describe("useNotebookFileSystem: WebRTC provider gating", () => {
       result.current.setLinkAccess?.("view")
     })
 
-    expect(providerInstances).toHaveLength(1)
-    expect(providerInstances[0].roomName).toBe(`nb:${id}:index`)
+    expectRooms(id)
     expect(result.current.indexProvider).toBe(providerInstances[0])
   })
 
@@ -311,8 +324,7 @@ describe("useNotebookFileSystem: WebRTC provider gating", () => {
     })
 
     await waitFor(() => expect(result.current.sharedWithMembers).toBe(true))
-    expect(providerInstances).toHaveLength(1)
-    expect(providerInstances[0].roomName).toBe(`nb:${id}:index`)
+    expectRooms(id)
     expect(result.current.linkAccess).toBe("restricted")
   })
 

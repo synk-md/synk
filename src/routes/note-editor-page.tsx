@@ -47,7 +47,7 @@ export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; no
     return originNoteId
   }, [isEmptyEditorRoute, noteExists, noteId, originNoteId])
 
-  const fileSystem = useNotebookFileSystem(activeNotebook, updateNotebookRoot)
+  const fileSystem = useNotebookFileSystem(activeNotebook, updateNotebookRoot, { replicate: true })
   const rootNodeId = activeNotebook?.root.id ?? null
   const hasNotebookContext = Boolean(activeNotebook)
 

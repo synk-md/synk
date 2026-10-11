@@ -194,6 +194,28 @@ export async function matchInvitation(
   return { invitation, expectedOwner: invitation.admin }
 }
 
+/**
+ * The invitation this device already redeemed here, if any.
+ *
+ * For somebody coming back to the link: the code is not needed twice, and the
+ * invitation still names the admin to check the notebook's genesis against.
+ */
+export async function findOwnRedemption(
+  doc: Y.Doc,
+  did: string,
+  now: number = Date.now(),
+): Promise<InvitationMatch | null> {
+  for (const invitation of invitationsInDoc(doc)) {
+    if (!redemptionsInDoc(doc, invitation.invitationId).some((redemption) => redemption.did === did)) {
+      continue
+    }
+    if (await verifyInvitation(invitation, [invitation.admin], { now })) {
+      return { invitation, expectedOwner: invitation.admin }
+    }
+  }
+  return null
+}
+
 /** The owner's root, which a member's capability is issued against. */
 export async function findOwnerRoot(
   doc: Y.Doc,
