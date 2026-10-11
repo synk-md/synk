@@ -22,12 +22,40 @@ import { createNoteSyncEngine, noteResourceId } from "./note-sync"
 // imported by the Node smoke scripts, where it does not exist.
 const env =
   (import.meta as unknown as { env?: Record<string, string | undefined> }).env ?? {}
-const RELAY_URL = env.VITE_SYNK_RELAY_URL
-const RELAY_ID = env.VITE_SYNK_RELAY_ID ?? "did:relay:dev"
+
+export interface RelaySettings {
+  /** Null or empty turns encrypted sync off. */
+  url: string | null
+  relayId: string
+}
+
+/**
+ * Where the relay is, and therefore whether encrypted sync is on at all.
+ *
+ * Configurable rather than read straight from the environment. Vite inlines
+ * `import.meta.env` at build time, so a value baked in there cannot be changed
+ * by anything later - which makes the suite depend on whoever's `.env.local` it
+ * ran with, and would make a settings screen impossible. The environment is the
+ * default; this is the setting.
+ */
+let settings: RelaySettings = {
+  url: env.VITE_SYNK_RELAY_URL ?? null,
+  relayId: env.VITE_SYNK_RELAY_ID ?? "did:relay:dev",
+}
+
+export function configureRelay(next: Partial<RelaySettings>): void {
+  settings = { ...settings, ...next }
+  // A changed address makes the open connection the wrong one.
+  closeRelayConnection()
+}
+
+export function relaySettings(): RelaySettings {
+  return settings
+}
 
 /** True when note content should travel as envelopes rather than plaintext Yjs. */
 export function encryptedSyncEnabled(): boolean {
-  return typeof RELAY_URL === "string" && RELAY_URL.length > 0
+  return typeof settings.url === "string" && settings.url.length > 0
 }
 
 let connection: RelayConnection | null = null
@@ -45,10 +73,10 @@ export function relayConnection(): RelayConnection | null {
   if (!device) return null
 
   if (!connection) {
-    link = new WebSocketLink({ url: RELAY_URL! })
+    link = new WebSocketLink({ url: settings.url! })
     connection = new RelayConnection({
       link,
-      relayId: RELAY_ID,
+      relayId: settings.relayId,
       did: device.identity.did,
       signingKey: device.identity.signingKey,
       onError: (error) => {

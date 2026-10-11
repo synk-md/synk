@@ -125,11 +125,14 @@ export type { JoinSnapshotResult } from "./note-snapshots"
 export { hasNoOperations } from "./note-snapshots"
 
 export type { NoteEngineOptions } from "./note-relay"
+export type { RelaySettings } from "./note-relay"
 export {
   closeRelayConnection,
+  configureRelay,
   createNoteEngine,
   encryptedSyncEnabled,
   relayConnection,
+  relaySettings,
 } from "./note-relay"
 
 export type { NoteAdmissionOptions, NoteAdmissionResult, NoteOutcome } from "./admit-notes"

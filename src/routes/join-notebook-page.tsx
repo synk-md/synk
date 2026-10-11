@@ -6,12 +6,15 @@ import { Button } from "@/components/tiptap-ui-primitive/button"
 import { parseInvitationSecret } from "@/lib/directory"
 import { currentDevice, deviceFingerprint } from "@/lib/identity"
 import {
+  genesisClaims,
   matchInvitation,
   readNotebookKeys,
   readNotebookWorkspace,
   redeemIntoNotebook,
 } from "@/lib/workspace"
 import { createNotebookIndexDoc, keyForIndex, SIGNALING_SERVERS } from "@/lib/yjs-utils"
+
+import { waitingMessage } from "./join-waiting-message"
 
 import "./join-notebook-page.scss"
 
@@ -39,6 +42,15 @@ export function JoinNotebookPage() {
   const [fingerprint, setFingerprint] = React.useState<string | null>(null)
   // Learned from the invitation the code points at, not from the notebook.
   const [expectedOwner, setExpectedOwner] = React.useState<string | null>(null)
+  // Whether the notebook has reached this device at all. A code checked against
+  // an empty document always fails, and reporting that as a wrong code is how
+  // somebody ends up retyping a correct one.
+  const [notebookReady, setNotebookReady] = React.useState(false)
+  const [waitedTooLong, setWaitedTooLong] = React.useState(false)
+  // Why nothing is arriving, which is a different question from whether
+  // anything has. Unreachable signaling and an absent owner both look like
+  // waiting, and only one of them is the waiting person's problem.
+  const [transport, setTransport] = React.useState({ signaling: false, peers: 0 })
 
   // The owner is asked to compare this against what their screen derives from
   // the redemption. Without it on screen here there is nothing to compare, and
@@ -55,6 +67,38 @@ export function JoinNotebookPage() {
     }
   }, [])
 
+  /**
+   * Wait for the notebook itself to arrive.
+   *
+   * A genesis claim is the signal: it is the first thing the owner wrote, so
+   * its presence means their document has reached us and the invitation will
+   * be here too.
+   */
+  React.useEffect(() => {
+    if (!notebookId) return
+    const { doc, idb } = createNotebookIndexDoc(notebookId)
+    let cancelled = false
+
+    const check = () => {
+      if (!cancelled && genesisClaims(doc).length > 0) setNotebookReady(true)
+    }
+    void idb.whenSynced.then(check)
+    doc.on("update", check)
+    check()
+
+    // Long enough that an ordinary connection is not interrupted, short enough
+    // that somebody staring at a spinner is told why.
+    const timer = setTimeout(() => {
+      if (!cancelled) setWaitedTooLong(true)
+    }, 15_000)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+      doc.off("update", check)
+    }
+  }, [notebookId])
+
   // Connect to the notebook's index room so the redemption reaches the owner
   // and their grant reaches back.
   React.useEffect(() => {
@@ -65,7 +109,23 @@ export function JoinNotebookPage() {
       signaling: SIGNALING_SERVERS,
       password: room,
     })
+
+    const onPeers = (event: { webrtcPeers: string[]; bcPeers: string[] }) => {
+      const peers = event.webrtcPeers.length + event.bcPeers.length
+      setTransport((prev) => (prev.peers === peers ? prev : { ...prev, peers }))
+    }
+    provider.on("peers", onPeers)
+
+    // Signaling state is not observable on the provider, so it is sampled.
+    const conns = provider.signalingConns as { connected: boolean }[]
+    const poll = setInterval(() => {
+      const signaling = conns.some((conn) => conn.connected)
+      setTransport((prev) => (prev.signaling === signaling ? prev : { ...prev, signaling }))
+    }, 1000)
+
     return () => {
+      clearInterval(poll)
+      provider.off("peers", onPeers)
       provider.disconnect()
       provider.destroy()
     }
@@ -123,8 +183,12 @@ export function JoinNotebookPage() {
       // stops this being trust-on-first-use in whatever document turned up.
       const match = await matchInvitation(doc, secret)
       if (!match) {
+        // Two very different failures, and conflating them sends somebody off
+        // to re-check a code that was right all along.
         throw new Error(
-          "That code does not match an invitation to this notebook. Check the link and the code came from the same person.",
+          notebookReady
+            ? "That code does not match an invitation to this notebook. Check the link and the code came from the same person."
+            : "This notebook has not reached your device yet, so there is nothing to check the code against. Whoever invited you needs it open.",
         )
       }
 
@@ -156,6 +220,8 @@ export function JoinNotebookPage() {
     const invited = params.get("for")
     if (invited) setLabel(invited)
   }, [params])
+
+  const waitingReason = waitingMessage({ waitedTooLong, ...transport })
 
   if (!notebookId) {
     return (
@@ -208,6 +274,12 @@ export function JoinNotebookPage() {
             which notebook, the code proves it is you.
           </p>
 
+          {!notebookReady && (
+            <p className="join-note" role="status">
+              {waitingReason}
+            </p>
+          )}
+
           <label htmlFor="join-code" className="join-label">
             One-time code
           </label>
@@ -237,11 +309,15 @@ export function JoinNotebookPage() {
 
           <Button
             className="join-button"
-            disabled={secretText.trim().length === 0 || stage === "redeeming"}
+            disabled={secretText.trim().length === 0 || stage === "redeeming" || !notebookReady}
             onClick={() => void redeem()}
           >
             <span className="tiptap-button-text">
-              {stage === "redeeming" ? "Sending…" : "Ask to join"}
+              {stage === "redeeming"
+                ? "Sending…"
+                : notebookReady
+                  ? "Ask to join"
+                  : "Waiting for the notebook…"}
             </span>
           </Button>
         </>

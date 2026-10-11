@@ -9,6 +9,7 @@
     "rebuild": "pnpm run tiptap:install && pnpm run tiptap:build && pnpm install",
     "dev": "vite",
     "signaling": "y-webrtc-signaling",
+    "dev:all": "trap 'kill 0' EXIT INT TERM; PORT=4444 y-webrtc-signaling & pnpm run relay & vite",
     "relay": "tsx --tsconfig tsconfig.app.json server/relay.ts",
     "relay:smoke": "tsx --tsconfig tsconfig.app.json server/smoke.ts",
     "relay:smoke-notes": "tsx --tsconfig tsconfig.app.json server/smoke-notes.ts",

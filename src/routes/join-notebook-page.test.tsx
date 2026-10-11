@@ -22,11 +22,21 @@ import {
 import { createNotebookIndexDoc, evictNotebookIndexDoc } from "@/lib/yjs-utils"
 
 import { JoinNotebookPage } from "./join-notebook-page"
+import { waitingMessage } from "./join-waiting-message"
 
 // jsdom has no WebRTC, and a real provider reaches the public signaling servers
 // over the network. The page's job here is the redemption, not the transport.
+// Mirrors the real provider's surface, including the parts the page reads to
+// explain itself: a fake that is missing them passes while the page throws.
 vi.mock("y-webrtc", () => ({
   WebrtcProvider: class {
+    signalingConns: { connected: boolean }[] = [{ connected: true }]
+    on() {
+      /* no peers ever arrive in a test */
+    }
+    off() {
+      /* nothing was registered */
+    }
     disconnect() {
       /* nothing to disconnect */
     }
@@ -107,13 +117,43 @@ describe("the join page", () => {
   })
 
   it("refuses a code that is not a valid secret", async () => {
+    await anInvitation()
     mount()
 
+    // Gated until the notebook has arrived, so wait for that first.
+    const submit = await screen.findByRole("button", { name: "Ask to join" })
     fireEvent.change(screen.getByLabelText("One-time code"), { target: { value: "nonsense" } })
-    fireEvent.click(screen.getByRole("button", { name: "Ask to join" }))
+    fireEvent.click(submit)
 
     expect(await screen.findByRole("alert")).toBeInTheDocument()
     expect(screen.getByLabelText("One-time code")).toBeEnabled()
+  })
+
+  /**
+   * A code checked against a document that has not arrived always fails, and
+   * reporting that as a wrong code sends somebody off to re-check a code that
+   * was right all along.
+   */
+  it("will not check a code before the notebook has reached this device", () => {
+    mount()
+
+    expect(screen.getByRole("button", { name: /Waiting for the notebook/ })).toBeDisabled()
+    expect(screen.getByRole("status")).toHaveTextContent(/Connecting to the notebook/)
+  })
+
+  it("stops waiting once the notebook arrives", async () => {
+    const { secret } = await anInvitation()
+    mount()
+
+    // The label stops saying it is waiting...
+    await screen.findByRole("button", { name: "Ask to join" })
+    expect(screen.queryByText(/Connecting to the notebook/)).not.toBeInTheDocument()
+
+    // ...and a typed code can now be submitted.
+    fireEvent.change(screen.getByLabelText("One-time code"), {
+      target: { value: formatInvitationSecret(secret) },
+    })
+    expect(screen.getByRole("button", { name: "Ask to join" })).toBeEnabled()
   })
 
   /**
@@ -216,5 +256,36 @@ describe("checking who owns the notebook", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/does not agree about who owns it/)
     // And nothing was published into a notebook it does not trust.
     expect(doc.getMap("directory:redemptions").size).toBe(0)
+  })
+})
+
+/* ---- why nothing has arrived ---------------------------------------------- */
+
+describe("waitingMessage", () => {
+  const state = (over: Partial<Parameters<typeof waitingMessage>[0]> = {}) =>
+    waitingMessage({ waitedTooLong: true, signaling: true, peers: 1, ...over })
+
+  it("does not diagnose anything while the wait is still ordinary", () => {
+    expect(state({ waitedTooLong: false, signaling: false, peers: 0 })).toMatch(/Connecting/)
+  })
+
+  /** The failure that presented as a wrong code, and then as a dead spinner. */
+  it("blames unreachable signaling rather than the person waiting", () => {
+    const message = state({ signaling: false, peers: 0 })
+    expect(message).toMatch(/cannot reach the service/)
+    expect(message).toMatch(/Nothing you can do from here/)
+  })
+
+  it("says nobody is here when signaling works but no peer is found", () => {
+    expect(state({ peers: 0 })).toMatch(/nobody else is in this notebook/)
+  })
+
+  it("distinguishes a connected peer from a missing one", () => {
+    expect(state({ peers: 1 })).toMatch(/Still waiting for the notebook itself/)
+  })
+
+  /** Unreachable signaling outranks an empty room: it explains the empty room. */
+  it("reports the cause, not the symptom, when both are true", () => {
+    expect(state({ signaling: false, peers: 0 })).toMatch(/cannot reach the service/)
   })
 })
