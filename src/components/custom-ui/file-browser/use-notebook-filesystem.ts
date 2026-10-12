@@ -281,13 +281,17 @@ export function useNotebookFileSystem(
   const treeRoom: "content" | "presence" | "none" = replication.relay
     ? linkShared
       ? "content"
-      : sharedWithMembers
+      : sharedWithMembers && replication.presence
         ? "presence"
         : "none"
     : linkShared || awaitingJoiners || sharedWithMembers
       ? "content"
       : "none"
   const directoryRoom = !replication.relay && treeRoom === "content"
+  // Read through a ref; the name alone decides when the room changes.
+  const presenceRef = React.useRef(replication.presence)
+  presenceRef.current = replication.presence
+  const presenceName = treeRoom === "presence" ? (replication.presence?.name ?? null) : null
 
   React.useEffect(() => {
     const indexHandle = indexDocRef.current
@@ -303,11 +307,13 @@ export function useNotebookFileSystem(
     if (providerRef.current) return
 
     // The tree keeps the room it always had, which is where link guests look.
-    // Presence gets its own, with an empty document, so text never enters it.
-    const room = `${keyForIndex(activeNotebookId)}${treeRoom === "presence" ? ":presence" : ""}`
-    const provider = new WebrtcProvider(room, treeRoom === "presence" ? new Y.Doc() : indexHandle.tree, {
+    // Presence gets a room derived from the current epoch key, with an empty
+    // document, so text never enters it and a removed member is left behind.
+    const presence = treeRoom === "presence" ? presenceRef.current : null
+    const room = presence?.name ?? keyForIndex(activeNotebookId)
+    const provider = new WebrtcProvider(room, presence ? new Y.Doc() : indexHandle.tree, {
       signaling: SIGNALING_SERVERS,
-      password: room,
+      password: presence?.password ?? room,
     })
     const directoryName = keyForDirectory(activeNotebookId)
     const directory = directoryRoom
@@ -331,7 +337,7 @@ export function useNotebookFileSystem(
     // flips away from "restricted" — indexDocRef.current itself isn't a dep
     // since refs aren't reactive, but it's set synchronously in the effect
     // above, which always runs before this one on the same commit.
-  }, [activeNotebookId, treeRoom, directoryRoom])
+  }, [activeNotebookId, treeRoom, directoryRoom, presenceName])
 
   const setLinkAccess = React.useCallback((access: LinkAccess) => {
     const indexHandle = indexDocRef.current

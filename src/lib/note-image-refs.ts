@@ -37,10 +37,16 @@ export class NoteImageRefIndex {
   }
 
   has(assetId: string): boolean {
-    if (!this.cache) {
-      this.cache = collectAssetIds(this.fragment)
-    }
-    return this.cache.has(assetId)
+    return this.ids().has(assetId)
+  }
+
+  all(): string[] {
+    return [...this.ids()]
+  }
+
+  private ids(): Set<string> {
+    this.cache ??= collectAssetIds(this.fragment)
+    return this.cache
   }
 
   destroy(): void {

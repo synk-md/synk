@@ -157,7 +157,7 @@ const IMAGE_SIGNATURES: Array<{ mimeType: string; matches: (bytes: Uint8Array) =
   },
 ]
 
-function sniffImageMimeType(bytes: Uint8Array): string | null {
+export function sniffImageMimeType(bytes: Uint8Array): string | null {
   return IMAGE_SIGNATURES.find((signature) => signature.matches(bytes))?.mimeType ?? null
 }
 

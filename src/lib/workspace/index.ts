@@ -153,6 +153,12 @@ export type {
 } from "./sync-session"
 export { openSyncSession } from "./sync-session"
 
+export type { BlobClient, ImageChannel } from "./images"
+export { fetchImage, httpBlobClient, imageChannel, openImage, publishImage, sealImage } from "./images"
+
+export type { PresenceRoom } from "./presence"
+export { indexPresenceScope, notePresenceScope, presenceRoom } from "./presence"
+
 export type { MemberRemoved, RemoveFromNotebookOptions } from "./removal"
 export { removeFromNotebook } from "./removal"
 

@@ -38,6 +38,8 @@ export { SocketLink } from "./socket-link"
 
 export type { RelayQuota } from "./server-store"
 export { DEFAULT_QUOTA, RelayStore } from "./server-store"
+export type { BlobQuota, BlobRequest, BlobResponse, PutResult } from "./blobs"
+export { BlobStore, DEFAULT_BLOB_QUOTA, handleBlobRequest, LOCATOR_PATTERN } from "./blobs"
 
 export type { RelayMetrics, RelayServerOptions, RelayWriteHint, TurnIssuer } from "./server"
 export { EphemeralTurnIssuer, RelayServer } from "./server"

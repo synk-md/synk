@@ -129,6 +129,9 @@ import { setNoteTitle, getNoteLinkAccess, setNoteLinkAccess, getNoteOwnerName, s
 import { getImageAsset, storeImageAsset } from "@/lib/image-assets"
 import { getOrCreateGuestIdentity, setGuestName } from "@/lib/guest-identity"
 import { P2PImageAssetTransfer } from "@/lib/p2p-image-assets"
+// By path, not through the barrel: it reaches IndexedDB, and the barrel is
+// imported by the test setup before any test can mock that.
+import { fetchRelayImage, publishHeldImage } from "@/lib/workspace/note-images"
 import { downloadFile } from "@/lib/download-file"
 import { exportNoteContent, fileExtensionForFormat, mimeTypeForFormat, type NoteExportFormat } from "@/lib/note-export"
 import { imageMimeType, importNoteContent, type NoteImportItem } from "@/lib/note-import"
@@ -692,11 +695,16 @@ export function SimpleEditor({
     : // A link is readable by whoever holds it, so link sharing stays plaintext.
       linkAccess !== "restricted" || encryptedNote.state === "off"
       ? "content"
-      : encryptedNote.state === "running"
+      : encryptedNote.state === "running" && encryptedNote.presence
         ? "presence"
         : // Never fall back to plaintext while the keys are being read, or for
           // a device that cannot read them: that is what removal relies on.
           "nothing"
+  const presenceRef = React.useRef(encryptedNote.presence)
+  presenceRef.current = encryptedNote.presence
+  const presenceName = webrtcCarries === "presence" ? (encryptedNote.presence?.name ?? null) : null
+  // Images go through the relay whenever the note's content does.
+  const imagesViaRelay = encryptedNote.state === "running"
   collaborationActiveRef.current = webrtcCarries !== "nothing"
   const shownSyncStatus: SyncStatus =
     encryptedNote.state === "off"
@@ -761,12 +769,22 @@ export function SimpleEditor({
       return localAsset.blob
     }
 
+    // The relay first: it holds the image whether or not anyone who has it is
+    // online, and serves it as one binary response instead of a chunk per
+    // round trip.
+    const fromRelay = notebookId ? await fetchRelayImage(notebookId, assetId).catch(() => undefined) : undefined
+    if (fromRelay) {
+      ensureImageAssetNode(fromRelay.id, assetName)
+      return fromRelay.blob
+    }
+
+    // Only on a link-shared note's own room; a presence room carries none.
     const transferredAsset = await imageTransferRef.current?.requestAsset(assetId)
     if (transferredAsset) {
       ensureImageAssetNode(transferredAsset.id, assetName)
     }
     return transferredAsset?.blob ?? null
-  }, [ensureImageAssetNode])
+  }, [ensureImageAssetNode, notebookId])
 
   // Create the Y-WebRTC provider AFTER mount (StrictMode safe)
   React.useEffect(() => {
@@ -797,22 +815,25 @@ export function SimpleEditor({
     if (!providerRef.current) {
       // A separate room and an empty document sharing the note's client id, so
       // the cursor plugin still recognises the local user's own cursor.
-      const presenceOnly = webrtcCarries === "presence"
-      const room = `nb:${notebookId}:n:${noteId}${presenceOnly ? ":presence" : ""}`
-      const roomDoc = presenceOnly ? new Y.Doc() : doc
+      // Presence gets a room derived from the current epoch key, so a removed
+      // member is left behind at the next cut.
+      const presence = webrtcCarries === "presence" ? presenceRef.current : null
+      const room = presence?.name ?? `nb:${notebookId}:n:${noteId}`
+      const roomDoc = presence ? new Y.Doc() : doc
       roomDoc.clientID = doc.clientID
       const provider = new WebrtcProvider(room, roomDoc, {
         signaling: SIGNALING_SERVERS,
-        password: room
+        password: presence?.password ?? room
       })
       providerRef.current = provider
       setProviderGeneration((g) => g + 1)
       const imageRefIndex = new NoteImageRefIndex(doc)
       imageRefIndexRef.current = imageRefIndex
-      imageTransferRef.current = new P2PImageAssetTransfer(
-        provider.awareness,
-        (assetId) => imageRefIndex.has(assetId)
-      )
+      // Serving images over presence would hand them to anyone in the room,
+      // and members get them from the relay. Only a link-shared room serves.
+      imageTransferRef.current = presence
+        ? null
+        : new P2PImageAssetTransfer(provider.awareness, (assetId) => imageRefIndex.has(assetId))
       setProviderReady(true)
 
       let connected = provider.connected
@@ -883,7 +904,7 @@ export function SimpleEditor({
       setSyncStatus("offline")
     }
     // only when the doc/ids truly change
-  }, [note?.doc, notebookId, noteId, webrtcCarries, reconnectNonce])
+  }, [note?.doc, notebookId, noteId, webrtcCarries, presenceName, reconnectNonce])
 
   // The public signaling servers (and the WebRTC handshake itself) are flaky
   // enough that the initial connection sometimes never completes — it sits
@@ -918,10 +939,23 @@ export function SimpleEditor({
     async (file: File, onProgress?: (event: { progress: number }) => void, abortSignal?: AbortSignal) => {
       const asset = await handleImageUpload(file, onProgress, abortSignal)
       ensureImageAssetNode(asset.assetId, file.name.replace(/\.[^/.]+$/, "") || "image")
+      // Published straight away, so members see it without this device online.
+      if (imagesViaRelay && notebookId) void publishHeldImage(notebookId, asset.assetId).catch(() => undefined)
       return asset
     },
-    [ensureImageAssetNode],
+    [ensureImageAssetNode, imagesViaRelay, notebookId],
   )
+
+  // Images this note shows that the relay may never have seen: added before
+  // the note was shared, or while the relay was unreachable.
+  React.useEffect(() => {
+    const doc = note?.doc
+    // After the content has loaded: before that the document is empty.
+    if (!imagesViaRelay || !doc || !notebookId || !noteContentSynced) return
+    const refs = new NoteImageRefIndex(doc)
+    for (const assetId of refs.all()) void publishHeldImage(notebookId, assetId).catch(() => undefined)
+    refs.destroy()
+  }, [imagesViaRelay, note?.doc, notebookId, noteContentSynced])
 
   const canCreateNodes = allowFileCreation && Boolean(rootId)
 

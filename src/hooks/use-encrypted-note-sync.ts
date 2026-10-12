@@ -6,6 +6,7 @@ import type * as Y from "yjs"
 import type { SyncStatus } from "@/components/custom-ui/shared-note-bar/shared-note-bar"
 import { useNotebookKeys } from "@/hooks/use-notebook-keys"
 import { useNotebookWorkspace } from "@/hooks/use-notebook-workspace"
+import { usePresenceRoom } from "@/hooks/use-presence-room"
 import { currentDevice } from "@/lib/identity"
 import type { ReadKeySource } from "@/lib/keys"
 import {
@@ -18,6 +19,8 @@ import {
   relayWatch,
   storedBaseline,
   storedCursor,
+  notePresenceScope,
+  type PresenceRoom,
 } from "@/lib/workspace"
 import { createNotebookIndexDoc } from "@/lib/yjs-utils"
 
@@ -36,6 +39,8 @@ export interface EncryptedNoteSync {
   lastSyncedAt: Date | null
   /** Holds keys to earlier epochs and not the current one: an admin removed it. */
   removed: boolean
+  /** Where cursors meet this epoch. Null until there is a current key to derive it from. */
+  presence: PresenceRoom | null
 }
 
 export interface UseEncryptedNoteSyncOptions {
@@ -85,6 +90,10 @@ export function useEncryptedNoteSync(options: UseEncryptedNoteSyncOptions): Encr
   const [lastSyncedAt, setLastSyncedAt] = React.useState<Date | null>(null)
 
   const running = state === "running"
+  const presence = usePresenceRoom(
+    running ? keyring : null,
+    running && notebookId && noteId ? notePresenceScope(notebookId, noteId) : null,
+  )
   React.useEffect(() => {
     if (!running || !notebookId || !noteId || !doc || !owner || !keyringRef.current) return
     const device = currentDevice()
@@ -132,5 +141,5 @@ export function useEncryptedNoteSync(options: UseEncryptedNoteSyncOptions): Encr
     }
   }, [running, notebookId, noteId, doc, owner, canAuthor])
 
-  return { state, status, lastSyncedAt, removed }
+  return { state, status, lastSyncedAt, removed, presence }
 }

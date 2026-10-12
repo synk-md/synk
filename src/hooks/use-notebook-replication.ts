@@ -5,6 +5,7 @@ import * as React from "react"
 import type { EncryptedNoteState } from "@/hooks/use-encrypted-note-sync"
 import { useNotebookKeys } from "@/hooks/use-notebook-keys"
 import { useNotebookWorkspace } from "@/hooks/use-notebook-workspace"
+import { usePresenceRoom } from "@/hooks/use-presence-room"
 import { currentDevice } from "@/lib/identity"
 import type { ReadKeySource } from "@/lib/keys"
 import {
@@ -17,6 +18,8 @@ import {
   relayConnection,
   relayWatch,
   treeResourceId,
+  indexPresenceScope,
+  type PresenceRoom,
   type SyncSession,
   type SyncSessionStatus,
 } from "@/lib/workspace"
@@ -28,6 +31,8 @@ export interface NotebookReplication {
   directory: SyncSessionStatus
   tree: EncryptedNoteState
   treeStatus: SyncSessionStatus
+  /** Where members' presence meets this epoch, once this device holds its key. */
+  presence: PresenceRoom | null
 }
 
 const warn = (what: string) => (error: unknown) => {
@@ -122,6 +127,10 @@ export function useNotebookReplication(
 
   const [treeStatus, setTreeStatus] = React.useState<SyncSessionStatus>("offline")
   const running = tree === "running"
+  const presence = usePresenceRoom(
+    running ? keyring : null,
+    running && notebookId ? indexPresenceScope(notebookId) : null,
+  )
   React.useEffect(() => {
     const device = currentDevice()
     if (!running || !notebookId || !owner || !device) return
@@ -171,5 +180,5 @@ export function useNotebookReplication(
     }
   }, [running, notebookId, owner])
 
-  return { relay, directory, tree, treeStatus }
+  return { relay, directory, tree, treeStatus, presence }
 }

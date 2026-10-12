@@ -20,6 +20,7 @@ import { foundNotebookKeys, readNotebookKeys } from "./notebook-keys"
 import { foundNotebookWorkspace, workspaceIdFor } from "./notebook-workspace"
 import { liveKeys } from "./note-relay"
 import { createNoteSyncEngine } from "./note-sync"
+import { indexPresenceScope, presenceRoom } from "./presence"
 import { removeFromNotebook } from "./removal"
 
 const NOTEBOOK = "travel"
@@ -346,5 +347,29 @@ describe("a revoked grant", () => {
     await settle(owner, ada)
 
     expect(text(owner)).toBe("still allowed.")
+  })
+})
+
+describe("presence after removal", () => {
+  /** Rooms come from the current key, so a cut moves everyone else and leaves them. */
+  it("moves everyone else to a room the removed member cannot name", async () => {
+    const notebook = await aNotebook()
+    const keysOf = (device: DeviceIdentity) =>
+      readNotebookKeys({ doc: notebook.directory, notebookId: NOTEBOOK, device, owner: notebook.owner.did })
+    const roomFor = async (device: DeviceIdentity) => {
+      const keys = await keysOf(device)
+      const key = keys.keyring ? await keys.keyring.keyFor(keys.keyring.currentEpoch) : undefined
+      return key ? (await presenceRoom(key, indexPresenceScope(NOTEBOOK))).name : null
+    }
+
+    const before = await roomFor(notebook.owner)
+    expect(await roomFor(notebook.ada)).toBe(before)
+
+    await removeAda(notebook)
+
+    const after = await roomFor(notebook.owner)
+    expect(after).not.toBe(before)
+    expect(await roomFor(notebook.grace)).toBe(after)
+    expect(await roomFor(notebook.ada)).toBeNull()
   })
 })

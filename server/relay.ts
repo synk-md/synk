@@ -13,10 +13,10 @@
  * built against it.
  */
 
-import { createServer } from "node:http"
+import { createServer, type IncomingMessage } from "node:http"
 import { WebSocketServer, type WebSocket } from "ws"
 
-import { RelayServer, SocketLink } from "../src/lib/relay/index.ts"
+import { BlobStore, handleBlobRequest, RelayServer, SocketLink } from "../src/lib/relay/index.ts"
 
 const PORT = Number(process.env.RELAY_PORT ?? 4455)
 const RELAY_ID = process.env.RELAY_ID ?? "did:relay:dev"
@@ -28,7 +28,52 @@ const relay = new RelayServer({
   rateLimit: 200,
 })
 
+const blobs = new BlobStore()
+
+/** The body, or null once it passes `limit` - stopped being kept, not buffered. */
+function readBody(request: IncomingMessage, limit: number): Promise<Uint8Array | null> {
+  if (Number(request.headers["content-length"] ?? 0) > limit) return Promise.resolve(null)
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = []
+    let size = 0
+    request.on("data", (chunk: Buffer) => {
+      size += chunk.length
+      if (size > limit) {
+        resolve(null)
+        return
+      }
+      chunks.push(chunk)
+    })
+    request.on("end", () => resolve(new Uint8Array(Buffer.concat(chunks))))
+    request.on("error", reject)
+  })
+}
+
 const http = createServer((request, response) => {
+  if (request.url?.startsWith("/blobs/")) {
+    void (async () => {
+      const body = request.method === "PUT" ? await readBody(request, blobs.quota.maxBlobBytes) : undefined
+      if (body === null) {
+        // Answered before the rest arrives, then closed: the client is told
+        // why rather than seeing its upload cut off.
+        response.writeHead(413, { "access-control-allow-origin": "*", connection: "close" })
+        response.end(() => request.destroy())
+        return
+      }
+      const reply = handleBlobRequest(blobs, {
+        method: request.method ?? "GET",
+        url: request.url ?? "/",
+        ...(body ? { body } : {}),
+      })
+      response.writeHead(reply?.status ?? 404, reply?.headers)
+      response.end(reply?.body && request.method !== "HEAD" ? Buffer.from(reply.body) : undefined)
+    })().catch(() => {
+      response.writeHead(500)
+      response.end()
+    })
+    return
+  }
+
   if (request.url === "/health") {
     response.writeHead(200, { "content-type": "application/json" })
     response.end(
@@ -36,6 +81,7 @@ const http = createServer((request, response) => {
         relayId: RELAY_ID,
         sessions: relay.sessionCount,
         resources: relay.store.resourceCount,
+        imageBytes: blobs.bytesHeld,
         metrics: relay.metrics,
       }),
     )

@@ -15,7 +15,9 @@ import {
   noteResourceId,
   type PlanProgress,
 } from "@/lib/workspace"
+import { NoteImageRefIndex } from "@/lib/note-image-refs"
 import { hasNoOperations } from "@/lib/workspace"
+import { publishHeldImage } from "@/lib/workspace/note-images"
 import { createNotebookIndexDoc, getOrCreateYDoc, readNotebookIndexTree } from "@/lib/yjs-utils"
 import * as Y from "yjs"
 
@@ -119,6 +121,14 @@ export function useNoteAdmission(notebookId: string | null) {
             await idb.whenSynced
             // Nobody has written to it, so no author gap can exist.
             if (hasNoOperations(doc)) return false
+
+            // Its images too, while the note is open anyway: the joiner may
+            // open it long after the last person holding them has gone.
+            const images = new NoteImageRefIndex(doc)
+            await Promise.all(
+              images.all().map((assetId) => publishHeldImage(notebookId, assetId).catch(() => undefined)),
+            )
+            images.destroy()
 
             const epochKey = await keys.keyring!.keyFor(epoch)
             if (!epochKey) throw new Error(`no key for epoch ${String(epoch)}`)

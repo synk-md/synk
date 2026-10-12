@@ -26,8 +26,19 @@ vi.mock("y-webrtc", () => ({ WebrtcProvider: FakeWebrtcProvider }))
 
 // A relay is configured. What it does is tested with the replicas; this file
 // is about what is left for the WebRTC rooms to carry.
+const replication = vi.hoisted(() => ({
+  presence: { name: "synk:presence:epoch-room", password: "derived-password" } as
+    | { name: string; password: string }
+    | null,
+}))
 vi.mock("@/hooks/use-notebook-replication", () => ({
-  useNotebookReplication: () => ({ relay: true, directory: "live", tree: "off", treeStatus: "offline" }),
+  useNotebookReplication: () => ({
+    relay: true,
+    directory: "live",
+    tree: "off",
+    treeStatus: "offline",
+    presence: replication.presence,
+  }),
 }))
 
 let counter = 0
@@ -55,6 +66,7 @@ function admitSomeone(id: string) {
 
 beforeEach(() => {
   providerInstances.length = 0
+  replication.presence = { name: "synk:presence:epoch-room", password: "derived-password" }
 })
 
 describe("useNotebookFileSystem with a relay", () => {
@@ -65,7 +77,9 @@ describe("useNotebookFileSystem with a relay", () => {
     admitSomeone(nb.id)
 
     await waitFor(() => expect(result.current.sharedWithMembers).toBe(true))
-    expect(providerInstances.map((provider) => provider.roomName)).toEqual([`nb:${nb.id}:index:presence`])
+    // Named from the epoch key, so it means nothing to anyone without it.
+    expect(providerInstances.map((provider) => provider.roomName)).toEqual(["synk:presence:epoch-room"])
+    expect(providerInstances[0].roomName).not.toContain(nb.id)
     const handle = createNotebookIndexDoc(nb.id)
     expect(providerInstances[0].doc).not.toBe(handle.tree)
     expect(providerInstances[0].doc).not.toBe(handle.doc)
@@ -104,6 +118,17 @@ describe("useNotebookFileSystem with a relay", () => {
 
   it("opens nothing for a notebook only its founder holds", async () => {
     await mounted(aNotebook())
+    expect(providerInstances).toHaveLength(0)
+  })
+
+  /** Never fall back to a room named after the notebook, which a removed member could still find. */
+  it("opens no presence room until there is a current key to derive it from", async () => {
+    replication.presence = null
+    const nb = aNotebook()
+    const { result } = await mounted(nb)
+    admitSomeone(nb.id)
+
+    await waitFor(() => expect(result.current.sharedWithMembers).toBe(true))
     expect(providerInstances).toHaveLength(0)
   })
 })
