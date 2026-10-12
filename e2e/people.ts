@@ -14,6 +14,14 @@ export interface Person {
   page: Page
 }
 
+/** Envelopes the test relay has accepted so far. */
+export async function envelopesPublished(): Promise<number> {
+  const health = (await (await fetch("http://localhost:4555/health")).json()) as {
+    metrics: { published: number }
+  }
+  return health.metrics.published
+}
+
 /** A separate browser profile: their own device keys, storage and notebooks. */
 export async function person(browser: Browser, name: string): Promise<Person> {
   const context = await browser.newContext()

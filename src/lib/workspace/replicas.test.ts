@@ -23,7 +23,7 @@ import {
   treeResourceId,
   type DirectoryChannel,
 } from "./replicas"
-import { openSyncSession, type RelayReachability } from "./sync-session"
+import { openSyncSession, type RelayReachability, type UnsentFlag } from "./sync-session"
 
 const NOTEBOOK = "travel"
 
@@ -52,7 +52,13 @@ interface Opened {
   refresh(): Promise<void>
 }
 
-async function opened(engine: SyncEngine, doc: Y.Doc, transport: ReturnType<MemoryRelay["attach"]>, resourceId: string): Promise<Opened> {
+async function opened(
+  engine: SyncEngine,
+  doc: Y.Doc,
+  transport: ReturnType<MemoryRelay["attach"]>,
+  resourceId: string,
+  unsent?: UnsentFlag,
+): Promise<Opened> {
   const session = openSyncSession({
     engine,
     doc,
@@ -62,6 +68,7 @@ async function opened(engine: SyncEngine, doc: Y.Doc, transport: ReturnType<Memo
     relay: online,
     canAuthor: true,
     recover: "publish-state",
+    ...(unsent ? { unsent } : {}),
   })
   await session.settled()
   await engine.flush()
@@ -81,10 +88,31 @@ async function opened(engine: SyncEngine, doc: Y.Doc, transport: ReturnType<Memo
   }
 }
 
-function openDirectory(relay: MemoryRelay, channel: DirectoryChannel, doc: Y.Doc, device: DeviceIdentity) {
+function openDirectory(
+  relay: MemoryRelay,
+  channel: DirectoryChannel,
+  doc: Y.Doc,
+  device: DeviceIdentity,
+  unsent?: UnsentFlag,
+) {
   const transport = relay.attach(device.did)
   const engine = createDirectoryReplica({ doc, channel, device, transport })
-  return opened(engine, doc, transport, channel.resourceId)
+  return opened(engine, doc, transport, channel.resourceId, unsent)
+}
+
+/** What the app keeps per document: set by any local edit, outliving the tab. */
+function anUnsentFlag(doc: Y.Doc): UnsentFlag & { set: boolean } {
+  const flag = {
+    set: false,
+    get: () => flag.set,
+    clear: () => {
+      flag.set = false
+    },
+  }
+  doc.on("update", (_update: Uint8Array, _origin: unknown, _doc: Y.Doc, transaction: Y.Transaction) => {
+    if (transaction.local) flag.set = true
+  })
+  return flag
 }
 
 /** A notebook founded on the owner's device, its directory not yet anywhere else. */
@@ -288,5 +316,59 @@ describe("the tree through the relay", () => {
     const memberTree = new Y.Doc()
     await openTree(shared, shared.member, memberTree)
     expect(titles(memberTree)).toEqual(["From the first tab", "From the second tab"])
+  })
+})
+
+describe("republishing only when something may be missing", () => {
+  /** Every open used to publish the whole document again, and the relay kept them all. */
+  it("publishes nothing when nothing changed since the last time", async () => {
+    const relay = new MemoryRelay()
+    const channel = await directoryChannel(NOTEBOOK)
+    const { owner, directory } = await aNotebook()
+    const unsent = anUnsentFlag(directory)
+    unsent.set = true
+
+    await (await openDirectory(relay, channel, directory, owner, unsent)).leave()
+    const held = relay.size
+    expect(unsent.get()).toBe(false)
+
+    await (await openDirectory(relay, channel, directory, owner, unsent)).leave()
+    await (await openDirectory(relay, channel, directory, owner, unsent)).leave()
+    expect(relay.size).toBe(held)
+  })
+
+  /** Written while nothing could deliver it, then the tab closed. */
+  it("publishes what an earlier session never delivered", async () => {
+    const relay = new MemoryRelay()
+    const channel = await directoryChannel(NOTEBOOK)
+    const { owner, directory } = await aNotebook()
+    const unsent = anUnsentFlag(directory)
+    await (await openDirectory(relay, channel, directory, owner, unsent)).leave()
+    expect(unsent.get()).toBe(false)
+
+    directory.getMap("directory:invitations").set("offline", { written: "offline" })
+    expect(unsent.get()).toBe(true)
+    await (await openDirectory(relay, channel, directory, owner, unsent)).leave()
+
+    const elsewhere = new Y.Doc()
+    await (await openDirectory(relay, channel, elsewhere, await aDevice())).leave()
+    expect(elsewhere.getMap("directory:invitations").get("offline")).toEqual({ written: "offline" })
+    expect(unsent.get()).toBe(false)
+  })
+
+  it("republishes to a relay that has lost everything", async () => {
+    const channel = await directoryChannel(NOTEBOOK)
+    const { owner, directory } = await aNotebook()
+    const unsent = anUnsentFlag(directory)
+    await (await openDirectory(new MemoryRelay(), channel, directory, owner, unsent)).leave()
+
+    // A restarted relay remembers nothing.
+    const restarted = new MemoryRelay()
+    await (await openDirectory(restarted, channel, directory, owner, unsent)).leave()
+    expect(restarted.size).toBeGreaterThan(0)
+
+    const other = new Y.Doc()
+    await (await openDirectory(restarted, channel, other, await aDevice())).leave()
+    expect(other.getMap("workspace:genesis").size).toBe(1)
   })
 })

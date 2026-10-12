@@ -18,6 +18,7 @@ import {
 import { NoteImageRefIndex } from "@/lib/note-image-refs"
 import { hasNoOperations } from "@/lib/workspace"
 import { publishHeldImage } from "@/lib/workspace/note-images"
+import { storedCoverage } from "@/lib/workspace/stored-watermark"
 import { createNotebookIndexDoc, getOrCreateYDoc, readNotebookIndexTree } from "@/lib/yjs-utils"
 import * as Y from "yjs"
 
@@ -139,7 +140,10 @@ export function useNoteAdmission(notebookId: string | null) {
               epoch,
               epochKey,
               state: Y.encodeStateAsUpdate(doc),
-              covers: {},
+              // What this copy is known to contain, so the joiner fetches only
+              // what came after it - not envelopes sealed under epochs it was
+              // never given, which it could not open anyway.
+              covers: await storedCoverage(idb),
               createdAt: Date.now(),
             })
             await shared

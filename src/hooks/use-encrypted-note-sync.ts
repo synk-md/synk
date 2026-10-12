@@ -22,7 +22,8 @@ import {
   notePresenceScope,
   type PresenceRoom,
 } from "@/lib/workspace"
-import { createNotebookIndexDoc } from "@/lib/yjs-utils"
+import { storedWatermark } from "@/lib/workspace/stored-watermark"
+import { createNotebookIndexDoc, getOrCreateYDoc } from "@/lib/yjs-utils"
 
 export type EncryptedNoteState =
   /** Not wanted here, or no relay configured. */
@@ -126,6 +127,7 @@ export function useEncryptedNoteSync(options: UseEncryptedNoteSyncOptions): Encr
       readableEpochs: () => keyringRef.current?.readableEpochs() ?? [],
       relay: relayWatch,
       baseline: storedBaseline(did, resourceId),
+      watermark: storedWatermark(getOrCreateYDoc(notebookId, noteId).idb),
       canAuthor,
       onStatus: setStatus,
       onSynced: setLastSyncedAt,

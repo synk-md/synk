@@ -136,6 +136,9 @@ export interface ResumeResult {
   republished: boolean
 }
 
+/** Past this, a batch goes at once. */
+const MAX_BATCH_BYTES = 64 * 1024
+
 /** A valid update containing nothing: fills a sequence number without content. */
 const EMPTY_UPDATE = Y.encodeStateAsUpdate(new Y.Doc())
 
@@ -170,6 +173,13 @@ export interface SyncEngineOptions {
    * typed an operation means nothing and a pinned id would need a writer lock.
    */
   attributeOperations?: boolean
+  /**
+   * Gather local edits for this long into one envelope. Typing is a
+   * transaction per keystroke, and an envelope each - signed, sealed, stored
+   * and replayed forever - is what makes the relay grow and opening slow.
+   * Zero, the default, sends each edit on its own.
+   */
+  batchMs?: number
   /** Surfaced rather than thrown - an outbound failure must not break editing. */
   onError?: (error: unknown) => void
 }
@@ -190,6 +200,9 @@ export class SyncEngine {
   /** Serialised so check-then-append is atomic across concurrent receives. */
   private inbound: Promise<void> = Promise.resolve()
   private localSeq = 0
+  private batch: Uint8Array[] = []
+  private batchBytes = 0
+  private batchTimer: ReturnType<typeof setTimeout> | undefined
   /** Own clock as of `localSeq`. */
   private localClock = 0
   private readonly cursor: SyncCursorStore
@@ -277,10 +290,43 @@ export class SyncEngine {
 
   private enqueueOutbound(update: Uint8Array): void {
     if (!this.mayAuthor()) return
+    const window = this.options.batchMs ?? 0
+    if (window <= 0) {
+      this.send(update)
+      return
+    }
+    this.batch.push(update)
+    this.batchBytes += update.length
+    // A paste can be large on its own, and gains nothing from waiting.
+    if (this.batchBytes >= MAX_BATCH_BYTES) {
+      this.drain()
+      return
+    }
+    this.batchTimer ??= setTimeout(() => {
+      this.drain()
+    }, window)
+  }
+
+  /**
+   * Send whatever is gathered as one envelope. The number is taken now, so the
+   * cursor's clock covers every operation in it - and a batch lost with the
+   * tab is operations without a number, which `resume` republishes.
+   */
+  private drain(final = false): void {
+    clearTimeout(this.batchTimer)
+    this.batchTimer = undefined
+    if (this.batch.length === 0) return
+    const update = this.batch.length === 1 ? this.batch[0] : Y.mergeUpdates(this.batch)
+    this.batch = []
+    this.batchBytes = 0
+    this.send(update, final)
+  }
+
+  private send(update: Uint8Array, final = false): void {
     const seq = this.reserve() // synchronous: pins this edit's place in order
     this.outbound = this.outbound
       .then(async () => {
-        if (this.closed) return
+        if (this.closed && !final) return
         await this.seal(seq, update)
       })
       .catch((error: unknown) => {
@@ -384,13 +430,22 @@ export class SyncEngine {
 
   /** Outbound first, then inbound, then outbound again for what it scheduled. */
   async flush(): Promise<void> {
+    this.drain()
     await this.outbound
     await this.inbound
     await this.outbound
   }
 
+  /** Whether everything this engine has sent has reached the relay. */
+  async delivered(): Promise<boolean> {
+    await this.flush()
+    const theirs = await this.options.transport.vector()
+    return (theirs[this.options.author] ?? 0) >= this.localSeq
+  }
+
   /** True when nothing is queued in either direction. */
   async isQuiescent(): Promise<boolean> {
+    if (this.batch.length > 0) return false
     const marker = Symbol("marker")
     const outboundDone = await Promise.race([this.outbound.then(() => marker), Promise.resolve(null)])
     const inboundDone = await Promise.race([this.inbound.then(() => marker), Promise.resolve(null)])
@@ -517,6 +572,8 @@ export class SyncEngine {
   }
 
   close(): void {
+    // Delivered rather than dropped: closing a note is not abandoning its edits.
+    this.drain(true)
     this.closed = true
     this.options.doc.off("update", this.updateHandler)
     this.unsubscribe()

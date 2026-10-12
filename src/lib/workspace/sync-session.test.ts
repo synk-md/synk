@@ -4,12 +4,17 @@ import { describe, expect, it } from "vitest"
 import { generateInvitationSecret } from "@/lib/directory"
 import { generateSealingKey, generateSigningKey } from "@/lib/crypto"
 import { createDeviceRecord, didFromSigningKey, type DeviceIdentity } from "@/lib/identity"
-import { MemoryRelay, memoryCursorStore, type SyncCursorStore } from "@/lib/sync"
+import { MemoryRelay, memoryCursorStore, type DeliveryVector, type SyncCursorStore } from "@/lib/sync"
 
 import { admitFromRedemption, inviteToNotebook, redeemIntoNotebook } from "./admission"
 import { foundNotebookKeys, readNotebookKeys } from "./notebook-keys"
 import { foundNotebookWorkspace } from "./notebook-workspace"
-import { openSyncSession, type SyncSessionStatus, type RelayReachability } from "./sync-session"
+import {
+  openSyncSession,
+  type DeliveryWatermark,
+  type SyncSessionStatus,
+  type RelayReachability,
+} from "./sync-session"
 import { snapshotNotesForJoiner } from "./note-snapshots"
 import { createNoteSyncEngine, noteResourceId } from "./note-sync"
 
@@ -108,6 +113,7 @@ async function open(
     cursor?: SyncCursorStore
     canAuthor?: boolean
     baseline?: ReturnType<typeof aMemo>
+    watermark?: DeliveryWatermark
   } = {},
 ) {
   const keys = await keyringFor(shared.index, device, shared.owner.did)
@@ -137,6 +143,7 @@ async function open(
     baseline: options.baseline ?? aMemo(),
     canAuthor: options.canAuthor ?? true,
     onStatus: (status) => statuses.push(status),
+    ...(options.watermark ? { watermark: options.watermark } : {}),
   })
   await session.settled()
   await engine.flush()
@@ -262,5 +269,68 @@ describe("a second tab", () => {
     await open(shared, shared.owner, ownerDoc, { canAuthor: false })
 
     expect(shared.relay.size).toBe(0)
+  })
+})
+
+/** Stands in for the note's own IndexedDB: survives the tab, durable on flush. */
+function aWatermark(options: { flushes?: boolean } = {}) {
+  let stored: DeliveryVector | null = null
+  const watermark: DeliveryWatermark & { saves: number } = {
+    saves: 0,
+    load: () => Promise.resolve(stored),
+    durable: () => (options.flushes === false ? new Promise<void>(() => undefined) : Promise.resolve()),
+    save: (vector) => {
+      stored = vector
+      watermark.saves += 1
+      return Promise.resolve()
+    },
+  }
+  return watermark
+}
+
+describe("reopening a note", () => {
+  async function aBusyNote(edits: number) {
+    const shared = await aSharedNotebook()
+    const ownerDoc = docFor(shared.owner)
+    const owner = await open(shared, shared.owner, ownerDoc)
+    for (let index = 0; index < edits; index += 1) {
+      owner.engine.transact(() => ownerDoc.getText("body").insert(text(ownerDoc).length, "."))
+    }
+    await owner.engine.flush()
+    return { shared, owner, ownerDoc }
+  }
+
+  /** The whole history was verified, authorised and decrypted again on every open. */
+  it("fetches only what arrived since it was last open", async () => {
+    const { shared, owner, ownerDoc } = await aBusyNote(40)
+    const watermark = aWatermark()
+    const memberDoc = docFor(shared.member)
+
+    const first = await open(shared, shared.member, memberDoc, { watermark })
+    expect(first.engine.stats.applied).toBe(40)
+    first.session.close()
+    first.engine.close()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    owner.engine.transact(() => ownerDoc.getText("body").insert(text(ownerDoc).length, "!"))
+    await owner.engine.flush()
+
+    const second = await open(shared, shared.member, memberDoc, { watermark })
+    expect(second.engine.stats.applied).toBe(1)
+    expect(text(memberDoc)).toBe(`${".".repeat(40)}!`)
+  })
+
+  /** Claiming more than storage holds would skip those operations on this device for good. */
+  it("never saves a watermark its storage has not caught up with", async () => {
+    const { shared } = await aBusyNote(5)
+    const watermark = aWatermark({ flushes: false })
+
+    const first = await open(shared, shared.member, docFor(shared.member), { watermark })
+    first.session.close()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(watermark.saves).toBe(0)
+    const second = await open(shared, shared.member, docFor(shared.member), { watermark })
+    expect(second.engine.stats.applied).toBe(5)
   })
 })

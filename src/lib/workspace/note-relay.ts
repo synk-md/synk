@@ -185,6 +185,12 @@ export interface NoteEngineOptions {
 }
 
 /**
+ * How long typing is gathered into one envelope. Long enough to fold a burst
+ * of keystrokes into one, short enough that a collaborator does not notice.
+ */
+export const NOTE_BATCH_MS = 250
+
+/**
  * An engine for one note, or null when encrypted sync is off or unusable.
  *
  * Returns null rather than throwing on a missing identity, owner or keyring:
@@ -207,6 +213,7 @@ export function createNoteEngine(options: NoteEngineOptions): SyncEngine | null 
     clientId: device.clientId,
     keys: options.keys,
     cursor: options.cursor,
+    batchMs: NOTE_BATCH_MS,
     transport: shared.transportFor(noteResourceId(options.notebookId, options.noteId)),
     ...(options.onDenied ? { onDenied: options.onDenied } : {}),
     onError: (error) => {

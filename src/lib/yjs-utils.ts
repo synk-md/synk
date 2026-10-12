@@ -137,7 +137,7 @@ export async function ensureNoteLinks(notebookId: string, noteIds: string[], sig
 // they were created, so a fresh transaction on the `updates` store can only
 // complete once every append made before it has committed - which makes this
 // a real write barrier rather than just a delay.
-function flushPersistence(idb: IndexeddbPersistence): Promise<void> {
+export function flushPersistence(idb: IndexeddbPersistence): Promise<void> {
   // No db handle yet means y-indexeddb's update handler has never written
   // anything for this doc, so there is nothing queued to wait for.
   const db = idb.db
@@ -234,6 +234,43 @@ export async function deleteNotebookMetaFromIndexedDB(notebookId: string) {
   ]);
 }
 
+const unsentKey = (notebookId: string, which: "directory" | "tree") =>
+  `synk:unsent:${notebookId}:${which}`
+
+// localStorage rather than the document's own store: it is written in the same
+// tick as the edit, so a tab closing straight after cannot lose the flag.
+function trackUnsent(doc: Y.Doc, notebookId: string, which: "directory" | "tree") {
+  doc.on("update", (_update: Uint8Array, _origin: unknown, _doc: Y.Doc, transaction: Y.Transaction) => {
+    if (!transaction.local) return
+    try {
+      localStorage.setItem(unsentKey(notebookId, which), "1")
+    } catch {
+      // Without storage this cannot be remembered; a republish is merely skipped.
+    }
+  })
+}
+
+/** Whether this device has edits to a notebook document the relay may not have. */
+export function unsentFlag(notebookId: string, which: "directory" | "tree") {
+  const key = unsentKey(notebookId, which)
+  return {
+    get: (): boolean => {
+      try {
+        return localStorage.getItem(key) === "1"
+      } catch {
+        return true
+      }
+    },
+    clear: (): void => {
+      try {
+        localStorage.removeItem(key)
+      } catch {
+        // Nothing to clear.
+      }
+    },
+  }
+}
+
 export function keyForDirectory(notebookId: string) {
   return `nb:${notebookId}:directory`
 }
@@ -272,6 +309,7 @@ const indexDocs = new Map<string, {
   tree: Y.Doc
   idb: { whenSynced: Promise<unknown> }
   persistences: IndexeddbPersistence[]
+  storage: { directory: IndexeddbPersistence; tree: IndexeddbPersistence }
   nodes: Y.Map<FlatNodeRecord>
   meta: Y.Map<any>
 }>()
@@ -307,9 +345,21 @@ export function createNotebookIndexDoc(notebookId: string) {
     const whenSynced = Promise.all([treeIdb.whenSynced, directoryIdb.whenSynced]).then(() => {
       migrateDirectoryRecords(tree, doc)
     })
+    // From the start, so nothing written locally - the migration included - can
+    // go unnoticed by the sessions that decide whether to republish.
+    trackUnsent(doc, notebookId, "directory")
+    trackUnsent(tree, notebookId, "tree")
     const nodes = tree.getMap<FlatNodeRecord>('nodes')
     const meta = tree.getMap<any>('meta')
-    entry = { doc, tree, idb: { whenSynced }, persistences: [treeIdb, directoryIdb], nodes, meta }
+    entry = {
+      doc,
+      tree,
+      idb: { whenSynced },
+      persistences: [treeIdb, directoryIdb],
+      storage: { directory: directoryIdb, tree: treeIdb },
+      nodes,
+      meta,
+    }
     indexDocs.set(key, entry)
   }
   return entry

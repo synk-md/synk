@@ -14,6 +14,7 @@ import {
   directoryChannel,
   encryptedSyncEnabled,
   liveKeys,
+  NOTE_BATCH_MS,
   openSyncSession,
   relayConnection,
   relayWatch,
@@ -23,7 +24,8 @@ import {
   type SyncSession,
   type SyncSessionStatus,
 } from "@/lib/workspace"
-import { createNotebookIndexDoc } from "@/lib/yjs-utils"
+import { storedWatermark } from "@/lib/workspace/stored-watermark"
+import { createNotebookIndexDoc, unsentFlag } from "@/lib/yjs-utils"
 
 export interface NotebookReplication {
   /** False when no relay is configured, and the WebRTC rooms carry everything. */
@@ -74,6 +76,9 @@ export function useNotebookReplication(
         channel,
         device: device.identity,
         transport,
+        // Not batched. Its writes are rare and are hand-offs to someone else -
+        // an invitation, a grant, a removal - and a tab closed inside the
+        // window would hold one back until it was next opened.
         onError: warn("directory sync"),
       })
       const session = openSyncSession({
@@ -85,6 +90,8 @@ export function useNotebookReplication(
         relay: relayWatch,
         canAuthor: true,
         recover: "publish-state",
+        watermark: storedWatermark(handle.storage.directory),
+        unsent: unsentFlag(notebookId, "directory"),
         onStatus: setDirectory,
         onError: warn("directory sync"),
       })
@@ -151,6 +158,7 @@ export function useNotebookReplication(
         device: device.identity,
         keys: liveKeys(() => keyringRef.current!),
         transport,
+        batchMs: NOTE_BATCH_MS,
         onError: warn("tree sync"),
       })
       const session = openSyncSession({
@@ -162,6 +170,8 @@ export function useNotebookReplication(
         relay: relayWatch,
         canAuthor: true,
         recover: "publish-state",
+        watermark: storedWatermark(handle.storage.tree),
+        unsent: unsentFlag(notebookId, "tree"),
         onStatus: setTreeStatus,
         onError: warn("tree sync"),
       })

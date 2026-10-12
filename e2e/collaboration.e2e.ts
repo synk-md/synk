@@ -9,6 +9,7 @@ import {
   createNotebook,
   editor,
   enter,
+  envelopesPublished,
   imagesShown,
   invite,
   person,
@@ -31,6 +32,28 @@ test("two people join a notebook and write in the same note", async ({ browser }
 
   await type(ada, " And by Ada.")
   await expect(editor(sindre.page)).toContainText("And by Ada.")
+})
+
+/** A transaction per keystroke used to be an envelope per keystroke, kept forever. */
+test("typing a sentence costs the relay a few envelopes, not one per key", async ({ browser }) => {
+  const sindre = await person(browser, "Sindre")
+  const ada = await person(browser, "Ada")
+  await createNotebook(sindre, "Travel")
+  const { link, code } = await invite(sindre, "Ada")
+  await admit(sindre, await askToJoin(ada, link, code))
+  await enter(ada)
+  await type(sindre, " Warm up.")
+  await expect(editor(ada.page)).toContainText("Warm up.")
+  await sindre.page.waitForTimeout(1_000)
+
+  const before = await envelopesPublished()
+  const sentence = " Thirty-two characters of typing."
+  await type(sindre, sentence)
+  await expect(editor(ada.page)).toContainText(sentence.trim())
+  const spent = (await envelopesPublished()) - before
+
+  console.log(`${String(sentence.length)} characters cost ${String(spent)} envelopes`)
+  expect(spent).toBeLessThan(sentence.length / 4)
 })
 
 /**

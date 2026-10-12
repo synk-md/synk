@@ -133,6 +133,9 @@ import { P2PImageAssetTransfer } from "@/lib/p2p-image-assets"
 // By path, not through the barrel: it reaches IndexedDB, and the barrel is
 // imported by the test setup before any test can mock that.
 import { fetchRelayImage, publishHeldImage } from "@/lib/workspace/note-images"
+
+/** How often typing may update a note's modified time in the shared tree. */
+const MODIFIED_AT_EVERY_MS = 5_000
 import { downloadFile } from "@/lib/download-file"
 import { exportNoteContent, fileExtensionForFormat, mimeTypeForFormat, type NoteExportFormat } from "@/lib/note-export"
 import { imageMimeType, importNoteContent, type NoteImportItem } from "@/lib/note-import"
@@ -535,6 +538,32 @@ export function SimpleEditor({
     [setFileTree],
   )
 
+  // A tree write per keystroke was an envelope per keystroke at the relay, and
+  // unread badges and sorting need nothing finer than a few seconds. The
+  // trailing touch keeps the recorded time that of the last edit.
+  const touchTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const lastTouchRef = React.useRef<{ noteId: string; at: number } | null>(null)
+  const touchModifiedAt = React.useCallback(
+    (id: string) => {
+      const now = Date.now()
+      const last = lastTouchRef.current
+      if (!last || last.noteId !== id || now - last.at >= MODIFIED_AT_EVERY_MS) {
+        clearTimeout(touchTimerRef.current)
+        touchTimerRef.current = undefined
+        lastTouchRef.current = { noteId: id, at: now }
+        setFileTree((tree) => touchNodeModifiedAt(tree, id))
+        return
+      }
+      touchTimerRef.current ??= setTimeout(() => {
+        touchTimerRef.current = undefined
+        lastTouchRef.current = { noteId: id, at: Date.now() }
+        setFileTree((tree) => touchNodeModifiedAt(tree, id))
+      }, MODIFIED_AT_EVERY_MS - (now - last.at))
+    },
+    [setFileTree],
+  )
+  React.useEffect(() => () => clearTimeout(touchTimerRef.current), [])
+
   const touchActiveNoteModifiedAt = React.useCallback(
     (props?: { transaction?: { docChanged?: boolean; getMeta: (key: string) => any } }) => {
       if (!noteId) return
@@ -551,14 +580,12 @@ export function SimpleEditor({
       // touched the doc. Require docChanged so that alone can't bump
       // modifiedAt either.
       const docChanged = props?.transaction?.docChanged === true
-      if (docChanged && !isSyncOrigin) {
-        setFileTree((tree) => touchNodeModifiedAt(tree, noteId))
-      }
+      if (docChanged && !isSyncOrigin) touchModifiedAt(noteId)
       // Still counts as "read" either way — we're watching this note live,
       // so switching away right after doesn't flag it unread.
       markNoteViewed(noteId)
     },
-    [noteId, setFileTree],
+    [noteId, touchModifiedAt],
   )
 
   // Keeps the active note's "viewed" timestamp in lockstep with its

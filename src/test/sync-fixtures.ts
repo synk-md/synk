@@ -68,7 +68,7 @@ export interface Client {
 export async function joinWorkspace(
   workspace: Workspace,
   name: string,
-  options: { member?: string; keys?: EpochKeyProvider; cursor?: SyncCursorStore } = {},
+  options: { member?: string; keys?: EpochKeyProvider; cursor?: SyncCursorStore; batchMs?: number } = {},
 ): Promise<Client> {
   const device = await admitDevice(workspace.admin, {
     member: options.member ?? `member:${name}`,
@@ -92,7 +92,7 @@ export async function joinWorkspace(
     transport,
     keys,
   }
-  return { ...client, engine: engineFor(workspace, client, transport, options.cursor) }
+  return { ...client, engine: engineFor(workspace, client, transport, options.cursor, options.batchMs) }
 }
 
 function engineFor(
@@ -100,6 +100,7 @@ function engineFor(
   client: Omit<Client, "engine" | "transport">,
   transport: Client["transport"],
   cursor?: SyncCursorStore,
+  batchMs?: number,
 ): SyncEngine {
   const authority = {
     directory: workspace.directory,
@@ -116,6 +117,7 @@ function engineFor(
     policy: new DirectoryMembershipPolicy(authority),
     keys: client.keys,
     ...(cursor ? { cursor } : {}),
+    ...(batchMs === undefined ? {} : { batchMs }),
   })
 }
 
@@ -126,12 +128,13 @@ function engineFor(
 export function restartClient(
   workspace: Workspace,
   client: Client,
-  options: { cursor?: SyncCursorStore } = {},
+  options: { cursor?: SyncCursorStore; batchMs?: number; abandon?: boolean } = {},
 ): Client {
-  client.engine.close()
+  // A tab that died rather than closed: nothing gets the chance to be sent.
+  if (!options.abandon) client.engine.close()
   client.transport.close()
   const transport = workspace.relay.attach(client.name)
-  return { ...client, transport, engine: engineFor(workspace, client, transport, options.cursor) }
+  return { ...client, transport, engine: engineFor(workspace, client, transport, options.cursor, options.batchMs) }
 }
 
 /**

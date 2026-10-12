@@ -17,7 +17,8 @@ import { RelayClient, SocketLink } from "../src/lib/relay/index.ts"
 
 const URL = process.env.RELAY_URL ?? "ws://localhost:4455"
 const RELAY_ID = process.env.RELAY_ID ?? "did:relay:dev"
-const RESOURCE = "notebook:smoke"
+// Unique per run: the relay outlives a run, and a fixed id finds the last one's envelopes.
+const RESOURCE = `notebook:smoke-${String(Date.now())}`
 const DEK = new Uint8Array(32).fill(7)
 
 async function connect(name: string) {

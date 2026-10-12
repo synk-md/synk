@@ -136,6 +136,7 @@ export {
   createNoteEngine,
   encryptedSyncEnabled,
   liveKeys,
+  NOTE_BATCH_MS,
   relayConnection,
   relaySettings,
   relayWatch,
@@ -145,6 +146,8 @@ export {
 
 export type {
   BaselineMemo,
+  DeliveryWatermark,
+  UnsentFlag,
   SyncSession,
   SyncSessionOptions,
   SyncSessionStatus,

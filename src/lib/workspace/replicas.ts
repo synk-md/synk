@@ -82,6 +82,7 @@ export interface DirectoryReplicaOptions {
   channel: DirectoryChannel
   device: ReplicaDevice
   transport: Transport
+  batchMs?: number
   onError?: (error: unknown) => void
 }
 
@@ -97,6 +98,7 @@ export function createDirectoryReplica(options: DirectoryReplicaOptions): SyncEn
     policy: anyone,
     keys: options.channel.keys,
     attributeOperations: false,
+    ...(options.batchMs === undefined ? {} : { batchMs: options.batchMs }),
     ...(options.onError ? { onError: options.onError } : {}),
   })
 }
@@ -116,6 +118,7 @@ export interface TreeReplicaOptions {
   keys: ReadKeySource
   transport: Transport
   now?: () => number
+  batchMs?: number
   onError?: (error: unknown) => void
   onDenied?: (author: string, reason: string) => void
 }
@@ -146,6 +149,7 @@ export function createTreeReplica(options: TreeReplicaOptions): SyncEngine {
     ),
     keys: notebookKeyProvider(options.keys),
     attributeOperations: false,
+    ...(options.batchMs === undefined ? {} : { batchMs: options.batchMs }),
     ...(options.onError ? { onError: options.onError } : {}),
   })
 }

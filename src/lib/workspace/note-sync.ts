@@ -75,6 +75,7 @@ export interface NoteSyncOptions {
   transport: Transport
   /** Where this device's numbering stands. Must persist, or a reload loses edits. */
   cursor?: SyncCursorStore
+  batchMs?: number
   now?: () => number
   onError?: (error: unknown) => void
   onDenied?: (author: string, reason: string) => void
@@ -111,6 +112,7 @@ export function createNoteSyncEngine(options: NoteSyncOptions): SyncEngine {
     }),
     keys: notebookKeyProvider(options.keys),
     ...(options.cursor ? { cursor: options.cursor } : {}),
+    ...(options.batchMs === undefined ? {} : { batchMs: options.batchMs }),
     ...(options.onError ? { onError: options.onError } : {}),
   })
 }
