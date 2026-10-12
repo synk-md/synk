@@ -44,6 +44,8 @@ export {
   OWNER_ROOT_TTL_MS,
   ownerHoldsRoot,
   putCapability,
+  putRevocation,
+  REVOCATION_MAP,
   readCapabilities,
 } from "./capabilities"
 
@@ -150,6 +152,9 @@ export type {
   RelayWatch,
 } from "./sync-session"
 export { openSyncSession } from "./sync-session"
+
+export type { MemberRemoved, RemoveFromNotebookOptions } from "./removal"
+export { removeFromNotebook } from "./removal"
 
 export type {
   DirectoryChannel,

@@ -378,7 +378,7 @@ describe("RemoveMemberDialog", () => {
     await setup()
 
     expect(screen.getByText(/keep everything they have already read/)).toBeInTheDocument()
-    expect(screen.getByText(/own copy of the notebook also keeps/)).toBeInTheDocument()
+    expect(screen.getByText(/Their copy stays on their device to\s+read/)).toBeInTheDocument()
   })
 
   it("withdraws every key of the member, and says how many", async () => {

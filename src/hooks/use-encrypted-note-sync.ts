@@ -34,6 +34,8 @@ export interface EncryptedNoteSync {
   state: EncryptedNoteState
   status: SyncStatus
   lastSyncedAt: Date | null
+  /** Holds keys to earlier epochs and not the current one: an admin removed it. */
+  removed: boolean
 }
 
 export interface UseEncryptedNoteSyncOptions {
@@ -60,7 +62,10 @@ export function useEncryptedNoteSync(options: UseEncryptedNoteSyncOptions): Encr
   const workspace = useNotebookWorkspace(enabled ? notebookId : null)
   const owner = workspace.workspace?.ownership.owner ?? null
   const keys = useNotebookKeys(enabled && owner ? notebookId : null, owner)
-  const keyring = keys.keys?.access === "reader" ? keys.keys.keyring : null
+  const reader = keys.keys?.access === "reader"
+  // Old keys still open old epochs, which is not the same as being a member.
+  const keyring = reader && keys.keys?.current ? keys.keys.keyring : null
+  const removed = enabled && reader && keys.keys?.current === false
 
   const state: EncryptedNoteState = !enabled
     ? "off"
@@ -127,5 +132,5 @@ export function useEncryptedNoteSync(options: UseEncryptedNoteSyncOptions): Encr
     }
   }, [running, notebookId, noteId, doc, owner, canAuthor])
 
-  return { state, status, lastSyncedAt }
+  return { state, status, lastSyncedAt, removed }
 }

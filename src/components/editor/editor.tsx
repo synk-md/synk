@@ -65,7 +65,7 @@ import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 
 // --- Custom UI ---
 import { CollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
-import { WriterNotice } from "@/components/custom-ui/connection/writer-notice"
+import { RemovedNotice, WriterNotice } from "@/components/custom-ui/connection/writer-notice"
 import { NotebookMembersDialog } from "@/components/custom-ui/members/notebook-members-dialog"
 import { MembersButton } from "@/components/custom-ui/members/members-button"
 import { canWriteWith, useDocBinding } from "@/hooks/use-doc-binding"
@@ -707,7 +707,8 @@ export function SimpleEditor({
           ? "connecting"
           : "offline"
   const shownLastSyncedAt = encryptedNote.state === "off" ? lastSyncedAt : encryptedNote.lastSyncedAt
-  const isEditable = sharedPermission === "edit" && noteContentSynced && canWriteWith(docBinding)
+  const isEditable =
+    sharedPermission === "edit" && noteContentSynced && canWriteWith(docBinding) && !encryptedNote.removed
   // Read mode is a user preference layered on top of permission: it only
   // ever takes editing away, never grants it.
   const readMode = useReadMode()
@@ -1994,6 +1995,7 @@ export function SimpleEditor({
                       />
                     )}
                     <WriterNotice binding={docBinding} className="simple-editor-writer-notice" />
+                    {encryptedNote.removed && <RemovedNotice className="simple-editor-writer-notice" />}
                     <EditorContent
                       editor={editor}
                       role="presentation"

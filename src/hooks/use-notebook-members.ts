@@ -2,11 +2,13 @@
 
 import * as React from "react"
 
+import { memberViews, type MemberView } from "@/components/custom-ui/membership/membership-model"
 import type { Ability } from "@/lib/authz"
 import type { Invitation, Redemption } from "@/lib/directory"
 import { currentDevice } from "@/lib/identity"
 import {
   admitFromRedemption,
+  authorizationContext,
   cancelInvitation,
   forgetInvitationCode,
   grantedInvitationIds,
@@ -16,7 +18,9 @@ import {
   recallInvitationCode,
   rememberInvitationCode,
   pendingRedemptions,
+  readCapabilities,
   readNotebookWorkspace,
+  removeFromNotebook,
   type NotebookWorkspace,
 } from "@/lib/workspace"
 import { createNotebookIndexDoc } from "@/lib/yjs-utils"
@@ -47,6 +51,10 @@ export interface NotebookMembers {
   cancel: (invitation: Invitation) => Promise<void>
   /** The code for an outstanding invitation, if this device issued it. */
   codeFor: (invitation: Invitation) => string | null
+  /** Members with what each can do, for removing one. */
+  views: MemberView[]
+  /** Withdraw every key the member holds and rotate the content key away from them. */
+  remove: (member: MemberView, reason?: string) => Promise<{ epoch: number }>
 }
 
 /**
@@ -63,6 +71,7 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
   const [awaiting, setAwaiting] = React.useState<PendingJoin[]>([])
   const [loading, setLoading] = React.useState(true)
   const [rejected, setRejected] = React.useState<Set<string>>(new Set())
+  const [views, setViews] = React.useState<MemberView[]>([])
 
   const device = currentDevice()
   const selfDid = device?.identity.did
@@ -107,9 +116,19 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
       notebookId,
       ...(selfDid === undefined ? {} : { selfDid }),
     })
-      .then((next) => {
+      .then(async (next) => {
         setWorkspace(next)
         setLoading(false)
+        const owner = next.ownership.owner
+        if (!owner) return
+        setViews(
+          await memberViews(
+            next.users,
+            await readCapabilities(doc),
+            next.resource,
+            await authorizationContext(doc, owner),
+          ),
+        )
       })
       .catch(() => {
         setLoading(false)
@@ -195,8 +214,26 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
     [notebookId, device, refresh],
   )
 
+  const remove = React.useCallback(
+    async (member: MemberView, reason?: string) => {
+      if (!notebookId || !device) throw new Error("no notebook or device identity")
+      const removed = await removeFromNotebook({
+        doc: createNotebookIndexDoc(notebookId).doc,
+        notebookId,
+        owner: device.identity,
+        member: member.member,
+        ...(reason === undefined ? {} : { reason }),
+      })
+      refresh()
+      return { epoch: removed.epoch }
+    },
+    [notebookId, device, refresh],
+  )
+
   return {
     workspace,
+    views,
+    remove,
     invitations,
     awaiting,
     loading,

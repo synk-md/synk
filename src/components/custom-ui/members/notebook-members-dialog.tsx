@@ -6,11 +6,13 @@ import { RiCloseLine, RiUserAddLine } from "@remixicon/react"
 import { Button } from "@/components/tiptap-ui-primitive/button"
 import { ApproveRedemptionDialog } from "@/components/custom-ui/invitations/approve-redemption-dialog"
 import { CreateInviteDialog } from "@/components/custom-ui/invitations/create-invite-dialog"
+import { RemoveMemberDialog } from "@/components/custom-ui/membership/remove-member-dialog"
+import type { MemberView } from "@/components/custom-ui/membership/membership-model"
 import { PendingInvites } from "@/components/custom-ui/invitations/pending-invites"
 import { WorkspacePanel } from "@/components/custom-ui/workspace/workspace-panel"
 import { useNoteAdmission } from "@/hooks/use-note-admission"
 import { useNotebookMembers, type PendingJoin } from "@/hooks/use-notebook-members"
-import { currentDevice } from "@/lib/identity"
+import { currentDevice, type User } from "@/lib/identity"
 import { encryptedSyncEnabled } from "@/lib/workspace"
 
 import { AdmissionProgress } from "./admission-progress"
@@ -47,12 +49,22 @@ export function NotebookMembersDialog({
   const admission = useNoteAdmission(notebookId)
   const [inviting, setInviting] = React.useState(false)
   const [reviewing, setReviewing] = React.useState<PendingJoin | null>(null)
+  // The person, not their view: views are computed a beat after the list, and
+  // a quick click would otherwise find nothing to open.
+  const [removingUser, setRemovingUser] = React.useState<User | null>(null)
   const selfDid = currentDevice()?.identity.did
+
+  const viewOf = (user: User): MemberView | null =>
+    members.views.find((view) =>
+      view.devices.some((device) => user.devices.some((own) => own.record.did === device.record.did)),
+    ) ?? null
+  const removing = removingUser ? viewOf(removingUser) : null
 
   React.useEffect(() => {
     if (!open) {
       setInviting(false)
       setReviewing(null)
+      setRemovingUser(null)
     }
   }, [open])
 
@@ -61,12 +73,12 @@ export function NotebookMembersDialog({
     const handler = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return
       event.stopPropagation()
-      if (inviting || reviewing) return
+      if (inviting || reviewing || removingUser) return
       onClose()
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [open, inviting, reviewing, onClose])
+  }, [open, inviting, reviewing, removingUser, onClose])
 
   if (!open || !notebookId) return null
 
@@ -103,6 +115,7 @@ export function NotebookMembersDialog({
             workspace={members.workspace}
             loading={members.loading}
             {...(selfDid === undefined ? {} : { selfDid })}
+            {...(members.canAdmit ? { onRemove: setRemovingUser } : {})}
           />
 
           {members.canAdmit && (
@@ -153,6 +166,18 @@ export function NotebookMembersDialog({
           }
         }}
         onReject={members.reject}
+      />
+
+      <RemoveMemberDialog
+        open={removing !== null}
+        onClose={() => setRemovingUser(null)}
+        member={removing}
+        remaining={members.views
+          .filter((view) => view.member !== removing?.member)
+          .map((view) => ({ did: view.devices[0]?.record.did ?? view.member, label: view.label }))}
+        onRemove={async (request, reason) => {
+          await members.remove(request.member, reason)
+        }}
       />
     </>
   )

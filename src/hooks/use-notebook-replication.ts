@@ -100,7 +100,7 @@ export function useNotebookReplication(
   const workspace = useNotebookWorkspace(wanted ? notebookId : null)
   const owner = workspace.workspace?.ownership.owner ?? null
   const keys = useNotebookKeys(wanted && owner ? notebookId : null, owner)
-  const keyring = keys.keys?.access === "reader" ? keys.keys.keyring : null
+  const keyring = keys.keys?.access === "reader" && keys.keys.current ? keys.keys.keyring : null
 
   const tree: EncryptedNoteState = !wanted
     ? "off"

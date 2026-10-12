@@ -32,10 +32,11 @@ import {
   putRedemption,
   redeemInvitation,
   verifyInvitation,
+  type DeviceRemoval,
   type Invitation,
   type Redemption,
 } from "@/lib/directory"
-import type { DeviceIdentity } from "@/lib/identity"
+import type { DeviceAdmission, DeviceIdentity } from "@/lib/identity"
 import { signEpochRecord } from "@/lib/membership"
 
 import { readCapabilities } from "./capabilities"
@@ -350,12 +351,41 @@ export function redemptionsInDoc(doc: Y.Doc, invitationId: string): Redemption[]
   return allRedemptions(doc).filter((redemption) => redemption.invitationId === invitationId)
 }
 
-/** Redemptions with no admission yet - what an owner is being asked to approve. */
+/**
+ * Whether the device behind each admission is still in.
+ *
+ * Unverified, like everything here: these decide what to show and which
+ * connections to open, never who may do anything. Times compared are all the
+ * owner's own, so one device's clock running ahead cannot strand a request.
+ */
+function standing(doc: Y.Doc) {
+  const admissions = doc.getMap<DeviceAdmission>("directory:admissions")
+  const removals = doc.getMap<DeviceRemoval>("directory:removals")
+  const ended = (did: string): number | null => {
+    const admission = admissions.get(did)
+    const removal = removals.get(did)
+    return admission && removal && removal.removedAt >= admission.issuedAt ? removal.removedAt : null
+  }
+  const invitations = new Map(invitationsInDoc(doc).map((invitation) => [invitation.invitationId, invitation]))
+
+  return {
+    live: () => [...admissions.keys()].filter((did) => ended(did) === null),
+    /** Granted, or granted and since removed. Either way, not waiting on anyone. */
+    answered: (redemption: Redemption): boolean => {
+      if (!admissions.has(redemption.did)) return false
+      const removedAt = ended(redemption.did)
+      if (removedAt === null) return true
+      // Only a request made under a later invitation is somebody asking again.
+      const invitation = invitations.get(redemption.invitationId)
+      return !(invitation && invitation.issuedAt > removedAt)
+    },
+  }
+}
+
+/** Redemptions with no answer yet - what an owner is being asked to approve. */
 export function pendingRedemptions(doc: Y.Doc): Redemption[] {
-  const admitted = new Set(doc.getMap("directory:admissions").keys())
-  return allRedemptions(doc).filter(
-    (redemption) => redemption.did && !admitted.has(redemption.did),
-  )
+  const { answered } = standing(doc)
+  return allRedemptions(doc).filter((redemption) => redemption.did && !answered(redemption))
 }
 
 /**
@@ -368,7 +398,7 @@ export function pendingRedemptions(doc: Y.Doc): Redemption[] {
  * whether someone was invited.
  */
 export function hasOutstandingInvitations(doc: Y.Doc, now: number = Date.now()): boolean {
-  const admitted = new Set(doc.getMap("directory:admissions").keys())
+  const { answered } = standing(doc)
   const cancelled = new Set(
     invitationRevocationsInDoc(doc).map((revocation) => revocation.invitationId),
   )
@@ -377,7 +407,7 @@ export function hasOutstandingInvitations(doc: Y.Doc, now: number = Date.now()):
     if (cancelled.has(invitation.invitationId)) continue
     const redemptions = redemptionsInDoc(doc, invitation.invitationId)
     if (redemptions.length === 0) return true
-    if (redemptions.some((redemption) => !admitted.has(redemption.did))) return true
+    if (redemptions.some((redemption) => !answered(redemption))) return true
   }
   return false
 }
@@ -393,7 +423,7 @@ export function hasOutstandingInvitations(doc: Y.Doc, now: number = Date.now()):
  * one admission is a notebook nobody has joined.
  */
 export function hasAdmittedMembers(doc: Y.Doc): boolean {
-  return doc.getMap("directory:admissions").size > 1
+  return standing(doc).live().length > 1
 }
 
 /**
@@ -406,12 +436,12 @@ export function hasAdmittedMembers(doc: Y.Doc): boolean {
  * that is the member list.
  */
 export function grantedInvitationIds(doc: Y.Doc): Set<string> {
-  const admitted = new Set(doc.getMap("directory:admissions").keys())
+  const { answered } = standing(doc)
   const granted = new Set<string>()
   for (const invitation of invitationsInDoc(doc)) {
     const redemptions = redemptionsInDoc(doc, invitation.invitationId)
     if (redemptions.length === 0) continue
-    if (redemptions.every((redemption) => admitted.has(redemption.did))) {
+    if (redemptions.every(answered)) {
       granted.add(invitation.invitationId)
     }
   }

@@ -15,6 +15,7 @@
     "relay:smoke-notes": "tsx --tsconfig tsconfig.app.json server/smoke-notes.ts",
     "relay:smoke-session": "tsx --tsconfig tsconfig.app.json server/smoke-session.ts",
     "relay:smoke-join": "tsx --tsconfig tsconfig.app.json server/smoke-join.ts",
+    "relay:smoke-remove": "tsx --tsconfig tsconfig.app.json server/smoke-remove.ts",
     "typecheck": "tsc -b --noEmit",
     "build": "pnpm run typecheck && vite build",
     "lint": "eslint .",

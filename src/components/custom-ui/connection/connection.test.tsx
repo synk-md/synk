@@ -5,6 +5,7 @@ import { initialStatus, SyncStatusTracker, type SyncStatus } from "@/lib/relay"
 
 import { ConnectionIndicator } from "./connection-indicator"
 import { OfflineBanner } from "./offline-banner"
+import { RemovedNotice } from "./writer-notice"
 import { statusCopy } from "./sync-copy"
 
 const NOW = 1_700_000_000_000
@@ -202,5 +203,15 @@ describe("end to end through the tracker", () => {
       "Syncing",
       "Up to date",
     ])
+  })
+})
+
+describe("RemovedNotice", () => {
+  /** Says what changed and what did not, so a read-only note is not mistaken for a fault. */
+  it("says access ended, and that nothing written here would reach anyone", () => {
+    render(<RemovedNotice />)
+    expect(screen.getByRole("alert")).toHaveTextContent(/no longer have access/)
+    expect(screen.getByRole("alert")).toHaveTextContent(/stays here to read/)
+    expect(screen.getByRole("alert")).toHaveTextContent(/would reach anyone/)
   })
 })

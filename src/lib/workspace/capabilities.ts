@@ -20,10 +20,13 @@ import {
   issueCapability,
   type AuthorizationContext,
   type Capability,
+  type Revocation,
 } from "@/lib/authz"
 import type { SigningKey } from "@/lib/crypto"
 
 export const CAPABILITY_MAP = "workspace:capabilities"
+/** Withdrawn grants, by the cid they withdraw. Verified against the chain on read. */
+export const REVOCATION_MAP = "workspace:revocations"
 
 /**
  * How long an owner's root lasts. Long, because it expiring locks the owner out
@@ -40,6 +43,10 @@ function capabilityMap(doc: Y.Doc): Y.Map<string> {
 
 export function putCapability(doc: Y.Doc, capability: Capability): void {
   capabilityMap(doc).set(capability.cid, capability.token)
+}
+
+export function putRevocation(doc: Y.Doc, revocation: Revocation): void {
+  doc.getMap<Revocation>(REVOCATION_MAP).set(revocation.cid, revocation)
 }
 
 /** Decode every token present. Malformed ones are dropped, not thrown on. */
@@ -71,6 +78,11 @@ export async function authorizationContext(
 ): Promise<AuthorizationContext> {
   const store = new CapabilityStore(owner)
   for (const capability of await readCapabilities(doc)) await store.add(capability)
+  // After every capability, since a revocation is judged against its chain.
+  // The store refuses one that its issuer was not entitled to make.
+  for (const revocation of doc.getMap<Revocation>(REVOCATION_MAP).values()) {
+    await store.revoke(revocation, now)
+  }
   return store.context(now)
 }
 

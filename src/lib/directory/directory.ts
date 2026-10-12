@@ -38,6 +38,7 @@ import {
   revokedInvitationIds,
   type InvitationRevocation,
 } from "./invitation-revocation"
+import { verifyDeviceRemoval, type DeviceRemoval } from "./device-removal"
 
 /** Sub-maps of the directory document. */
 export const DIRECTORY_MAPS = {
@@ -48,6 +49,7 @@ export const DIRECTORY_MAPS = {
   invitations: "directory:invitations",
   invitationRevocations: "directory:invitation-revocations",
   redemptions: "directory:redemptions",
+  removals: "directory:removals",
 } as const
 
 export interface DirectoryReadOptions extends VerifyAdmissionOptions {
@@ -67,6 +69,8 @@ export interface VerifiedDirectory {
   /** Ids an admin has taken back, so a caller can say why one vanished. */
   revokedInvitations: Set<string>
   redemptions: Map<string, Redemption[]>
+  /** Admitted, then validly removed. Absent from `devices`. */
+  removed: Set<string>
   rejected: number
 }
 
@@ -84,6 +88,18 @@ export function putDeviceRecord(doc: Y.Doc, record: DeviceRecord): void {
 
 export function putAdmission(doc: Y.Doc, admission: DeviceAdmission): void {
   map<DeviceAdmission>(doc, DIRECTORY_MAPS.admissions).set(admission.did, admission)
+}
+
+export function putRemoval(doc: Y.Doc, removal: DeviceRemoval): void {
+  map<DeviceRemoval>(doc, DIRECTORY_MAPS.removals).set(removal.did, removal)
+}
+
+/**
+ * Dids with a removal on file, unverified. Only for deciding whether a
+ * connection is worth opening, never for deciding who may do anything.
+ */
+export function removedDidsUnverified(doc: Y.Doc): Set<string> {
+  return new Set(map<DeviceRemoval>(doc, DIRECTORY_MAPS.removals).keys())
 }
 
 export function putLink(doc: Y.Doc, link: DeviceLink): void {
@@ -146,6 +162,8 @@ export async function readDirectory(
 
   // Admissions first: links can only be rooted in an admitted parent.
   const admitted = new Map<string, AdmittedDevice>()
+  const removals = map<DeviceRemoval>(doc, DIRECTORY_MAPS.removals)
+  const removed = new Set<string>()
   for (const [did, admission] of map<DeviceAdmission>(doc, DIRECTORY_MAPS.admissions).entries()) {
     const record = records.get(did)
     if (!record || admission?.did !== did) {
@@ -153,8 +171,19 @@ export async function readDirectory(
       continue
     }
     const device: AdmittedDevice = { record, admission }
-    if (await verifyAdmittedDevice(device, trustedAdminDids, options)) admitted.set(did, device)
-    else rejected += 1
+    if (!(await verifyAdmittedDevice(device, trustedAdminDids, options))) {
+      rejected += 1
+      continue
+    }
+    // Removed is not rejected: the admission was real, and an admin ended it.
+    // Leaving it out here is what stops everything built on the directory -
+    // the author check, the member list - from honouring it.
+    const removal = removals.get(did)
+    if (removal && (await verifyDeviceRemoval(removal, admission, trustedAdminDids))) {
+      removed.add(did)
+      continue
+    }
+    admitted.set(did, device)
   }
 
   const linked: LinkedDevice[] = []
@@ -221,7 +250,7 @@ export async function readDirectory(
     if (valid.length > 0) redemptions.set(id, valid)
   }
 
-  return { devices, prekeys, invitations, revokedInvitations: revoked, redemptions, rejected }
+  return { devices, prekeys, invitations, revokedInvitations: revoked, redemptions, removed, rejected }
 }
 
 /**

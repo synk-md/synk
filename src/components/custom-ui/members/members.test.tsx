@@ -220,3 +220,60 @@ describe("the notebook members dialog", () => {
     expect(screen.queryByText("Waiting for you")).not.toBeInTheDocument()
   }, 20_000)
 })
+
+describe("removing a member", () => {
+  /** An owned notebook with Ada admitted, as the app would hold it. */
+  async function withAda() {
+    const { doc, device } = await ownedNotebook()
+    const ada = await anotherDevice()
+    const { secret } = generateInvitationSecret()
+    const invitation = await inviteToNotebook({
+      doc,
+      notebookId: NOTEBOOK,
+      admin: { signingKey: device.identity.signingKey, did: device.identity.did },
+      secret,
+      label: "Ada",
+    })
+    const redemption = await redeemIntoNotebook({ doc, secret, device: ada })
+    const { admitFromRedemption } = await import("@/lib/workspace")
+    await admitFromRedemption({ doc, notebookId: NOTEBOOK, owner: device.identity, invitation, redemption, ability: "write" })
+    return { doc, device, ada }
+  }
+
+  it("is offered on everyone's row but the owner's", async () => {
+    await withAda()
+    mount()
+
+    expect(await screen.findByRole("button", { name: "Remove Ada" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Remove Sindre" })).not.toBeInTheDocument()
+  }, 20_000)
+
+  /** The reseal goes to exactly that set, so it is shown in full before anything happens. */
+  it("lists who keeps access, and takes them out of the notebook when confirmed", async () => {
+    const { doc, device, ada } = await withAda()
+    mount()
+
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Ada" }))
+    const dialog = await screen.findByRole("dialog", { name: /Remove Ada/ })
+    expect(within(dialog).getByText("Sindre")).toBeInTheDocument()
+    expect(within(dialog).getByText(/Reading stops straight away/)).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Remove Ada" }))
+
+    expect(await screen.findByText("1 member")).toBeInTheDocument()
+    const keys = await readNotebookKeys({ doc, notebookId: NOTEBOOK, device: ada, owner: device.identity.did })
+    expect(keys.current).toBe(false)
+  }, 20_000)
+
+  it("is not offered to a member who is not the owner", async () => {
+    const { doc, idb } = createNotebookIndexDoc(NOTEBOOK)
+    await idb.whenSynced
+    const owner = await anotherDevice()
+    await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+    await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: owner })
+    mount()
+
+    expect(await screen.findByText("1 member")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^Remove/ })).not.toBeInTheDocument()
+  })
+})

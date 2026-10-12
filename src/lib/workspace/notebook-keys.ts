@@ -176,6 +176,12 @@ export interface NotebookKeys {
   verification: TimelineVerification | null
   /** Epochs this device can open. Exactly what it can decrypt. */
   readableEpochs: number[]
+  /**
+   * Whether that includes the current one. A removed device keeps the epochs
+   * it held, so it still reads as a reader - and can open nothing written
+   * since, nor seal anything anyone else will accept.
+   */
+  current: boolean
 }
 
 export interface ReadKeysOptions {
@@ -207,6 +213,7 @@ export async function readNotebookKeys(options: ReadKeysOptions): Promise<Notebo
     timeline: null,
     verification: null,
     readableEpochs: [],
+    current: false,
   }
   if (!options.owner) return empty
 
@@ -247,6 +254,7 @@ export async function readNotebookKeys(options: ReadKeysOptions): Promise<Notebo
     timeline,
     verification,
     readableEpochs: keyring.readableEpochs(),
+    current: (await keyring.keyFor(keyring.currentEpoch)) !== undefined,
   }
 }
 

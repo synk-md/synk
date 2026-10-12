@@ -3,6 +3,7 @@
 import { RiAlertLine, RiGroupLine, RiQuestionLine, RiShieldCheckLine } from "@remixicon/react"
 
 import { IdentityBadge } from "@/components/custom-ui/identity/identity-badge"
+import { Button } from "@/components/tiptap-ui-primitive/button"
 import { useFingerprints } from "@/hooks/use-device-identity"
 import { userLabel, type User } from "@/lib/identity"
 import type { NotebookWorkspace } from "@/lib/workspace"
@@ -14,6 +15,8 @@ export type WorkspacePanelProps = {
   loading?: boolean
   /** This device, so its own row can be marked. */
   selfDid?: string
+  /** Offered on every row but the owner's. Only passed to the owner. */
+  onRemove?: (user: User) => void
   className?: string
 }
 
@@ -39,6 +42,7 @@ export function WorkspacePanel({
   workspace,
   loading,
   selfDid,
+  onRemove,
   className,
 }: WorkspacePanelProps) {
   const dids = workspace?.directory?.devices.map((device) => device.record.did) ?? []
@@ -133,6 +137,17 @@ export function WorkspacePanel({
                   </span>
                 )}
               </span>
+              {onRemove && !user.devices.some((device) => device.record.did === ownership.owner) && (
+                <Button
+                  type="button"
+                  data-style="ghost"
+                  className="ws-remove"
+                  aria-label={`Remove ${label.text}`}
+                  onClick={() => onRemove(user)}
+                >
+                  <span className="tiptap-button-text">Remove</span>
+                </Button>
+              )}
             </li>
           )
         })}

@@ -63,6 +63,8 @@ export {
   putInvitation,
   putInvitationRevocation,
   putLink,
+  putRemoval,
+  removedDidsUnverified,
   putPrekeyBundle,
   putRedemption,
   rawEntries,
@@ -84,6 +86,13 @@ export type {
   InvitationRevocationBody,
   RevokeInvitationOptions,
 } from "./invitation-revocation"
+export type { DeviceRemoval, DeviceRemovalBody, RemoveDeviceOptions } from "./device-removal"
+export {
+  DEVICE_REMOVAL_VERSION,
+  deviceRemovalBytes,
+  removeDevice,
+  verifyDeviceRemoval,
+} from "./device-removal"
 export {
   INVITATION_REVOCATION_VERSION,
   invitationRevocationBytes,

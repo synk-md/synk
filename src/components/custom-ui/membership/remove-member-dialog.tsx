@@ -134,9 +134,9 @@ export function RemoveMemberDialog({
           <div>
             <strong>What this cannot undo.</strong>
             <p>
-              They keep everything they have already read. Their own copy of the notebook also keeps
-              working on their device — what changes is that nobody else accepts what they write in
-              it.
+              They keep everything they have already read. Their copy stays on their device to
+              read, and the app tells them they were removed; nothing they write would be accepted
+              by anyone.
             </p>
           </div>
         </div>
