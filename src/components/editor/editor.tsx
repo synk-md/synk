@@ -70,6 +70,7 @@ import { NotebookMembersDialog } from "@/components/custom-ui/members/notebook-m
 import { MembersButton } from "@/components/custom-ui/members/members-button"
 import { canWriteWith, useDocBinding } from "@/hooks/use-doc-binding"
 import { useEncryptedNoteSync } from "@/hooks/use-encrypted-note-sync"
+import { useRemovedFromNotebook } from "@/hooks/use-removed-from-notebook"
 import { SidePanelButton } from "@/components/custom-ui/side-panel-button"
 import { MoreActionsButton } from "@/components/custom-ui/more-actions-button"
 import { SidePanel } from "@/components/custom-ui/side-panel"
@@ -690,6 +691,8 @@ export function SimpleEditor({
     wanted: collaborationActive && !isSharedView && (fs.sharedWithMembers ?? false),
     canAuthor: docBinding.status === "writer",
   })
+  const removedFromNotebook =
+    useRemovedFromNotebook(isSharedView ? null : (notebookId ?? null)) || encryptedNote.removed
   const webrtcCarries: "content" | "presence" | "nothing" = !collaborationActive
     ? "nothing"
     : // A link is readable by whoever holds it, so link sharing stays plaintext.
@@ -716,7 +719,7 @@ export function SimpleEditor({
           : "offline"
   const shownLastSyncedAt = encryptedNote.state === "off" ? lastSyncedAt : encryptedNote.lastSyncedAt
   const isEditable =
-    sharedPermission === "edit" && noteContentSynced && canWriteWith(docBinding) && !encryptedNote.removed
+    sharedPermission === "edit" && noteContentSynced && canWriteWith(docBinding) && !removedFromNotebook
   // Read mode is a user preference layered on top of permission: it only
   // ever takes editing away, never grants it.
   const readMode = useReadMode()
@@ -2029,7 +2032,7 @@ export function SimpleEditor({
                       />
                     )}
                     <WriterNotice binding={docBinding} className="simple-editor-writer-notice" />
-                    {encryptedNote.removed && <RemovedNotice className="simple-editor-writer-notice" />}
+                    {removedFromNotebook && <RemovedNotice className="simple-editor-writer-notice" />}
                     <EditorContent
                       editor={editor}
                       role="presentation"
