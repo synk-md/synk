@@ -223,3 +223,14 @@ export async function memberCount(page: Page): Promise<string> {
   await closeMembers(page)
   return heading
 }
+
+/** Takes a linked device out, from "Your devices" on one the owner approved. */
+export async function unlinkDevice(from: Person): Promise<void> {
+  await from.page.getByRole("button", { name: "Open settings" }).first().click()
+  await from.page.getByRole("button", { name: "Manage devices" }).click()
+  const dialog = from.page.getByRole("dialog", { name: "Your devices" })
+  await dialog.getByRole("button", { name: /^Remove / }).click()
+  await dialog.getByRole("button", { name: "Remove device" }).click()
+  await expect(dialog.getByRole("button", { name: /^Remove / })).toHaveCount(0, { timeout: 30_000 })
+  await dialog.getByRole("button", { name: "Close" }).first().click()
+}

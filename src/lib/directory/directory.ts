@@ -39,6 +39,7 @@ import {
   type InvitationRevocation,
 } from "./invitation-revocation"
 import { verifyDeviceRemoval, type DeviceRemoval } from "./device-removal"
+import { verifyLinkRevocation, type LinkRevocation } from "@/lib/membership/link-revocation"
 
 /** Sub-maps of the directory document. */
 export const DIRECTORY_MAPS = {
@@ -50,6 +51,7 @@ export const DIRECTORY_MAPS = {
   invitationRevocations: "directory:invitation-revocations",
   redemptions: "directory:redemptions",
   removals: "directory:removals",
+  linkRevocations: "directory:link-revocations",
 } as const
 
 export interface DirectoryReadOptions extends VerifyAdmissionOptions {
@@ -69,7 +71,7 @@ export interface VerifiedDirectory {
   /** Ids an admin has taken back, so a caller can say why one vanished. */
   revokedInvitations: Set<string>
   redemptions: Map<string, Redemption[]>
-  /** Admitted, then validly removed. Absent from `devices`. */
+  /** Present once, then validly taken out - removed by an admin, or unlinked by its own member. Absent from `devices`. */
   removed: Set<string>
   rejected: number
 }
@@ -88,6 +90,10 @@ export function putDeviceRecord(doc: Y.Doc, record: DeviceRecord): void {
 
 export function putAdmission(doc: Y.Doc, admission: DeviceAdmission): void {
   map<DeviceAdmission>(doc, DIRECTORY_MAPS.admissions).set(admission.did, admission)
+}
+
+export function putLinkRevocation(doc: Y.Doc, revocation: LinkRevocation): void {
+  map<LinkRevocation>(doc, DIRECTORY_MAPS.linkRevocations).set(revocation.did, revocation)
 }
 
 export function putRemoval(doc: Y.Doc, removal: DeviceRemoval): void {
@@ -187,6 +193,8 @@ export async function readDirectory(
   }
 
   const linked: LinkedDevice[] = []
+  const revocations = map<LinkRevocation>(doc, DIRECTORY_MAPS.linkRevocations)
+  const admittedDevices = [...admitted.values()].map((device) => ({ kind: "admitted" as const, ...device }))
   for (const [did, link] of map<DeviceLink>(doc, DIRECTORY_MAPS.links).entries()) {
     const record = records.get(did)
     const parent = link ? admitted.get(link.parent) : undefined
@@ -195,8 +203,22 @@ export async function readDirectory(
       continue
     }
     const device: LinkedDevice = { record, link }
-    if (await verifyLinkedDevice(device, parent, trustedAdminDids, options)) linked.push(device)
-    else rejected += 1
+    if (!(await verifyLinkedDevice(device, parent, trustedAdminDids, options))) {
+      rejected += 1
+      continue
+    }
+    // Unlinked by one of the member's own admitted devices - a lost phone. It
+    // applies to links issued before it, so the device can be linked again.
+    const revocation = revocations.get(did)
+    if (
+      revocation &&
+      revocation.revokedAt >= link.issuedAt &&
+      (await verifyLinkRevocation(revocation, link, admittedDevices))
+    ) {
+      removed.add(did)
+      continue
+    }
+    linked.push(device)
   }
 
   const devices: MemberDevice[] = [

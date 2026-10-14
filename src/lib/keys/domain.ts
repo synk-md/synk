@@ -171,13 +171,15 @@ export class KeyDomainAdmin {
     }
   }
 
-  /** Rotate without a membership change - after a suspected compromise. */
+  /** Rotate without a membership change - after a suspected compromise, or a lost device. */
   async rotate(
     members: readonly KeyRecipient[],
-    options: { createdAt?: number } = {},
+    options: { createdAt?: number; reason?: "manual-rotation" | "device-unlinked" } = {},
   ): Promise<CutEpochResult> {
     const key = generateEpochSeed()
-    const record = this.push(await this.committed(this.nextRecord("rotation", "manual-rotation", options.createdAt), key))
+    const record = this.push(
+      await this.committed(this.nextRecord("rotation", options.reason ?? "manual-rotation", options.createdAt), key),
+    )
     this.keys.set(record.epoch, key)
     return {
       record,

@@ -22,11 +22,13 @@ export function SettingsMenu({
   name,
   onNameChange,
   onLinkDevice,
+  onManageDevices,
 }: {
   name: string
   onNameChange: (name: string) => void
   /** Offered where this device holds notebooks of its own. */
   onLinkDevice?: () => void
+  onManageDevices?: () => void
 }) {
   const dialog = React.useRef<HTMLDialogElement>(null)
   const trigger = React.useRef<HTMLButtonElement>(null)
@@ -74,6 +76,10 @@ export function SettingsMenu({
     ...(onLinkDevice
       ? [{ id: "link-device", category: "general" as const, label: "Link another device", description: "Use your notebooks on a phone or another browser as you, not as a second member.", keywords: "phone pair device sync browser",
           control: <button type="button" onClick={() => { setOpen(false); onLinkDevice() }}>Link a device</button> }]
+      : []),
+    ...(onManageDevices
+      ? [{ id: "your-devices", category: "general" as const, label: "Your devices", description: "See the devices that are you, and take a lost one out.", keywords: "phone lost unlink remove device",
+          control: <button type="button" onClick={() => { setOpen(false); onManageDevices() }}>Manage devices</button> }]
       : []),
     { id: "theme", category: "appearance", label: "Color mode", description: "Use a light, dark, or system-matched workspace.", keywords: "color mode",
       control: <select id="theme" value={theme} onChange={event => setTheme(event.target.value as Theme)}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select> },

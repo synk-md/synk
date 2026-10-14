@@ -166,6 +166,8 @@ export { indexPresenceScope, notePresenceScope, presenceRoom } from "./presence"
 export type { MemberRemoved, RemoveFromNotebookOptions } from "./removal"
 export type { LinkIntoNotebookOptions, LinkOutcome } from "./linking"
 export { linkIntoNotebook } from "./linking"
+export type { RotateAwayOptions, UnlinkOptions } from "./unlinking"
+export { rotateAway, unlinkDevice } from "./unlinking"
 
 export type { PairedNotebook, PairingApproval, PairingRequest } from "./pairing"
 export { approvePairing, pairingApproval, pairingChannel, pairingRequest, requestPairing } from "./pairing"

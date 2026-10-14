@@ -368,7 +368,8 @@ function standing(doc: Y.Doc) {
   }
   const invitations = new Map(invitationsInDoc(doc).map((invitation) => [invitation.invitationId, invitation]))
 
-  const links = doc.getMap<{ parent?: string }>("directory:links")
+  const links = doc.getMap<{ parent?: string; issuedAt?: number }>("directory:links")
+  const unlinked = doc.getMap<{ revokedAt?: number }>("directory:link-revocations")
 
   return {
     live: () => {
@@ -377,6 +378,8 @@ function standing(doc: Y.Doc) {
       // Another of a member's own devices holds the notebook too.
       const linked = [...links.entries()]
         .filter(([, link]) => typeof link?.parent === "string" && standing.has(link.parent))
+        // Taken back out by its member: a lost phone holds nothing any more.
+        .filter(([did, link]) => (unlinked.get(did)?.revokedAt ?? -1) < (link.issuedAt ?? 0))
         .map(([did]) => did)
       return [...admitted, ...linked]
     },

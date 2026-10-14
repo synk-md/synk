@@ -1,6 +1,18 @@
 import { expect, test } from "@playwright/test"
 
-import { admit, askToJoin, createNotebook, editor, enter, invite, linkDevice, memberCount, person, type } from "./people"
+import {
+  admit,
+  askToJoin,
+  createNotebook,
+  editor,
+  enter,
+  invite,
+  linkDevice,
+  memberCount,
+  person,
+  type,
+  unlinkDevice,
+} from "./people"
 
 /**
  * One person, two devices: the second sees what the first wrote before it was
@@ -28,4 +40,26 @@ test("a person links their phone, and it is them, not a second member", async ({
   await expect(editor(ada.page)).toContainText("Ada should see what the phone wrote.")
 
   expect(await memberCount(laptop.page)).toBe("2 members")
+})
+
+/** The owner cannot be removed, so before unlinking an owner's lost phone could never be cut off. */
+test("the owner takes a lost phone out, and it gets nothing written afterwards", async ({ browser }) => {
+  const laptop = await person(browser, "Sindre")
+  const phone = await person(browser, "Sindre's phone")
+
+  await createNotebook(laptop, "Travel")
+  await type(laptop, " Before the phone was lost.")
+  await linkDevice(laptop, phone)
+  await expect(editor(phone.page)).toContainText("Before the phone was lost.")
+
+  await unlinkDevice(laptop)
+
+  await expect(phone.page.getByText("You no longer have access to this notebook")).toBeVisible({ timeout: 30_000 })
+  await expect(editor(phone.page)).toHaveAttribute("contenteditable", "false")
+
+  await type(laptop, " After it was taken out.")
+  // Absence has no event to wait for; give it longer than a delivery takes.
+  await phone.page.waitForTimeout(4_000)
+  await expect(editor(phone.page)).not.toContainText("After it was taken out.")
+  await expect(editor(phone.page)).toContainText("Before the phone was lost.")
 })

@@ -63,6 +63,7 @@ export {
   putInvitation,
   putInvitationRevocation,
   putLink,
+  putLinkRevocation,
   putRemoval,
   removedDidsUnverified,
   putPrekeyBundle,

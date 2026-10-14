@@ -19,6 +19,9 @@ export type DeviceManagerDialogProps = {
   onClose: () => void
   user: User
   onRevoke?: (device: MemberDevice) => Promise<void> | void
+  canRevoke?: (device: MemberDevice) => boolean
+  /** What removing actually does here, which depends on who can replace the key. */
+  removalNote?: string
   onRequestReAdmission?: () => void
   className?: string
 }
@@ -36,6 +39,8 @@ export function DeviceManagerDialog({
   onClose,
   user,
   onRevoke,
+  canRevoke,
+  removalNote,
   onRequestReAdmission,
   className,
 }: DeviceManagerDialogProps) {
@@ -110,13 +115,14 @@ export function DeviceManagerDialog({
           devices={user.devices}
           {...(identity ? { currentDid: identity.did } : {})}
           {...(onRevoke ? { onRevoke: setPendingRemoval } : {})}
+          {...(canRevoke ? { canRevoke } : {})}
         />
 
         {pendingRemoval && (
           <div className="dm-confirm" role="alertdialog" aria-label="Confirm removal">
             <SelfLinkWarning user={user} removing={pendingRemoval} />
             <p className="dm-body-text">
-              Remove this device? It will stop being able to read anything written from now on.
+              {removalNote ?? "Remove this device? It will stop being able to read anything written from now on."}
             </p>
             <div className="dm-actions">
               <Button data-style="ghost" onClick={() => setPendingRemoval(null)}>

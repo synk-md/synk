@@ -67,6 +67,7 @@ import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 import { CollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
 import { RemovedNotice, WriterNotice } from "@/components/custom-ui/connection/writer-notice"
 import { LinkDeviceDialog } from "@/components/custom-ui/device-manager/link-device-dialog"
+import { YourDevicesDialog } from "@/components/custom-ui/device-manager/your-devices-dialog"
 import { NotebookMembersDialog } from "@/components/custom-ui/members/notebook-members-dialog"
 import { MembersButton } from "@/components/custom-ui/members/members-button"
 import { canWriteWith, useDocBinding } from "@/hooks/use-doc-binding"
@@ -708,8 +709,10 @@ export function SimpleEditor({
   // rejected later, which would look like typing vanishing.
   const [membersOpen, setMembersOpen] = React.useState(false)
   const [linkingDevice, setLinkingDevice] = React.useState(false)
+  const [managingDevices, setManagingDevices] = React.useState(false)
   // Only where these are this device's own notebooks, not a link guest's view.
   const openLinkDevice = isSharedView ? undefined : () => setLinkingDevice(true)
+  const openDevices = isSharedView ? undefined : () => setManagingDevices(true)
   const docBinding = useDocBinding(notebookId ?? null, noteId ?? null)
 
   // Members get content as encrypted envelopes through the relay. The open
@@ -1761,7 +1764,7 @@ export function SimpleEditor({
                 </Button>
               </div>
             )}
-            <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} {...(openLinkDevice ? { onLinkDevice: openLinkDevice } : {})} />
+            <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} {...(openLinkDevice ? { onLinkDevice: openLinkDevice } : {})} {...(openDevices ? { onManageDevices: openDevices } : {})} />
           </div>
 
           {!showFileBrowser && (
@@ -1786,10 +1789,11 @@ export function SimpleEditor({
             </div>
           </div>
           <MembersButton onOpen={() => setMembersOpen(true)} />
-          <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} {...(openLinkDevice ? { onLinkDevice: openLinkDevice } : {})} />
+          <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} {...(openLinkDevice ? { onLinkDevice: openLinkDevice } : {})} {...(openDevices ? { onManageDevices: openDevices } : {})} />
         </div>
       )}
       <LinkDeviceDialog open={linkingDevice} onClose={() => setLinkingDevice(false)} />
+      <YourDevicesDialog open={managingDevices} onClose={() => setManagingDevices(false)} notebookId={notebookId ?? null} />
       <NotebookMembersDialog
         open={membersOpen}
         onClose={() => setMembersOpen(false)}

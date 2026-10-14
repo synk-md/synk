@@ -27,6 +27,8 @@ export type EpochReason =
   | "manual-rotation"
   /** A chain step taken only so an epoch from before commitments gets one. */
   | "key-commitment"
+  /** A rotation away from a device its own member unlinked. */
+  | "device-unlinked"
 
 export interface EpochRecord {
   v: typeof EPOCH_RECORD_VERSION

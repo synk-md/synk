@@ -17,6 +17,7 @@ import { createNotebookIndexDoc, readNotebookIndexTree, unsentFlag } from "@/lib
 
 import { coverNotes } from "./cover-notes"
 import { linkIntoNotebook } from "./linking"
+import { rotateAway, unlinkDevice } from "./unlinking"
 import { readNotebookKeys } from "./notebook-keys"
 import { readNotebookWorkspace } from "./notebook-workspace"
 import { liveKeys, relayConnection, relayWatch } from "./note-relay"
@@ -216,6 +217,35 @@ export async function linkEverywhere(options: LinkEverywhereOptions) {
     done += 1
   }
   return { linked, skipped }
+}
+
+/**
+ * Take a device back out of every notebook it was linked into, and publish
+ * that. Where this device is the owner the key is replaced at once; elsewhere
+ * the owner's device does it the next time it opens the notebook.
+ */
+export async function unlinkEverywhere(options: {
+  device: DeviceIdentity
+  did: string
+  notebooks: readonly PairedNotebook[]
+}) {
+  const unlinked: PairedNotebook[] = []
+  const rotated: PairedNotebook[] = []
+  const failed: (PairedNotebook & { reason: string })[] = []
+  for (const notebook of options.notebooks) {
+    try {
+      const handle = createNotebookIndexDoc(notebook.id)
+      await handle.idb.whenSynced
+      const outcome = await unlinkDevice({ doc: handle.doc, notebookId: notebook.id, actor: options.device, did: options.did })
+      if (outcome === "not-linked") continue
+      unlinked.push(notebook)
+      if (await rotateAway({ doc: handle.doc, notebookId: notebook.id, owner: options.device })) rotated.push(notebook)
+      if (relayConnection()) await syncDirectory(notebook.id, options.device)
+    } catch (error) {
+      failed.push({ ...notebook, reason: error instanceof Error ? error.message : "could not be unlinked" })
+    }
+  }
+  return { unlinked, rotated, failed }
 }
 
 /**

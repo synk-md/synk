@@ -18,6 +18,8 @@ export type DeviceListProps = {
   devices: readonly MemberDevice[]
   /** `did:key` of the device the person is looking at right now. */
   currentDid?: string
+  /** Which devices this one may take out. Defaults to all but itself. */
+  canRevoke?: (device: MemberDevice) => boolean
   /** Omitted when the viewer has no way to revoke - a linked device, say. */
   onRevoke?: (device: MemberDevice) => void
   className?: string
@@ -45,7 +47,7 @@ function formatAdded(device: MemberDevice): string {
  * none left cannot add devices at all. And the fingerprint, because it is the
  * only way to tell two devices apart when both are called "Laptop".
  */
-export function DeviceList({ devices, currentDid, onRevoke, className }: DeviceListProps) {
+export function DeviceList({ devices, currentDid, canRevoke, onRevoke, className }: DeviceListProps) {
   const fingerprints = useFingerprints(React.useMemo(() => devices.map((d) => d.record.did), [devices]))
 
   if (devices.length === 0) {
@@ -102,7 +104,7 @@ export function DeviceList({ devices, currentDid, onRevoke, className }: DeviceL
               </code>
             </span>
 
-            {onRevoke && !isCurrent && (
+            {onRevoke && !isCurrent && (canRevoke?.(device) ?? true) && (
               <Button
                 type="button"
                 data-style="ghost"
