@@ -6,6 +6,7 @@ import { NotFound } from "@/routes/not-found"
 import { SharedNotePage } from "@/routes/shared-note-page"
 import { SharedNotebookPage } from "@/routes/shared-notebook-page"
 import { JoinNotebookPage } from "@/routes/join-notebook-page"
+import { LinkDevicePage } from "@/routes/link-device-page"
 import { NotebooksProvider } from "@/hooks/use-notebooks"
 
 function WorkspaceLayout() {
@@ -29,6 +30,9 @@ export function AppRoutes() {
             the workspace layout because being let in has to add the notebook
             to this device's own list. */}
         <Route path="/join/:notebookId" element={<JoinNotebookPage />} />
+
+        {/* Another of your own devices, collecting the notebooks it was linked into. */}
+        <Route path="/link" element={<LinkDevicePage />} />
       </Route>
 
       <Route path="/s/:notebookId/:noteId" element={<SharedNotePage />} />

@@ -18,7 +18,16 @@ const categories = [
 
 type Category = typeof categories[number]["id"]
 
-export function SettingsMenu({ name, onNameChange }: { name: string; onNameChange: (name: string) => void }) {
+export function SettingsMenu({
+  name,
+  onNameChange,
+  onLinkDevice,
+}: {
+  name: string
+  onNameChange: (name: string) => void
+  /** Offered where this device holds notebooks of its own. */
+  onLinkDevice?: () => void
+}) {
   const dialog = React.useRef<HTMLDialogElement>(null)
   const trigger = React.useRef<HTMLButtonElement>(null)
   const [open, setOpen] = React.useState(false)
@@ -62,6 +71,10 @@ export function SettingsMenu({ name, onNameChange }: { name: string; onNameChang
         <input id="display-name" aria-labelledby="display-name-label" value={draftName} maxLength={40} autoComplete="nickname" onChange={event => setDraftName(event.target.value)} />
         <button type="submit" disabled={!draftName.trim() || draftName.trim() === name}>Save</button>
       </form> },
+    ...(onLinkDevice
+      ? [{ id: "link-device", category: "general" as const, label: "Link another device", description: "Use your notebooks on a phone or another browser as you, not as a second member.", keywords: "phone pair device sync browser",
+          control: <button type="button" onClick={() => { setOpen(false); onLinkDevice() }}>Link a device</button> }]
+      : []),
     { id: "theme", category: "appearance", label: "Color mode", description: "Use a light, dark, or system-matched workspace.", keywords: "color mode",
       control: <select id="theme" value={theme} onChange={event => setTheme(event.target.value as Theme)}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select> },
     { id: "color-theme", category: "appearance", label: "Color theme", description: "", keywords: "palette style classic sandstone forest rose ocean",

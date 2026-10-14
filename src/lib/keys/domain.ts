@@ -9,6 +9,7 @@
 import { generateAeadKey, type Bytes, type SealingKey } from "@/lib/crypto"
 import {
   deriveChainedEpochKey,
+  epochKeyCommitment,
   generateEpochSeed,
   genesisEpoch,
   reachableEpochs,
@@ -64,8 +65,8 @@ export class KeyDomainAdmin {
     options: { createdAt?: number; key?: Bytes } = {},
   ): Promise<{ admin: KeyDomainAdmin; sealed: SealedEpochKey[] }> {
     const admin = new KeyDomainAdmin(domain)
-    const record = genesisEpoch(domain, options.createdAt)
     const key = options.key ?? generateAeadKey()
+    const record = { ...genesisEpoch(domain, options.createdAt), commitment: await epochKeyCommitment(key) }
     admin.records.push(record)
     admin.keys.set(1, key)
 
@@ -126,9 +127,20 @@ export class KeyDomainAdmin {
     options: { createdAt?: number } = {},
   ): Promise<StagedEpoch> {
     const key = await deriveChainedEpochKey(await this.currentKey())
-    const record = this.nextRecord("chain", "member-added", options.createdAt)
+    const record = await this.committed(this.nextRecord("chain", "member-added", options.createdAt), key)
     const sealed = [await sealEpochKey(this.domain, record.epoch, joiner.sealingDid, key)]
     return { record, key, sealed, commit: this.committer(record, key) }
+  }
+
+  /**
+   * A chain step with nobody joining, so a domain whose current epoch predates
+   * commitments gets one. Everyone derives the new key themselves, so nothing
+   * is sealed - and a device holding a planted key derives one that fails it.
+   */
+  async stageCommitment(options: { createdAt?: number } = {}): Promise<StagedEpoch> {
+    const key = await deriveChainedEpochKey(await this.currentKey())
+    const record = await this.committed(this.nextRecord("chain", "key-commitment", options.createdAt), key)
+    return { record, key, sealed: [], commit: this.committer(record, key) }
   }
 
   /**
@@ -148,7 +160,7 @@ export class KeyDomainAdmin {
     options: { createdAt?: number } = {},
   ): Promise<CutEpochResult> {
     const key = generateEpochSeed()
-    const record = this.push("rotation", "member-removed", options.createdAt)
+    const record = this.push(await this.committed(this.nextRecord("rotation", "member-removed", options.createdAt), key))
     this.keys.set(record.epoch, key)
     return {
       record,
@@ -165,7 +177,7 @@ export class KeyDomainAdmin {
     options: { createdAt?: number } = {},
   ): Promise<CutEpochResult> {
     const key = generateEpochSeed()
-    const record = this.push("rotation", "manual-rotation", options.createdAt)
+    const record = this.push(await this.committed(this.nextRecord("rotation", "manual-rotation", options.createdAt), key))
     this.keys.set(record.epoch, key)
     return {
       record,
@@ -180,10 +192,13 @@ export class KeyDomainAdmin {
     return resolveEpochKey(this.records, this.keys, epoch)
   }
 
-  private push(kind: "chain" | "rotation", reason: EpochReason, createdAt?: number): EpochRecord {
-    const record = this.nextRecord(kind, reason, createdAt)
+  private push(record: EpochRecord): EpochRecord {
     this.records.push(record)
     return record
+  }
+
+  private async committed(record: EpochRecord, key: Bytes): Promise<EpochRecord> {
+    return { ...record, commitment: await epochKeyCommitment(key) }
   }
 
   private nextRecord(

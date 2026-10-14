@@ -29,7 +29,7 @@ import {
   type Transport,
 } from "@/lib/sync"
 
-import { authorizationContext } from "./capabilities"
+import { authorizationContext, linkedPrincipal } from "./capabilities"
 import { resourceIdFor, workspaceIdFor } from "./notebook-workspace"
 
 /** What capabilities call a note. Beneath its notebook, so a notebook grant covers it. */
@@ -107,9 +107,13 @@ export function createNoteSyncEngine(options: NoteSyncOptions): SyncEngine {
       trustedAdminDids: [options.owner],
       workspace,
     }),
-    policy: new CapabilityWritePolicy(context, (did, result) => {
-      options.onDenied?.(did, result.reason ?? "unauthorized")
-    }),
+    policy: new CapabilityWritePolicy(
+      context,
+      (did, result) => {
+        options.onDenied?.(did, result.reason ?? "unauthorized")
+      },
+      linkedPrincipal(options.index, options.owner, workspace),
+    ),
     keys: notebookKeyProvider(options.keys),
     ...(options.cursor ? { cursor: options.cursor } : {}),
     ...(options.batchMs === undefined ? {} : { batchMs: options.batchMs }),

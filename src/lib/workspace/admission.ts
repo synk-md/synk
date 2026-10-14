@@ -368,8 +368,18 @@ function standing(doc: Y.Doc) {
   }
   const invitations = new Map(invitationsInDoc(doc).map((invitation) => [invitation.invitationId, invitation]))
 
+  const links = doc.getMap<{ parent?: string }>("directory:links")
+
   return {
-    live: () => [...admissions.keys()].filter((did) => ended(did) === null),
+    live: () => {
+      const admitted = [...admissions.keys()].filter((did) => ended(did) === null)
+      const standing = new Set(admitted)
+      // Another of a member's own devices holds the notebook too.
+      const linked = [...links.entries()]
+        .filter(([, link]) => typeof link?.parent === "string" && standing.has(link.parent))
+        .map(([did]) => did)
+      return [...admitted, ...linked]
+    },
     /** Granted, or granted and since removed. Either way, not waiting on anyone. */
     answered: (redemption: Redemption): boolean => {
       if (!admissions.has(redemption.did)) return false
@@ -413,7 +423,8 @@ export function hasOutstandingInvitations(doc: Y.Doc, now: number = Date.now()):
 }
 
 /**
- * Has anybody besides the founder been admitted?
+ * Is this notebook held by any device besides the founder's - another member,
+ * or another device of a member, the founder's own included?
  *
  * Membership and link sharing are different questions. A private notebook
  * shared with named members still has to sync - to them - so this is what

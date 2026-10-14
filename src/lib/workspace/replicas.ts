@@ -35,7 +35,7 @@ import {
   type WritePolicy,
 } from "@/lib/sync"
 
-import { authorizationContext } from "./capabilities"
+import { authorizationContext, linkedPrincipal } from "./capabilities"
 import { notebookKeyProvider } from "./note-sync"
 import { resourceIdFor, workspaceIdFor } from "./notebook-workspace"
 
@@ -145,6 +145,7 @@ export function createTreeReplica(options: TreeReplicaOptions): SyncEngine {
         (author, result) => {
           options.onDenied?.(author, result.reason ?? "unauthorized")
         },
+        linkedPrincipal(options.directory, options.owner, workspaceIdFor(options.notebookId)),
       ),
     ),
     keys: notebookKeyProvider(options.keys),

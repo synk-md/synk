@@ -16,11 +16,13 @@
 import * as Y from "yjs"
 
 import type { AuthorizationContext } from "@/lib/authz"
+import type { Bytes } from "@/lib/crypto"
 import {
+  deriveChainedEpochKey,
+  epochKeyCommitment,
   FlatKeyring,
   KeyDomainAdmin,
-  openKeyring,
-  readKeysFor,
+  openEpochKey,
   type EpochTimeline,
   type SealedEpochKey,
 } from "@/lib/keys"
@@ -52,7 +54,18 @@ function keyringMap(doc: Y.Doc): Y.Map<SealedEpochKey> {
 }
 
 /** Distinct per domain, epoch and recipient, so copies never collide. */
+/**
+ * One slot per copy, not per recipient. With one slot a copy planted for
+ * someone's device replaced the genuine one; now both are kept and the reader
+ * picks by commitment.
+ */
 export function sealedKeyId(sealed: SealedEpochKey): string {
+  // The whole box, so the only copy that can take a slot is the one already in it.
+  return `${sealed.domain}|${String(sealed.epoch)}|${sealed.recipient}|${sealed.box}`
+}
+
+/** Where a copy was filed before copies had a slot each. Still read. */
+function legacySealedKeyId(sealed: SealedEpochKey): string {
   return `${sealed.domain}|${String(sealed.epoch)}|${sealed.recipient}`
 }
 
@@ -79,8 +92,8 @@ export function storedEpochRecords(doc: Y.Doc, domain: string): SignedEpochRecor
 export function storedSealedKeys(doc: Y.Doc, domain: string): SealedEpochKey[] {
   const out: SealedEpochKey[] = []
   for (const [key, sealed] of keyringMap(doc).entries()) {
-    if (sealed?.domain !== domain) continue
-    if (sealedKeyId(sealed) !== key) continue
+    if (sealed?.domain !== domain || typeof sealed.box !== "string") continue
+    if (sealedKeyId(sealed) !== key && legacySealedKeyId(sealed) !== key) continue
     out.push(sealed)
   }
   return out
@@ -156,6 +169,100 @@ export async function foundNotebookKeys(options: FoundKeysOptions): Promise<Foun
   return { domain, timeline: admin.timeline, sealed: [...sealed] }
 }
 
+/**
+ * The key a candidate copy yields for the first committed epoch it can reach
+ * by derivation, judged against that commitment. `undefined` when nothing
+ * ahead of it in its segment is committed - an epoch from before commitments.
+ */
+async function judge(timeline: EpochTimeline, epoch: number, key: Bytes): Promise<boolean | undefined> {
+  let current = key
+  for (let at = epoch; at <= timeline.length; at += 1) {
+    const record = timeline[at - 1]
+    if (at > epoch) {
+      // A rotation starts a new key; nothing past it says anything about this one.
+      if (record.kind !== "chain") return undefined
+      current = await deriveChainedEpochKey(current)
+    }
+    if (record.commitment !== undefined) return (await epochKeyCommitment(current)) === record.commitment
+  }
+  return undefined
+}
+
+/**
+ * This device's anchor keys, each the copy its epoch's commitment vouches for.
+ *
+ * Copies are unsigned and anyone holding the link can file one, so several
+ * may claim the same epoch. A copy contradicted by a commitment is dropped;
+ * among copies nothing can judge - epochs from before commitments - the first
+ * is used, as before.
+ */
+async function openVerifiedAnchors(
+  timeline: EpochTimeline,
+  sealed: readonly SealedEpochKey[],
+  device: DeviceIdentity,
+): Promise<{ anchors: Map<number, Bytes>; rejected: number }> {
+  const domain = timeline[0].domain
+  const candidates = new Map<number, Bytes[]>()
+  for (const copy of sealed) {
+    if (copy.domain !== domain || copy.recipient !== device.record.sealingDid) continue
+    if (!timeline[copy.epoch - 1]) continue
+    try {
+      const key = await openEpochKey(copy, device.sealingKey)
+      candidates.set(copy.epoch, [...(candidates.get(copy.epoch) ?? []), key])
+    } catch {
+      // Not openable by this device: somebody else's, or garbage.
+    }
+  }
+
+  const anchors = new Map<number, Bytes>()
+  let rejected = 0
+  for (const [epoch, keys] of candidates) {
+    let fallback: Bytes | undefined
+    let chosen: Bytes | undefined
+    for (const key of keys) {
+      const verdict = await judge(timeline, epoch, key)
+      if (verdict === true) {
+        chosen = key
+        break
+      }
+      if (verdict === undefined) fallback ??= key
+      else rejected += 1
+    }
+    const anchor = chosen ?? fallback
+    if (anchor) anchors.set(epoch, anchor)
+  }
+  return { anchors, rejected }
+}
+
+/**
+ * Give a notebook whose current epoch predates commitments a committed one.
+ *
+ * Only the owner can, since only an admin signs epochs. A chain step, so every
+ * member derives the new key from what they hold - and one holding a planted
+ * key derives a key that fails the commitment rather than one an attacker
+ * knows. Returns whether a step was taken.
+ */
+export async function commitCurrentKey(options: {
+  doc: Y.Doc
+  notebookId: string
+  owner: DeviceIdentity
+}): Promise<boolean> {
+  const keys = await readNotebookKeys({
+    doc: options.doc,
+    notebookId: options.notebookId,
+    device: options.owner,
+    owner: options.owner.did,
+  })
+  const latest = keys.timeline?.[keys.timeline.length - 1]
+  if (keys.access !== "reader" || !latest || latest.commitment !== undefined) return false
+  const domain = await restoreDomainAdmin(keys)
+  if (!domain) return false
+  const staged = await domain.stageCommitment()
+  putEpochRecord(options.doc, await signEpochRecord(staged.record, options.owner.signingKey, options.owner.did))
+  staged.commit()
+  return true
+}
+
 export type KeyAccess =
   /** This device holds keys and can read content. */
   | "reader"
@@ -163,6 +270,12 @@ export type KeyAccess =
   | "no-keys"
   /** The stored timeline did not verify. Nothing is derived from it. */
   | "untrusted-timeline"
+  /**
+   * Keys were sealed to this device, but none matches what the owner committed
+   * to. Someone planted them. Nothing is sealed under them, so nothing written
+   * here goes where the planter can read it.
+   */
+  | "untrusted-keys"
   /** The notebook has no key domain yet. */
   | "none"
 
@@ -231,22 +344,20 @@ export async function readNotebookKeys(options: ReadKeysOptions): Promise<Notebo
   }
 
   const sealed = storedSealedKeys(options.doc, domain)
-  const { anchors } = await openKeyring(
-    sealed,
-    domain,
-    options.device.record.sealingDid,
-    options.device.sealingKey,
-  )
+  const { anchors, rejected } = await openVerifiedAnchors(timeline, sealed, options.device)
   if (anchors.size === 0) {
-    return { ...empty, access: "no-keys", timeline, verification }
+    return { ...empty, access: rejected > 0 ? "untrusted-keys" : "no-keys", timeline, verification }
   }
 
-  const keyring = await readKeysFor(
-    timeline,
-    sealed,
-    options.device.record.sealingDid,
-    options.device.sealingKey,
-  )
+  const keyring = new FlatKeyring(timeline, anchors)
+  // Belt and braces: the anchors were chosen by commitment, so this holds
+  // unless the choice itself is wrong - and sealing under a key that fails
+  // it is the one outcome that must not happen.
+  const currentKey = await keyring.keyFor(keyring.currentEpoch)
+  const committed = timeline[timeline.length - 1]?.commitment
+  if (currentKey && committed !== undefined && (await epochKeyCommitment(currentKey)) !== committed) {
+    return { ...empty, access: "untrusted-keys", timeline, verification }
+  }
   return {
     domain,
     access: "reader",

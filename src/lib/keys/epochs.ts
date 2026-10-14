@@ -13,14 +13,20 @@
  * constant: one anchor per segment, not one key per epoch.
  */
 
-import { deriveKey, generateAeadKey, type Bytes } from "@/lib/crypto"
+import { deriveKey, generateAeadKey, toBase64Url, type Bytes } from "@/lib/crypto"
 
 export const EPOCH_RECORD_VERSION = 1
 
 /** How an epoch's key relates to the one before it. */
 export type EpochKind = "genesis" | "chain" | "rotation"
 
-export type EpochReason = "genesis" | "member-added" | "member-removed" | "manual-rotation"
+export type EpochReason =
+  | "genesis"
+  | "member-added"
+  | "member-removed"
+  | "manual-rotation"
+  /** A chain step taken only so an epoch from before commitments gets one. */
+  | "key-commitment"
 
 export interface EpochRecord {
   v: typeof EPOCH_RECORD_VERSION
@@ -31,6 +37,20 @@ export interface EpochRecord {
   kind: EpochKind
   reason: EpochReason
   createdAt: number
+  /**
+   * What this epoch's key must hash to. Sealed copies are unsigned and the
+   * directory is writable by anyone holding the link, so without this a copy
+   * planted for someone's device - by a removed member, say - would be taken
+   * as genuine, and they would seal new writes under a key the planter knows.
+   * Signed with the record, so it cannot be stripped. Absent only on epochs
+   * cut before it existed.
+   */
+  commitment?: string
+}
+
+/** The value an epoch record commits its key to. One-way: it reveals nothing of the key. */
+export async function epochKeyCommitment(key: Bytes): Promise<string> {
+  return toBase64Url(await deriveKey(key, "synk/epoch-commitment/v1", 32))
 }
 
 /** Ordered, contiguous from 1. */

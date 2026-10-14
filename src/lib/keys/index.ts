@@ -11,6 +11,7 @@ export type { EpochKind, EpochReason, EpochRecord, EpochTimeline } from "./epoch
 export {
   deriveChainedEpochKey,
   EPOCH_RECORD_VERSION,
+  epochKeyCommitment,
   generateEpochSeed,
   genesisEpoch,
   isReachable,

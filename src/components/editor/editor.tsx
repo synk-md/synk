@@ -66,6 +66,7 @@ import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 // --- Custom UI ---
 import { CollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
 import { RemovedNotice, WriterNotice } from "@/components/custom-ui/connection/writer-notice"
+import { LinkDeviceDialog } from "@/components/custom-ui/device-manager/link-device-dialog"
 import { NotebookMembersDialog } from "@/components/custom-ui/members/notebook-members-dialog"
 import { MembersButton } from "@/components/custom-ui/members/members-button"
 import { canWriteWith, useDocBinding } from "@/hooks/use-doc-binding"
@@ -706,6 +707,9 @@ export function SimpleEditor({
   // one of them may author. Blocked here rather than letting its edits be
   // rejected later, which would look like typing vanishing.
   const [membersOpen, setMembersOpen] = React.useState(false)
+  const [linkingDevice, setLinkingDevice] = React.useState(false)
+  // Only where these are this device's own notebooks, not a link guest's view.
+  const openLinkDevice = isSharedView ? undefined : () => setLinkingDevice(true)
   const docBinding = useDocBinding(notebookId ?? null, noteId ?? null)
 
   // Members get content as encrypted envelopes through the relay. The open
@@ -1757,7 +1761,7 @@ export function SimpleEditor({
                 </Button>
               </div>
             )}
-            <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} />
+            <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} {...(openLinkDevice ? { onLinkDevice: openLinkDevice } : {})} />
           </div>
 
           {!showFileBrowser && (
@@ -1782,9 +1786,10 @@ export function SimpleEditor({
             </div>
           </div>
           <MembersButton onOpen={() => setMembersOpen(true)} />
-          <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} />
+          <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} {...(openLinkDevice ? { onLinkDevice: openLinkDevice } : {})} />
         </div>
       )}
+      <LinkDeviceDialog open={linkingDevice} onClose={() => setLinkingDevice(false)} />
       <NotebookMembersDialog
         open={membersOpen}
         onClose={() => setMembersOpen(false)}

@@ -48,6 +48,8 @@ export function epochRecordBytes(record: EpochRecord, asserter: string): Bytes {
       record.reason,
       String(record.createdAt),
       asserter,
+      // Only when present, so a record from before commitments signs as it did.
+      ...(record.commitment === undefined ? [] : [`commitment:${record.commitment}`]),
     ].join("\n"),
   )
 }

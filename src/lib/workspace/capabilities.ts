@@ -23,6 +23,7 @@ import {
   type Revocation,
 } from "@/lib/authz"
 import type { SigningKey } from "@/lib/crypto"
+import { readDirectory } from "@/lib/directory"
 
 export const CAPABILITY_MAP = "workspace:capabilities"
 /** Withdrawn grants, by the cid they withdraw. Verified against the chain on read. */
@@ -47,6 +48,21 @@ export function putCapability(doc: Y.Doc, capability: Capability): void {
 
 export function putRevocation(doc: Y.Doc, revocation: Revocation): void {
   doc.getMap<Revocation>(REVOCATION_MAP).set(revocation.cid, revocation)
+}
+
+/**
+ * Resolves an author to the device whose grant it writes under: itself, or -
+ * for a device linked by one of the member's own - the device that linked it.
+ *
+ * Read from the verified directory at each check, so a link whose parent is
+ * removed, or whose record does not verify, gives nothing to write under.
+ */
+export function linkedPrincipal(directory: Y.Doc, owner: string, workspace: string) {
+  return async (author: string): Promise<string> => {
+    const verified = await readDirectory(directory, [owner], { workspace })
+    const device = verified.devices.find((entry) => entry.record.did === author)
+    return device?.kind === "linked" ? device.link.parent : author
+  }
 }
 
 /** Decode every token present. Malformed ones are dropped, not thrown on. */

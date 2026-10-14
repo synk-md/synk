@@ -7,7 +7,9 @@ import { findNode, isNoteNode } from "@/components/custom-ui/file-browser/tree"
 import { useBackgroundNoteSync } from "@/hooks/use-background-note-sync"
 import { setLastOpenedNoteId } from "@/lib/notebook-settings"
 import { pickNotebookTargetNote } from "@/lib/resolve-notebook-target"
-import { encryptedSyncEnabled } from "@/lib/workspace"
+import { currentDevice } from "@/lib/identity"
+import { commitCurrentKey, encryptedSyncEnabled } from "@/lib/workspace"
+import { createNotebookIndexDoc } from "@/lib/yjs-utils"
 
 export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; noteId?: string }) {
   const navigate = useNavigate()
@@ -48,6 +50,17 @@ export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; no
   }, [isEmptyEditorRoute, noteExists, noteId, originNoteId])
 
   const fileSystem = useNotebookFileSystem(activeNotebook, updateNotebookRoot, { replicate: true })
+
+  // A notebook from before key commitments gets one the next time its owner
+  // opens it. Anywhere else this does nothing: only the owner signs epochs.
+  React.useEffect(() => {
+    const device = currentDevice()
+    if (!notebookId || !device) return
+    const handle = createNotebookIndexDoc(notebookId)
+    void handle.idb.whenSynced
+      .then(() => commitCurrentKey({ doc: handle.doc, notebookId, owner: device.identity }))
+      .catch(() => undefined)
+  }, [notebookId])
   const rootNodeId = activeNotebook?.root.id ?? null
   const hasNotebookContext = Boolean(activeNotebook)
 

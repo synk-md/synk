@@ -21,15 +21,25 @@ export class CapabilityWritePolicy implements WritePolicy {
   private readonly context: ContextSource
   /** Set to observe denials - useful for surfacing *why* an edit was refused. */
   readonly onDenied?: (author: string, result: AuthorizationResult) => void
+  /**
+   * Whose authority an author writes under. A device someone linked to their
+   * own holds no grant of its own and writes under the one it was linked from.
+   */
+  private readonly principalOf: (author: string) => string | Promise<string>
 
-  constructor(context: ContextSource, onDenied?: (author: string, result: AuthorizationResult) => void) {
+  constructor(
+    context: ContextSource,
+    onDenied?: (author: string, result: AuthorizationResult) => void,
+    principalOf?: (author: string) => string | Promise<string>,
+  ) {
     this.context = context
     if (onDenied) this.onDenied = onDenied
+    this.principalOf = principalOf ?? ((author) => author)
   }
 
   async canWrite(resourceId: string, authorDid: string): Promise<boolean> {
     const result = await authorize(
-      { principal: authorDid, resource: resourceId, ability: "write" },
+      { principal: await this.principalOf(authorDid), resource: resourceId, ability: "write" },
       await this.context(),
     )
     if (!result.authorized) this.onDenied?.(authorDid, result)

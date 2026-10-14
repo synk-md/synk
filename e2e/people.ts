@@ -187,3 +187,39 @@ export async function remove(owner: Person, label: string): Promise<void> {
   await expect(dialog.getByText("1 member")).toBeVisible()
   await closeMembers(page)
 }
+
+/**
+ * Links another of this person's devices, from Settings on the one they
+ * already use: open the link there, read its code across, confirm here.
+ */
+export async function linkDevice(from: Person, to: Person): Promise<void> {
+  await from.page.getByRole("button", { name: "Open settings" }).first().click()
+  await from.page.getByRole("button", { name: "Link a device" }).click()
+  const dialog = from.page.getByRole("dialog", { name: "Link another device" })
+  await expect(dialog.getByLabel("Linking link")).not.toHaveText("…")
+  const link = (await dialog.getByLabel("Linking link").textContent())?.trim() ?? ""
+
+  const url = new URL(link)
+  await to.page.goto(url.pathname + url.hash)
+  await to.page.getByRole("button", { name: "Ask to link" }).click()
+  const code = to.page.getByLabel("This device's code")
+  await expect(code).not.toHaveText("…")
+  const deviceCode = (await code.textContent())?.trim() ?? ""
+
+  await from.page.locator("#link-device-code").fill(deviceCode, { timeout: 30_000 })
+  await dialog.getByRole("button", { name: "Link this device" }).click()
+  await expect(dialog.getByText(/Linked into \d+ notebook/)).toBeVisible({ timeout: 60_000 })
+  await dialog.getByRole("button", { name: "Done" }).click()
+
+  await expect(to.page.getByRole("heading", { name: "Linked" })).toBeVisible({ timeout: 60_000 })
+  await to.page.getByRole("link", { name: "Open your notebooks" }).click()
+  await to.page.waitForURL(/\/nb\//)
+  await expect(editor(to.page)).toBeVisible()
+}
+
+export async function memberCount(page: Page): Promise<string> {
+  const dialog = await openMembers(page)
+  const heading = (await dialog.getByText(/^\d+ members?$/).textContent()) ?? ""
+  await closeMembers(page)
+  return heading
+}
