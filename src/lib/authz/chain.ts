@@ -48,6 +48,24 @@ export interface AuthorizationContext {
   now: number
   /** Revoked cids. Eventually consistent - see `revocation.ts`. */
   revoked?: ReadonlySet<string>
+  /** Devices that act as another principal: an admin's own linked devices act as that admin. */
+  deputies?: ReadonlyMap<string, string>
+  /**
+   * What former deputies issued that stays valid, by cid or signature. Such a
+   * record acts for the owner, as the deputy did when it signed it.
+   */
+  kept?: ReadonlySet<string>
+}
+
+/** Who a capability's issuer acts as: a deputy for its principal, a kept one for the owner. */
+function issuerPrincipal(capability: Capability, context: AuthorizationContext): string {
+  const issuer = capability.payload.iss
+  return context.deputies?.get(issuer) ?? (context.kept?.has(capability.cid) ? context.owner : issuer)
+}
+
+/** Who a principal holds capabilities as. */
+export function principalFor(did: string, context: AuthorizationContext): string {
+  return context.deputies?.get(did) ?? did
 }
 
 function deny(reason: DenialReason, detail?: string): AuthorizationResult {
@@ -107,7 +125,11 @@ export async function verifyChain(
     if (!parent) {
       return deny("broken-proof", `proof ${current.payload.prf} is not available`)
     }
-    const failure = checkAttenuation(current.payload, parent.payload)
+    // A deputy issues as the principal it acts for, so its grants rest on that principal's.
+    const failure = checkAttenuation(
+      { ...current.payload, iss: issuerPrincipal(current, context) },
+      parent.payload,
+    )
     if (failure) return deny("attenuation", `${failure.rule}: ${failure.detail}`)
     current = parent
   }
@@ -130,9 +152,10 @@ export async function authorize(
   query: AuthorizationQuery,
   context: AuthorizationContext,
 ): Promise<AuthorizationResult> {
+  const principal = principalFor(query.principal, context)
   const candidates = [...context.proofs.values()].filter(
     (capability) =>
-      capability.payload.aud === query.principal &&
+      capability.payload.aud === principal &&
       abilitySatisfies(capability.payload.can, query.ability) &&
       resourceContains(capability.payload.rsc, query.resource),
   )

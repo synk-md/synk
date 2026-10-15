@@ -64,6 +64,7 @@ export {
   putInvitationRevocation,
   putLink,
   putLinkRevocation,
+  putRatification,
   putRemoval,
   removedDidsUnverified,
   putPrekeyBundle,
@@ -87,6 +88,8 @@ export type {
   InvitationRevocationBody,
   RevokeInvitationOptions,
 } from "./invitation-revocation"
+export type { Ratification, RatificationBody } from "./ratification"
+export { RATIFICATION_VERSION, ratificationBytes, ratify, verifyRatification } from "./ratification"
 export type { DeviceRemoval, DeviceRemovalBody, RemoveDeviceOptions } from "./device-removal"
 export {
   DEVICE_REMOVAL_VERSION,

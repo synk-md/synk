@@ -67,6 +67,9 @@ export function useEncryptedNoteSync(options: UseEncryptedNoteSyncOptions): Encr
 
   const workspace = useNotebookWorkspace(enabled ? notebookId : null)
   const owner = workspace.workspace?.ownership.owner ?? null
+  // Read through, so a phone the owner links later counts without a rebuild.
+  const adminsRef = React.useRef<readonly string[]>([])
+  adminsRef.current = workspace.workspace?.directory?.admins ?? (owner ? [owner] : [])
   const keys = useNotebookKeys(enabled && owner ? notebookId : null, owner)
   const reader = keys.keys?.access === "reader"
   // Old keys still open old epochs, which is not the same as being a member.
@@ -127,7 +130,7 @@ export function useEncryptedNoteSync(options: UseEncryptedNoteSyncOptions): Encr
       readableEpochs: () => keyringRef.current?.readableEpochs() ?? [],
       relay: relayWatch,
       baseline: storedBaseline(did, resourceId),
-      anchorAuthor: () => owner,
+      anchorAuthors: () => adminsRef.current,
       watermark: storedWatermark(getOrCreateYDoc(notebookId, noteId).idb),
       canAuthor,
       onStatus: setStatus,

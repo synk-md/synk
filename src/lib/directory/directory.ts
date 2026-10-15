@@ -16,6 +16,8 @@
 
 import * as Y from "yjs"
 import {
+  adminDidsOf,
+  keptOf,
   verifyAdmittedDevice,
   verifyDeviceRecord,
   verifyLinkedDevice,
@@ -24,6 +26,7 @@ import {
   type DeviceLink,
   type DeviceRecord,
   type LinkedDevice,
+  type AdminTrust,
   type MemberDevice,
   type VerifyAdmissionOptions,
 } from "@/lib/identity"
@@ -40,6 +43,7 @@ import {
 } from "./invitation-revocation"
 import { verifyDeviceRemoval, type DeviceRemoval } from "./device-removal"
 import { verifyLinkRevocation, type LinkRevocation } from "@/lib/membership/link-revocation"
+import { verifyRatification, type Ratification } from "./ratification"
 
 /** Sub-maps of the directory document. */
 export const DIRECTORY_MAPS = {
@@ -52,6 +56,7 @@ export const DIRECTORY_MAPS = {
   redemptions: "directory:redemptions",
   removals: "directory:removals",
   linkRevocations: "directory:link-revocations",
+  ratifications: "directory:ratifications",
 } as const
 
 export interface DirectoryReadOptions extends VerifyAdmissionOptions {
@@ -73,6 +78,12 @@ export interface VerifiedDirectory {
   redemptions: Map<string, Redemption[]>
   /** Present once, then validly taken out - removed by an admin, or unlinked by its own member. Absent from `devices`. */
   removed: Set<string>
+  /** Who may sign as an admin: those trusted, and their own linked devices. */
+  admins: string[]
+  /** Which admin each linked one acts as. */
+  deputies: Map<string, string>
+  /** What former deputies signed that an admin kept. */
+  kept: ReadonlySet<string>
   rejected: number
 }
 
@@ -106,6 +117,14 @@ export function putRemoval(doc: Y.Doc, removal: DeviceRemoval): void {
  */
 export function removedDidsUnverified(doc: Y.Doc): Set<string> {
   return new Set(map<DeviceRemoval>(doc, DIRECTORY_MAPS.removals).keys())
+}
+
+/** Filed by device and time, so keeping more later adds rather than replaces. */
+export function putRatification(doc: Y.Doc, ratification: Ratification): void {
+  map<Ratification>(doc, DIRECTORY_MAPS.ratifications).set(
+    `${ratification.device}@${String(ratification.at)}`,
+    ratification,
+  )
 }
 
 export function putLink(doc: Y.Doc, link: DeviceLink): void {
@@ -152,9 +171,35 @@ export function putRedemption(doc: Y.Doc, redemption: Redemption): void {
  */
 export async function readDirectory(
   doc: Y.Doc,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
   options: DirectoryReadOptions = {},
 ): Promise<VerifiedDirectory> {
+  const base = adminDidsOf(trustedAdminDids)
+  const kept = new Set(keptOf(trustedAdminDids))
+  for (const ratification of map<Ratification>(doc, DIRECTORY_MAPS.ratifications).values()) {
+    if (await verifyRatification(ratification, base, options)) {
+      for (const signature of ratification.kept) kept.add(signature)
+    }
+  }
+
+  // An admin's own linked devices act as that admin: the owner's phone is the
+  // owner. Found with the admins alone, then read again with them added -
+  // links rest on admissions, so the second read cannot change who they are.
+  const first = await readWith(doc, { dids: base, kept }, options)
+  const deputies = new Map<string, string>()
+  for (const device of first.devices) {
+    if (device.kind === "linked" && base.includes(device.link.parent)) deputies.set(device.record.did, device.link.parent)
+  }
+  const admins = [...base, ...deputies.keys()]
+  const read = deputies.size === 0 ? first : await readWith(doc, { dids: admins, kept }, options)
+  return { ...read, admins, deputies, kept }
+}
+
+async function readWith(
+  doc: Y.Doc,
+  trustedAdminDids: AdminTrust,
+  options: DirectoryReadOptions,
+): Promise<Omit<VerifiedDirectory, "admins" | "deputies" | "kept">> {
   const now = options.now ?? Date.now()
   let rejected = 0
 
@@ -284,7 +329,7 @@ export async function readDirectory(
 export async function redemptionsFor(
   doc: Y.Doc,
   invitationId: string,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
   options: DirectoryReadOptions = {},
 ): Promise<Redemption[]> {
   const directory = await readDirectory(doc, trustedAdminDids, options)

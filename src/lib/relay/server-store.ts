@@ -43,6 +43,8 @@ export const DEFAULT_PRUNE: PrunePolicy = {
  */
 interface OwnerClaim {
   owner: string
+  /** The owner's own linked devices, as the owner last said. */
+  deputies: Set<string>
   /** Two different owners claimed it. Never pruned again. */
   disputed: boolean
 }
@@ -92,14 +94,15 @@ export class RelayStore {
   }
 
   /** A verified genesis. A second, different owner disputes it for good. */
-  claimOwnership(genesis: WorkspaceGenesis): OwnerClaim {
+  claimOwnership(genesis: WorkspaceGenesis, deputies: readonly string[] = []): OwnerClaim {
     const existing = this.owners.get(genesis.resource)
     if (!existing) {
-      const claim = { owner: genesis.owner, disputed: false }
+      const claim = { owner: genesis.owner, deputies: new Set(deputies), disputed: false }
       this.owners.set(genesis.resource, claim)
       return claim
     }
     if (existing.owner !== genesis.owner) existing.disputed = true
+    else existing.deputies = new Set(deputies)
     return existing
   }
 
@@ -126,7 +129,10 @@ export class RelayStore {
         return true
       })
     const anchor = this.archived(resourceId)
-      .filter((snapshot) => snapshot.author === claim.owner && this.signed.has(snapshot.id))
+      .filter(
+        (snapshot) =>
+          (snapshot.author === claim.owner || claim.deputies.has(snapshot.author)) && this.signed.has(snapshot.id),
+      )
       .filter((snapshot) => covers(snapshot.covers, floor) && !covers(floor, snapshot.covers))
       .sort((a, b) => b.createdAt - a.createdAt)
       .find(aged)

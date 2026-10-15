@@ -8,6 +8,7 @@
  */
 
 import { assertNoClientIdCollision } from "./client-id"
+import type { AdminTrust } from "./admin-trust"
 import type { DeviceRecord } from "./device-record"
 import {
   verifyAdmittedDevice,
@@ -144,7 +145,7 @@ export function userLabelOrThrow(user: User): string | undefined {
  */
 export async function verifyUser(
   user: User,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
   options: VerifyAdmissionOptions = {},
 ): Promise<boolean> {
   try {

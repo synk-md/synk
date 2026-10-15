@@ -16,6 +16,7 @@ import {
   type SigningKey,
 } from "@/lib/crypto"
 import { deriveClientId } from "./client-id"
+import type { AdminTrust } from "./admin-trust"
 import { publicKeyFromDid } from "./did"
 import { verifyDeviceRecord, type DeviceRecord } from "./device-record"
 import {
@@ -134,7 +135,7 @@ export async function createDeviceLink(options: CreateDeviceLinkOptions): Promis
 export async function verifyDeviceLink(
   link: DeviceLink,
   parent: AdmittedDevice,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
   options: VerifyAdmissionOptions = {},
 ): Promise<boolean> {
   try {
@@ -171,7 +172,7 @@ export async function verifyDeviceLink(
 export async function verifyLinkedDevice(
   device: LinkedDevice,
   parent: AdmittedDevice,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
   options: VerifyAdmissionOptions = {},
 ): Promise<boolean> {
   const { record, link } = device

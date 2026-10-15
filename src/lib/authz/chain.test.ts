@@ -508,3 +508,63 @@ describe("revocation", () => {
     expect(result.reason).toBe("revoked")
   })
 })
+
+/** The owner's own linked devices act as the owner; a former one, only for what was kept. */
+describe("deputies", () => {
+  async function ownerRoot(owner: Principal) {
+    return grant(owner, owner, { ability: "admin", depth: 4 })
+  }
+
+  it("lets a deputy grant from the owner's root", async () => {
+    const owner = await principal()
+    const phone = await principal()
+    const member = await principal()
+    const root = await ownerRoot(owner)
+    const issued = await grant(phone, member, { proof: root.cid })
+    const query = { principal: member.did, resource: RESOURCE, ability: "write" as const }
+
+    expect((await authorize(query, context(owner.did, [root, issued]))).authorized).toBe(false)
+    const deputized = { ...context(owner.did, [root, issued]), deputies: new Map([[phone.did, owner.did]]) }
+    expect((await authorize(query, deputized)).authorized).toBe(true)
+  })
+
+  it("holds the owner's authority as a deputy", async () => {
+    const owner = await principal()
+    const phone = await principal()
+    const root = await ownerRoot(owner)
+    const query = { principal: phone.did, resource: RESOURCE, ability: "admin" as const }
+
+    const deputized = { ...context(owner.did, [root]), deputies: new Map([[phone.did, owner.did]]) }
+    expect((await authorize(query, deputized)).authorized).toBe(true)
+  })
+
+  it("keeps a former deputy's grant only if it was kept", async () => {
+    const owner = await principal()
+    const phone = await principal()
+    const member = await principal()
+    const root = await ownerRoot(owner)
+    const issued = await grant(phone, member, { proof: root.cid })
+    const query = { principal: member.did, resource: RESOURCE, ability: "write" as const }
+
+    const kept = { ...context(owner.did, [root, issued]), kept: new Set([issued.cid]) }
+    expect((await authorize(query, kept)).authorized).toBe(true)
+  })
+
+  /** Removing someone from the phone has to withdraw what the laptop granted them. */
+  it("lets a deputy revoke what the owner granted, and nobody else", async () => {
+    const owner = await principal()
+    const phone = await principal()
+    const stranger = await principal()
+    const member = await principal()
+    const root = await ownerRoot(owner)
+    const issued = await grant(owner, member, { proof: root.cid })
+    const revokeAs = (by: Principal) =>
+      revokeCapability({ signingKey: by.key, issuer: by.did, capabilityCid: issued.cid, revokedAt: T0 })
+
+    const store = new CapabilityStore(owner.did, { deputies: new Map([[phone.did, owner.did]]) })
+    await store.add(root)
+    await store.add(issued)
+    expect(await store.revoke(await revokeAs(stranger), T0)).toBe(false)
+    expect(await store.revoke(await revokeAs(phone), T0)).toBe(true)
+  })
+})

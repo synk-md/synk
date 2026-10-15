@@ -63,3 +63,30 @@ test("the owner takes a lost phone out, and it gets nothing written afterwards",
   await expect(editor(phone.page)).not.toContainText("After it was taken out.")
   await expect(editor(phone.page)).toContainText("Before the phone was lost.")
 })
+
+/**
+ * The owner's phone is the owner: away from the laptop it lets someone in. And
+ * when the phone is later lost and unlinked, the person it let in stays in.
+ */
+test("the owner's phone lets someone in, and they stay in once the phone is unlinked", async ({ browser }) => {
+  const laptop = await person(browser, "Sindre")
+  const phone = await person(browser, "Sindre's phone")
+  const ada = await person(browser, "Ada")
+
+  await createNotebook(laptop, "Travel")
+  await type(laptop, " Planned on the laptop.")
+  await linkDevice(laptop, phone)
+  await expect(editor(phone.page)).toContainText("Planned on the laptop.")
+
+  const { link, code } = await invite(phone, "Ada")
+  await admit(phone, await askToJoin(ada, link, code))
+  await enter(ada)
+  await expect(editor(ada.page)).toContainText("Planned on the laptop.")
+
+  await unlinkDevice(laptop)
+  await expect(phone.page.getByText("You no longer have access to this notebook")).toBeVisible({ timeout: 30_000 })
+
+  await type(ada, " Ada, after the phone was gone.")
+  await expect(editor(laptop.page)).toContainText("Ada, after the phone was gone.")
+  expect(await memberCount(laptop.page)).toBe("2 members")
+})

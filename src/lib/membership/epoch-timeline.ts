@@ -90,6 +90,8 @@ export async function verifySignedEpochRecord(
       fromBase64Url(signed.sig),
     )
     if (!authentic) return false
+    // Cut by a deputy since unlinked, and kept by the admin who unlinked it.
+    if (context.kept?.has(signed.sig)) return true
     return await canAdminister(signed.asserter, signed.record.domain, context)
   } catch {
     return false

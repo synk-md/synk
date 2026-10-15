@@ -62,9 +62,9 @@ export interface SyncSessionOptions {
   baseline?: BaselineMemo
   /**
    * Whose anchors may carry this device past envelopes the relay let go: the
-   * owner, since only the owner's anchors let the relay prune.
+   * owner and the owner's own devices, since only theirs let the relay prune.
    */
-  anchorAuthor?: () => string | null
+  anchorAuthors?: () => readonly string[]
   /**
    * Whether this tab may author. A follower tab must not resume: it would
    * hand out numbers from the cursor the writing tab is using.
@@ -128,9 +128,9 @@ export function openSyncSession(options: SyncSessionOptions): SyncSession {
     const behind = Object.entries(floor).filter(([author, seq]) => (ours[author] ?? 0) < seq)
     if (behind.length === 0) return
     const readable = new Set(options.readableEpochs())
-    const author = options.anchorAuthor?.() ?? null
+    const authors = options.anchorAuthors?.() ?? null
     const anchors = (await options.transport.fetchSnapshots(options.resourceId))
-      .filter((snapshot) => author === null || snapshot.author === author)
+      .filter((snapshot) => authors === null || authors.includes(snapshot.author))
       .filter((snapshot) => snapshot.wraps.some((wrap) => readable.has(wrap.epoch)))
       .filter((snapshot) => behind.every(([writer, seq]) => (snapshot.covers[writer] ?? 0) >= seq))
       .sort((a, b) => b.createdAt - a.createdAt)

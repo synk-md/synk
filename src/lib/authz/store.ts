@@ -15,9 +15,16 @@ export class CapabilityStore {
   readonly owner: string
   private readonly capabilities = new Map<string, Capability>()
   private readonly revocations = new Map<string, Revocation>()
+  private readonly deputies: ReadonlyMap<string, string>
+  private readonly kept: ReadonlySet<string>
 
-  constructor(owner: string) {
+  constructor(
+    owner: string,
+    options: { deputies?: ReadonlyMap<string, string>; kept?: ReadonlySet<string> } = {},
+  ) {
     this.owner = owner
+    this.deputies = options.deputies ?? new Map()
+    this.kept = options.kept ?? new Set()
   }
 
   /** Add a capability. Signature is checked; authority is not - that is the walk's job. */
@@ -54,7 +61,12 @@ export class CapabilityStore {
 
     const walked = await verifyChain(capability, this.context(now))
     const issuers = chainIssuers(walked.chain ?? [capability])
-    if (!(await verifyRevocation(revocation, capability, issuers, this.owner))) return false
+    // A deputy revokes as the principal it acts for; a kept revocation, as the owner.
+    const principal =
+      this.deputies.get(revocation.iss) ?? (this.kept.has(revocation.sig) ? this.owner : revocation.iss)
+    const entitled = principal === this.owner || issuers.includes(principal)
+    const judged = entitled ? [...issuers, revocation.iss] : issuers
+    if (!(await verifyRevocation(revocation, capability, judged, this.owner))) return false
 
     this.revocations.set(revocation.cid, revocation)
     return true
@@ -75,6 +87,8 @@ export class CapabilityStore {
       owner: this.owner,
       now,
       revoked: this.revokedCids(),
+      deputies: this.deputies,
+      kept: this.kept,
     }
   }
 

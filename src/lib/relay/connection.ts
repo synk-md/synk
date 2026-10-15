@@ -283,8 +283,8 @@ export class RelayConnection {
   }
 
   /** As the owner, so the relay may let envelopes go behind this device's anchors. */
-  async claimOwnership(genesis: WorkspaceGenesis): Promise<boolean> {
-    const reply = await this.call({ op: "claim-owner", genesis })
+  async claimOwnership(genesis: WorkspaceGenesis, deputies: readonly string[] = []): Promise<boolean> {
+    const reply = await this.call({ op: "claim-owner", genesis, deputies: [...deputies] })
     return reply?.ok === true
   }
 

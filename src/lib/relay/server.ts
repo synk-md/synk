@@ -238,7 +238,7 @@ export class RelayServer {
         })
 
       case "claim-owner":
-        return this.claimOwner(session, message.id, message.genesis)
+        return this.claimOwner(session, message.id, message.genesis, message.deputies ?? [])
 
       case "deposit-snapshot":
         return this.deposit(session, message.id, message.snapshot)
@@ -342,11 +342,19 @@ export class RelayServer {
   }
 
   /** Only the owner's own device, with a genesis that verifies. */
-  private async claimOwner(session: Session, id: string, genesis: WorkspaceGenesis): Promise<void> {
+  private async claimOwner(
+    session: Session,
+    id: string,
+    genesis: WorkspaceGenesis,
+    deputies: readonly string[],
+  ): Promise<void> {
     if (!genesis || genesis.owner !== session.did || !(await verifyGenesis(genesis))) {
       return this.refuse(session, id, "malformed")
     }
-    this.store.claimOwnership(genesis)
+    if (!Array.isArray(deputies) || deputies.some((did) => typeof did !== "string")) {
+      return this.refuse(session, id, "malformed")
+    }
+    this.store.claimOwnership(genesis, deputies)
     this.send(session, { id, ok: true, re: "claim-owner" })
   }
 

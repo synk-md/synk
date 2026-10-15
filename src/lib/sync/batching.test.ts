@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import { joinWorkspace, newWorkspace, restartClient, settle, textOf } from "@/test/sync-fixtures"
 
@@ -87,7 +87,7 @@ describe("gathering edits", () => {
     const workspace = await newWorkspace()
     const alice = await joinWorkspace(workspace, "alice", { batchMs: 60_000 })
     alice.engine.transact(() => alice.text.insert(0, "x".repeat(70 * 1024)))
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(workspace.relay.size).toBe(1)
+    // Seconds, not the minute the batch would wait: sealing 70 KB takes a while under load.
+    await vi.waitFor(() => expect(workspace.relay.size).toBe(1), { timeout: 2000 })
   })
 })

@@ -20,7 +20,7 @@ import { linkIntoNotebook } from "./linking"
 import { rotateAway, unlinkDevice } from "./unlinking"
 import { readNotebookKeys } from "./notebook-keys"
 import { readNotebookWorkspace } from "./notebook-workspace"
-import { liveKeys, relayConnection, relayWatch } from "./note-relay"
+import { claimOwnershipAtRelay, liveKeys, relayConnection, relayWatch } from "./note-relay"
 import { pairingChannel, type PairedNotebook } from "./pairing"
 import { createDirectoryReplica, createTreeReplica, directoryChannel, treeResourceId } from "./replicas"
 import { storedWatermark } from "./stored-watermark"
@@ -210,6 +210,8 @@ export async function linkEverywhere(options: LinkEverywhereOptions) {
         recipient: options.record.did,
         epoch: keyring.currentEpoch,
       })
+      // As the owner, the new device's anchors now count at the relay too.
+      await claimOwnershipAtRelay({ doc: handle.doc, notebookId: notebook.id, device: options.device })
       linked.push(notebook)
     } catch (error) {
       skipped.push({ ...notebook, reason: error instanceof Error ? error.message : "could not be linked" })
@@ -241,6 +243,8 @@ export async function unlinkEverywhere(options: {
       unlinked.push(notebook)
       if (await rotateAway({ doc: handle.doc, notebookId: notebook.id, owner: options.device })) rotated.push(notebook)
       if (relayConnection()) await syncDirectory(notebook.id, options.device)
+      // And its anchors stop counting there.
+      await claimOwnershipAtRelay({ doc: handle.doc, notebookId: notebook.id, device: options.device })
     } catch (error) {
       failed.push({ ...notebook, reason: error instanceof Error ? error.message : "could not be unlinked" })
     }

@@ -11,6 +11,7 @@
 
 import type * as Y from "yjs"
 
+import { readDirectory } from "@/lib/directory"
 import { currentDevice, type DeviceIdentity } from "@/lib/identity"
 import type { ReadKeySource } from "@/lib/keys"
 import { RelayConnection, WebSocketLink, type RelayConnectionState } from "@/lib/relay"
@@ -97,7 +98,8 @@ export function relayConnection(): RelayConnection | null {
 
 /**
  * As the owner, say so to the relay - which is what lets it let envelopes go
- * behind this device's anchors. Anywhere else, nothing.
+ * behind this device's anchors, and behind those of the owner's own linked
+ * devices, named here. Anywhere else, nothing.
  */
 export async function claimOwnershipAtRelay(options: {
   doc: Y.Doc
@@ -110,7 +112,10 @@ export async function claimOwnershipAtRelay(options: {
     workspace: workspaceIdFor(options.notebookId),
   })
   if (ownership.owner !== options.device.did || !ownership.genesis) return false
-  return connection.claimOwnership(ownership.genesis)
+  const directory = await readDirectory(options.doc, [ownership.owner], {
+    workspace: workspaceIdFor(options.notebookId),
+  })
+  return connection.claimOwnership(ownership.genesis, [...directory.deputies.keys()])
 }
 
 export function closeRelayConnection(): void {

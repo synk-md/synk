@@ -77,6 +77,9 @@ export {
   trackDocumentClock,
 } from "./clock-durability"
 
+export type { AdminTrust, TrustedAdmins } from "./admin-trust"
+export { adminDidsOf, keptOf, trustsAdmin } from "./admin-trust"
+
 export type {
   AdmittedDevice,
   CreateDeviceAdmissionOptions,

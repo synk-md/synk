@@ -3,8 +3,9 @@
 import * as React from "react"
 
 import { currentDevice } from "@/lib/identity"
-import { relayConnection, type PlanProgress } from "@/lib/workspace"
+import { readNotebookWorkspace, relayConnection, type PlanProgress } from "@/lib/workspace"
 import { coverNotes } from "@/lib/workspace/cover-notes"
+import { createNotebookIndexDoc } from "@/lib/yjs-utils"
 
 export interface AdmissionRun {
   /** Null until an admission is running or has finished. */
@@ -61,11 +62,12 @@ export function useNoteAdmission(notebookId: string | null) {
       abort.current = controller
 
       try {
+        // Admitting is the owner's act: this device, or one of the owner's own.
+        const workspace = await readNotebookWorkspace({ doc: createNotebookIndexDoc(notebookId).doc, notebookId })
         const result = await coverNotes({
           notebookId,
           device: device.identity,
-          // Admitting is the owner's act, so the owner is this device.
-          owner: device.identity.did,
+          owner: workspace.ownership.owner ?? device.identity.did,
           recipient: joinerDid,
           epoch,
           signal: controller.signal,

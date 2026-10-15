@@ -63,8 +63,13 @@ export type ClientMessage =
   | { op: "vector"; id: string; resourceId: string }
   /** How far envelopes were let go, so a device behind it knows to start from an anchor. */
   | { op: "floor"; id: string; resourceId: string }
-  /** The owner's genesis, which is what lets the relay prune behind their anchors. */
-  | { op: "claim-owner"; id: string; genesis: WorkspaceGenesis }
+  /**
+   * The owner's genesis, which is what lets the relay prune behind their
+   * anchors, and the owner's own linked devices, whose anchors count too.
+   * Sent by the owner's device, so the list is the owner's word; each claim
+   * replaces the last.
+   */
+  | { op: "claim-owner"; id: string; genesis: WorkspaceGenesis; deputies?: string[] }
   | { op: "deposit-snapshot"; id: string; snapshot: Snapshot }
   | { op: "snapshots"; id: string; resourceId: string }
   | { op: "slice"; id: string; request: SliceRequest }

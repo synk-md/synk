@@ -19,6 +19,7 @@ import {
 } from "@/lib/crypto"
 import { deriveClientId } from "./client-id"
 import { publicKeyFromDid } from "./did"
+import { trustsAdmin, type AdminTrust } from "./admin-trust"
 import { verifyDeviceRecord, type DeviceRecord } from "./device-record"
 
 export const DEVICE_ADMISSION_VERSION = 1
@@ -146,7 +147,7 @@ export interface VerifyAdmissionOptions {
  */
 export async function verifyDeviceAdmission(
   admission: DeviceAdmission,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
   options: VerifyAdmissionOptions = {},
 ): Promise<boolean> {
   try {
@@ -154,7 +155,7 @@ export async function verifyDeviceAdmission(
     if (!admission.label.trim()) return false
     if (!admission.member.trim()) return false
     if (options.workspace !== undefined && admission.workspace !== options.workspace) return false
-    if (!trustedAdminDids.includes(admission.admin)) return false
+    if (!trustsAdmin(trustedAdminDids, admission.admin, admission.sig)) return false
 
     const devicePublicKey = publicKeyFromDid(admission.did, "ed25519")
     // Throws if the sealing slot holds a signing key or a malformed DID.
@@ -183,7 +184,7 @@ export async function verifyDeviceAdmission(
  */
 export async function verifyAdmittedDevice(
   device: AdmittedDevice,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
   options: VerifyAdmissionOptions = {},
 ): Promise<boolean> {
   const { record, admission } = device

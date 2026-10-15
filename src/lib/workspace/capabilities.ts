@@ -92,7 +92,10 @@ export async function authorizationContext(
   owner: string,
   now: number = Date.now(),
 ): Promise<AuthorizationContext> {
-  const store = new CapabilityStore(owner)
+  // The owner's own linked devices act as the owner; what one signed before it
+  // was unlinked stays valid if the owner kept it.
+  const directory = await readDirectory(doc, [owner], { now })
+  const store = new CapabilityStore(owner, { deputies: directory.deputies, kept: directory.kept })
   for (const capability of await readCapabilities(doc)) await store.add(capability)
   // After every capability, since a revocation is judged against its chain.
   // The store refuses one that its issuer was not entitled to make.

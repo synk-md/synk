@@ -24,7 +24,7 @@ import {
   type Bytes,
   type SigningKey,
 } from "@/lib/crypto"
-import { publicKeyFromDid } from "@/lib/identity"
+import { publicKeyFromDid, trustsAdmin, type AdminTrust } from "@/lib/identity"
 
 import type { Invitation } from "./invitation"
 
@@ -94,13 +94,13 @@ export async function revokeInvitation(
 export async function verifyInvitationRevocation(
   revocation: InvitationRevocation,
   invitation: Invitation,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
 ): Promise<boolean> {
   try {
     if (revocation.v !== INVITATION_REVOCATION_VERSION) return false
     if (revocation.invitationId !== invitation.invitationId) return false
     if (revocation.workspace !== invitation.workspace) return false
-    if (!trustedAdminDids.includes(revocation.admin)) return false
+    if (!trustsAdmin(trustedAdminDids, revocation.admin, revocation.sig)) return false
 
     const { sig, ...body } = revocation
     return await verifySignature(
@@ -117,7 +117,7 @@ export async function verifyInvitationRevocation(
 export async function revokedInvitationIds(
   revocations: readonly InvitationRevocation[],
   invitations: readonly Invitation[],
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
 ): Promise<Set<string>> {
   const byId = new Map(invitations.map((invitation) => [invitation.invitationId, invitation]))
   const revoked = new Set<string>()

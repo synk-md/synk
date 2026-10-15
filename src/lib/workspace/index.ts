@@ -72,6 +72,7 @@ export {
   findOwnRedemption,
   cancelInvitation,
   findOwnerRoot,
+  notebookAdmins,
   grantedInvitationIds,
   hasAdmittedMembers,
   hasOutstandingInvitations,

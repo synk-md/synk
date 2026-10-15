@@ -19,7 +19,7 @@ import {
   type Bytes,
   type SigningKey,
 } from "@/lib/crypto"
-import { publicKeyFromDid, type DeviceAdmission } from "@/lib/identity"
+import { publicKeyFromDid, trustsAdmin, type AdminTrust, type DeviceAdmission } from "@/lib/identity"
 
 export const DEVICE_REMOVAL_VERSION = 1
 
@@ -88,14 +88,14 @@ export async function removeDevice(options: RemoveDeviceOptions): Promise<Device
 export async function verifyDeviceRemoval(
   removal: DeviceRemoval,
   admission: DeviceAdmission,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
 ): Promise<boolean> {
   try {
     if (removal.v !== DEVICE_REMOVAL_VERSION) return false
     if (removal.did !== admission.did) return false
     if (removal.workspace !== admission.workspace) return false
     if (removal.removedAt < admission.issuedAt) return false
-    if (!trustedAdminDids.includes(removal.admin)) return false
+    if (!trustsAdmin(trustedAdminDids, removal.admin, removal.sig)) return false
 
     const { sig, ...body } = removal
     return await verifySignature(

@@ -26,7 +26,10 @@ import { readNotebookWorkspace } from "./notebook-workspace"
 export interface RemoveFromNotebookOptions {
   doc: Y.Doc
   notebookId: string
+  /** The device removing: the owner, or one of the owner's own linked devices. */
   owner: DeviceIdentity
+  /** The notebook's owner, when `owner` is one of their linked devices. */
+  ownerDid?: string
   /** Every device admitted under this member id goes. Leaving one would leave them access. */
   member: string
   reason?: string
@@ -48,16 +51,21 @@ function memberOf(device: MemberDevice): string {
 
 export async function removeFromNotebook(options: RemoveFromNotebookOptions): Promise<MemberRemoved> {
   const now = options.now ?? Date.now()
-  const ownerDid = options.owner.did
+  const ownerDid = options.ownerDid ?? options.owner.did
+  const admin = options.owner
 
   const workspace = await readNotebookWorkspace({
     doc: options.doc,
     notebookId: options.notebookId,
-    selfDid: ownerDid,
+    selfDid: admin.did,
     expectedOwner: ownerDid,
     now,
   })
-  if (workspace.ownership.status !== "established" || workspace.ownership.owner !== ownerDid) {
+  if (
+    workspace.ownership.status !== "established" ||
+    workspace.ownership.owner !== ownerDid ||
+    !workspace.directory?.admins.includes(admin.did)
+  ) {
     throw new Error("only the notebook's owner can remove members")
   }
   const devices = workspace.directory?.devices ?? []
@@ -73,7 +81,7 @@ export async function removeFromNotebook(options: RemoveFromNotebookOptions): Pr
   const keys = await readNotebookKeys({
     doc: options.doc,
     notebookId: options.notebookId,
-    device: options.owner,
+    device: admin,
     owner: ownerDid,
     now,
   })
@@ -88,15 +96,15 @@ export async function removeFromNotebook(options: RemoveFromNotebookOptions): Pr
     sealingDid: device.record.sealingDid,
   }))
   const cut = await domain.removeMember(recipients, { createdAt: now })
-  const signedEpoch = await signEpochRecord(cut.record, options.owner.signingKey, ownerDid)
+  const signedEpoch = await signEpochRecord(cut.record, admin.signingKey, admin.did)
 
   const revocations: Revocation[] = []
   for (const capability of await readCapabilities(options.doc)) {
     if (!leavingDids.has(capability.payload.aud)) continue
     revocations.push(
       await revokeCapability({
-        signingKey: options.owner.signingKey,
-        issuer: ownerDid,
+        signingKey: admin.signingKey,
+        issuer: admin.did,
         capabilityCid: capability.cid,
         revokedAt: now,
         ...(options.reason === undefined ? {} : { reason: options.reason }),
@@ -111,8 +119,8 @@ export async function removeFromNotebook(options: RemoveFromNotebookOptions): Pr
     if (device.kind !== "admitted") continue
     removals.push(
       await removeDevice({
-        signingKey: options.owner.signingKey,
-        admin: ownerDid,
+        signingKey: admin.signingKey,
+        admin: admin.did,
         admission: device.admission,
         removedAt: now,
         ...(options.reason === undefined ? {} : { reason: options.reason }),

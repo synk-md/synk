@@ -108,7 +108,7 @@ async function theOwner(notebook: Notebook) {
     engine,
     transport,
     keys,
-    claim: () => connection.claimOwnership(ownership.genesis!),
+    claim: (deputies: string[] = []) => connection.claimOwnership(ownership.genesis!, deputies),
     writes: async (text: string) => {
       engine.transact(() => write(doc, text))
       await engine.flush()
@@ -157,7 +157,7 @@ async function aLateDevice(notebook: Notebook, device: DeviceIdentity) {
     resourceId: RESOURCE,
     readableEpochs: () => keys.readableEpochs(),
     relay: { state: () => "online", onChange: () => () => undefined },
-    anchorAuthor: () => notebook.owner.did,
+    anchorAuthors: () => [notebook.owner.did],
     canAuthor: false,
   })
   await session.settled()
@@ -278,6 +278,24 @@ describe("letting envelopes go behind the owner's anchor", () => {
     const ada = await aLateDevice(notebook, notebook.ada)
     expect(read(ada.doc)).toContain("Flights booked.")
     ada.close()
+  })
+
+  /** The owner's phone acts as the owner, so its anchors count - for as long as the owner says so. */
+  it("lets go behind an anchor from a device the owner names, until it stops naming it", async () => {
+    const notebook = await aNotebook()
+    const phone = await aDevice()
+    const sindre = await theOwner(notebook)
+    await sindre.claim([phone.did])
+    await sindre.writes("Flights booked.")
+    await sindre.anchor(phone)
+    notebook.clock.now += 31 * DAY
+    expect(notebook.server.sweep()).toBe(1)
+
+    await sindre.claim([])
+    await sindre.writes("Hotel near the station.")
+    await sindre.anchor(phone)
+    notebook.clock.now += 31 * DAY
+    expect(notebook.server.sweep()).toBe(0)
   })
 
   it("refuses a claim made for someone else", async () => {

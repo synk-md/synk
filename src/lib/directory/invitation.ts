@@ -30,7 +30,9 @@ import {
   createDeviceAdmission,
   didFromSigningKey,
   publicKeyFromDid,
+  trustsAdmin,
   verifyDeviceRecord,
+  type AdminTrust,
   type DeviceAdmission,
   type DeviceRecord,
 } from "@/lib/identity"
@@ -123,6 +125,12 @@ export interface InvitationBody {
   label: string
   workspace: string
   admin: string
+  /**
+   * The owner the admin acts for, when it is one of the owner's own devices.
+   * Signed, so a joiner checks the notebook against it rather than against
+   * links in the directory, which anyone who can write there can overwrite.
+   */
+  owner?: string
   issuedAt: number
   expiresAt: number
 }
@@ -143,6 +151,8 @@ export function invitationBytes(body: InvitationBody): Bytes {
       body.admin,
       String(body.issuedAt),
       String(body.expiresAt),
+      // Only when present, so an invitation from before it verifies unchanged.
+      ...(body.owner === undefined ? [] : [body.owner]),
     ].join("\n"),
   )
 }
@@ -155,6 +165,7 @@ export interface CreateInvitationOptions {
   member: string
   label: string
   workspace: string
+  owner?: string
   issuedAt?: number
   ttlMs?: number
 }
@@ -185,6 +196,7 @@ export async function createInvitation(options: CreateInvitationOptions): Promis
     label: label.trim(),
     workspace,
     admin: adminDid,
+    ...(options.owner === undefined ? {} : { owner: options.owner }),
     issuedAt,
     expiresAt: issuedAt + (options.ttlMs ?? DEFAULT_INVITATION_TTL_MS),
   }
@@ -199,13 +211,13 @@ export interface VerifyInvitationOptions {
 
 export async function verifyInvitation(
   invitation: Invitation,
-  trustedAdminDids: readonly string[],
+  trustedAdminDids: AdminTrust,
   options: VerifyInvitationOptions = {},
 ): Promise<boolean> {
   try {
     if (invitation.v !== INVITATION_VERSION) return false
     if (!invitation.member.trim() || !invitation.label.trim()) return false
-    if (!trustedAdminDids.includes(invitation.admin)) return false
+    if (!trustsAdmin(trustedAdminDids, invitation.admin, invitation.sig)) return false
     if (options.workspace !== undefined && invitation.workspace !== options.workspace) return false
 
     const now = options.now ?? Date.now()
@@ -353,7 +365,7 @@ export interface GrantFromRedemptionOptions {
   invitation: Invitation
   redemption: Redemption
   /** Admins this grant will accept the invitation as having come from. */
-  trustedAdminDids: readonly string[]
+  trustedAdminDids: AdminTrust
   /**
    * Redemptions already recorded for this invitation, from the directory.
    * Single-use is enforced here: a second redemption naming a *different*

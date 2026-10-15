@@ -7,6 +7,7 @@ import type { Ability } from "@/lib/authz"
 import type { Invitation, Redemption } from "@/lib/directory"
 import { currentDevice } from "@/lib/identity"
 import {
+  adminDids,
   admitFromRedemption,
   authorizationContext,
   cancelInvitation,
@@ -145,9 +146,9 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
     }
   }, [notebookId, refresh])
 
-  const canAdmit = Boolean(
-    notebookId && selfDid && workspace?.ownership.owner === selfDid,
-  )
+  // The owner, or any of the owner's own linked devices.
+  const canAdmit = Boolean(notebookId && selfDid && workspace && adminDids(workspace).includes(selfDid))
+  const ownerDid = workspace?.ownership.owner ?? null
 
   const invite = React.useCallback(
     async (request: { secret: Uint8Array; text: string; member: string; label: string }) => {
@@ -179,6 +180,7 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
         doc,
         notebookId,
         owner: device.identity,
+        ...(ownerDid === null ? {} : { ownerDid }),
         invitation: pending.invitation,
         redemption: pending.redemption,
         ability,
@@ -187,7 +189,7 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
       refresh()
       return { epoch: granted.epoch }
     },
-    [notebookId, device, refresh],
+    [notebookId, device, ownerDid, refresh],
   )
 
   // Rejection is local and deliberately not a record: refusing to admit someone
@@ -221,13 +223,14 @@ export function useNotebookMembers(notebookId: string | null): NotebookMembers {
         doc: createNotebookIndexDoc(notebookId).doc,
         notebookId,
         owner: device.identity,
+        ...(ownerDid === null ? {} : { ownerDid }),
         member: member.member,
         ...(reason === undefined ? {} : { reason }),
       })
       refresh()
       return { epoch: removed.epoch }
     },
-    [notebookId, device, refresh],
+    [notebookId, device, ownerDid, refresh],
   )
 
   return {

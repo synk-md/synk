@@ -8,21 +8,28 @@
  * until the key is replaced - which only the owner can do. The owner's device
  * does it as soon as it sees a device that has been taken out and can still
  * reach the current key; if the owner is the one unlinking, that is at once.
+ *
+ * One of the owner's own devices acted as the owner, so it may have admitted,
+ * removed and cut epochs. Unlinking it keeps what the owner has seen it sign,
+ * by signature, so none of that comes undone - and nothing it signs later counts.
  */
 
 import type * as Y from "yjs"
 
-import { putLinkRevocation, readDirectory } from "@/lib/directory"
+import type { Revocation } from "@/lib/authz"
+import { putLinkRevocation, putRatification, ratify, readDirectory } from "@/lib/directory"
 import type { DeviceIdentity } from "@/lib/identity"
 import { segmentStart, type KeyRecipient } from "@/lib/keys"
 import { revokeLink, signEpochRecord } from "@/lib/membership"
 
+import { readCapabilities, REVOCATION_MAP } from "./capabilities"
 import {
   keyDomainFor,
   putEpochRecord,
   putSealedKeys,
   readNotebookKeys,
   restoreDomainAdmin,
+  storedEpochRecords,
   storedSealedKeys,
 } from "./notebook-keys"
 import { readNotebookWorkspace, workspaceIdFor } from "./notebook-workspace"
@@ -57,17 +64,51 @@ export async function unlinkDevice(options: UnlinkOptions): Promise<"unlinked" |
     throw new Error("only one of this person's own approved devices can unlink it")
   }
 
-  putLinkRevocation(
-    options.doc,
-    await revokeLink({
-      signingKey: options.actor.signingKey,
-      revoker: options.actor.did,
-      link: target.link,
-      revokedAt: options.now ?? Date.now(),
-      ...(options.reason === undefined ? {} : { reason: options.reason }),
-    }),
-  )
+  const now = options.now ?? Date.now()
+  const revocation = await revokeLink({
+    signingKey: options.actor.signingKey,
+    revoker: options.actor.did,
+    link: target.link,
+    revokedAt: now,
+    ...(options.reason === undefined ? {} : { reason: options.reason }),
+  })
+  const deputy = directory.deputies.has(target.record.did)
+  const ratification = deputy
+    ? await ratify({
+        signingKey: options.actor.signingKey,
+        admin: options.actor.did,
+        workspace: workspaceIdFor(options.notebookId),
+        device: target.record.did,
+        kept: await signedBy(options.doc, options.notebookId, target.record.did),
+        at: now,
+      })
+    : null
+  // Together, so nobody ever sees the device gone and its work undone.
+  options.doc.transact(() => {
+    putLinkRevocation(options.doc, revocation)
+    if (ratification) putRatification(options.doc, ratification)
+  })
   return "unlinked"
+}
+
+/** Everything a device signed as an admin that this document holds, by signature or cid. */
+async function signedBy(doc: Y.Doc, notebookId: string, did: string): Promise<string[]> {
+  const out: string[] = []
+  for (const name of ["directory:admissions", "directory:removals", "directory:invitations", "directory:invitation-revocations"]) {
+    for (const record of doc.getMap<{ admin?: string; sig?: string }>(name).values()) {
+      if (record?.admin === did && typeof record.sig === "string") out.push(record.sig)
+    }
+  }
+  for (const signed of storedEpochRecords(doc, keyDomainFor(notebookId))) {
+    if (signed.asserter === did) out.push(signed.sig)
+  }
+  for (const capability of await readCapabilities(doc)) {
+    if (capability.payload.iss === did) out.push(capability.cid)
+  }
+  for (const revocation of doc.getMap<Revocation>(REVOCATION_MAP).values()) {
+    if (revocation?.iss === did && typeof revocation.sig === "string") out.push(revocation.sig)
+  }
+  return out
 }
 
 export interface RotateAwayOptions {

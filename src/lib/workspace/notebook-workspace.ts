@@ -210,7 +210,8 @@ export async function readNotebookWorkspace(
   }
 }
 
-/** Admins of this workspace. Today the owner; a grant model arrives with M7's wiring. */
+/** Admins of this workspace: the owner and the owner's own linked devices. */
 export function adminDids(workspace: NotebookWorkspace): string[] {
-  return workspace.ownership.owner ? [workspace.ownership.owner] : []
+  if (!workspace.ownership.owner) return []
+  return workspace.directory?.admins ?? [workspace.ownership.owner]
 }

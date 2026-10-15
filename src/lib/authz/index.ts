@@ -37,7 +37,7 @@ export type {
   AuthorizationResult,
   DenialReason,
 } from "./chain"
-export { activeCapabilities, authorize, isAuthorized, MAX_CHAIN_DEPTH, verifyChain } from "./chain"
+export { activeCapabilities, authorize, isAuthorized, MAX_CHAIN_DEPTH, principalFor, verifyChain } from "./chain"
 
 export type { Revocation, RevocationBody, RevokeOptions } from "./revocation"
 export { chainIssuers, REVOCATION_VERSION, revocationBytes, revokeCapability, verifyRevocation } from "./revocation"
