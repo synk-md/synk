@@ -14,8 +14,8 @@ import {
 } from "./people"
 
 // Only meaningful with a relay that lets go at once rather than after a month:
-// RELAY_PRUNE_AFTER_MS=0 RELAY_PRUNE_SETTLE_MS=0 pnpm test:e2e
-const PRUNING_AT_ONCE = process.env.RELAY_PRUNE_AFTER_MS === "0" && process.env.RELAY_PRUNE_SETTLE_MS === "0"
+// RELAY_PRUNE_AFTER_MS=0 pnpm test:e2e
+const PRUNING_AT_ONCE = process.env.RELAY_PRUNE_AFTER_MS === "0"
 
 /**
  * Once the relay has let the start of a note go behind the owner's anchor, a

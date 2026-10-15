@@ -23,11 +23,10 @@ const RELAY_ID = process.env.RELAY_ID ?? "did:relay:dev"
 
 /** Overridable so a test run can see pruning without waiting a month. */
 const PRUNE_AFTER_MS = Number(process.env.RELAY_PRUNE_AFTER_MS ?? 30 * 24 * 60 * 60 * 1000)
-const PRUNE_SETTLE_MS = Number(process.env.RELAY_PRUNE_SETTLE_MS ?? 7 * 24 * 60 * 60 * 1000)
 
 const relay = new RelayServer({
   relayId: RELAY_ID,
-  prune: { olderThanMs: PRUNE_AFTER_MS, settleMs: PRUNE_SETTLE_MS },
+  prune: { olderThanMs: PRUNE_AFTER_MS },
   // A generous ceiling. It exists so one client cannot spin the process, not
   // as a real quota - that belongs with the billing this does not have.
   rateLimit: 200,

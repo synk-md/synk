@@ -31,21 +31,18 @@ export const DEFAULT_QUOTA: RelayQuota = {
 export interface PrunePolicy {
   /** Only envelopes held at least this long. */
   olderThanMs: number
-  /**
-   * Only once the owner's claim has stood this long, so an owner who has not
-   * opened the notebook since can still dispute a rival who claimed first.
-   */
-  settleMs: number
 }
 
 export const DEFAULT_PRUNE: PrunePolicy = {
   olderThanMs: 30 * 24 * 60 * 60 * 1000,
-  settleMs: 7 * 24 * 60 * 60 * 1000,
 }
 
+/**
+ * The first claim is the owner's: they claim on creating the notebook, before
+ * anyone else knows its id. A rival can only dispute it, never take it over.
+ */
 interface OwnerClaim {
   owner: string
-  since: number
   /** Two different owners claimed it. Never pruned again. */
   disputed: boolean
 }
@@ -95,10 +92,10 @@ export class RelayStore {
   }
 
   /** A verified genesis. A second, different owner disputes it for good. */
-  claimOwnership(genesis: WorkspaceGenesis, now = Date.now()): OwnerClaim {
+  claimOwnership(genesis: WorkspaceGenesis): OwnerClaim {
     const existing = this.owners.get(genesis.resource)
     if (!existing) {
-      const claim = { owner: genesis.owner, since: now, disputed: false }
+      const claim = { owner: genesis.owner, disputed: false }
       this.owners.set(genesis.resource, claim)
       return claim
     }
@@ -116,7 +113,7 @@ export class RelayStore {
   prune(resourceId: string, now: number, policy: PrunePolicy = DEFAULT_PRUNE): number {
     const log = this.logs.get(resourceId)
     const claim = this.owners.get(governingResource(resourceId))
-    if (!log || !claim || claim.disputed || now - claim.since < policy.settleMs) return 0
+    if (!log || !claim || claim.disputed) return 0
 
     const floor = log.floor()
     const aged = (snapshot: Snapshot) =>

@@ -23,7 +23,7 @@ const RELAY_ID = "did:relay:test"
 const NOTEBOOK = "travel"
 const RESOURCE = noteResourceId(NOTEBOOK, "kyoto")
 const DAY = 24 * 60 * 60 * 1000
-const PRUNE = { olderThanMs: 30 * DAY, settleMs: 7 * DAY }
+const PRUNE = { olderThanMs: 30 * DAY }
 
 async function aDevice(): Promise<DeviceIdentity> {
   const signingKey = await generateSigningKey()
@@ -164,7 +164,7 @@ async function aLateDevice(notebook: Notebook, device: DeviceIdentity) {
   return { doc, close: () => session.close() }
 }
 
-/** A month and a bit, with the owner's anchor in place and the claim settled. */
+/** A month and a bit, with the owner's claim and anchor in place. */
 async function aPrunedNote(notebook: Notebook) {
   const sindre = await theOwner(notebook)
   expect(await sindre.claim()).toBe(true)
@@ -247,20 +247,6 @@ describe("letting envelopes go behind the owner's anchor", () => {
     notebook.clock.now += 31 * DAY
 
     expect(notebook.server.sweep()).toBe(0)
-  })
-
-  /** Gives an owner who has not opened the notebook lately time to dispute a rival. */
-  it("waits a week after the owner's claim before letting anything go", async () => {
-    const notebook = await aNotebook()
-    const sindre = await theOwner(notebook)
-    await sindre.writes("Flights booked.")
-    await sindre.anchor()
-    notebook.clock.now += 31 * DAY
-    await sindre.claim()
-
-    expect(notebook.server.sweep()).toBe(0)
-    notebook.clock.now += 7 * DAY
-    expect(notebook.server.sweep()).toBeGreaterThan(0)
   })
 
   /** Partway would leave the floor where no anchor is, and nothing to rebuild from. */

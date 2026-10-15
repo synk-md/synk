@@ -346,7 +346,7 @@ export class RelayServer {
     if (!genesis || genesis.owner !== session.did || !(await verifyGenesis(genesis))) {
       return this.refuse(session, id, "malformed")
     }
-    this.store.claimOwnership(genesis, this.now())
+    this.store.claimOwnership(genesis)
     this.send(session, { id, ok: true, re: "claim-owner" })
   }
 
