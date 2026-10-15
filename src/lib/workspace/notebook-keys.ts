@@ -37,6 +37,7 @@ import {
 
 import { authorizationContext, issueOwnerRoot, ownerHoldsRoot, putCapability } from "./capabilities"
 import { resourceIdFor } from "./notebook-workspace"
+import { rememberedEpoch, rememberEpoch } from "./remembered-epochs"
 
 export const EPOCH_MAP = "workspace:epochs"
 export const KEYRING_MAP = "workspace:keyring"
@@ -345,6 +346,18 @@ export async function readNotebookKeys(options: ReadKeysOptions): Promise<Notebo
   if (!timeline) {
     return { ...empty, access: "untrusted-timeline", verification }
   }
+  // Ending before an epoch this device already verified means the newest
+  // record went missing. Going back would mean writing under an old key.
+  const newest = timeline[timeline.length - 1].epoch
+  const seen = rememberedEpoch(options.notebookId)
+  if (seen !== null && newest < seen) {
+    return {
+      ...empty,
+      access: "untrusted-timeline",
+      verification: { ok: false, reason: "behind", failedAt: newest + 1 },
+    }
+  }
+  rememberEpoch(options.notebookId, newest)
 
   const sealed = storedSealedKeys(options.doc, domain)
   const { anchors, rejected } = await openVerifiedAnchors(timeline, sealed, options.device)

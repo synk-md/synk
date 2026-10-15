@@ -8,13 +8,15 @@ import { AppRoutes } from './app-routes.tsx'
 import { UpdateToast } from './components/custom-ui/update-toast/update-toast.tsx'
 import { flushPersistedDocs } from './lib/yjs-utils.ts'
 import { initCurrentDevice } from './lib/identity'
-import { configureOwnerPins, localOwnerPins } from './lib/workspace'
+import { configureOwnerPins, configureRememberedEpochs, localOwnerPins, localRememberedEpochs } from './lib/workspace'
 import { registerSW } from 'virtual:pwa-register'
 
 bootTheme();
 applyZoom();
 // Remember each notebook's owner once established, so a rival claim cannot dispute it.
 configureOwnerPins(localOwnerPins);
+// And the newest epoch verified, so a timeline missing its newest record is refused.
+configureRememberedEpochs(localRememberedEpochs);
 
 // Resolved before the first render so every document created afterwards can be
 // pinned to this device's client id synchronously. A failure here is reported

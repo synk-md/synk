@@ -132,6 +132,14 @@ export { hasNoOperations } from "./note-snapshots"
 
 export type { NoteEngineOptions } from "./note-relay"
 export type { RelaySettings } from "./note-relay"
+export type { RememberedEpochs } from "./remembered-epochs"
+export {
+  configureRememberedEpochs,
+  localRememberedEpochs,
+  memoryRememberedEpochs,
+  rememberedEpoch,
+  rememberEpoch,
+} from "./remembered-epochs"
 export type { OwnerPins } from "./owner-pins"
 export { configureOwnerPins, localOwnerPins, memoryOwnerPins, pinnedOwner, pinOwner } from "./owner-pins"
 export {

@@ -101,7 +101,8 @@ export async function verifySignedEpochRecord(
 export interface TimelineVerification {
   ok: boolean
   timeline?: EpochTimeline
-  reason?: "malformed" | "unsigned-record" | "unauthorized-asserter" | "empty"
+  /** `behind`: it ends before an epoch this device has already verified. */
+  reason?: "malformed" | "unsigned-record" | "unauthorized-asserter" | "empty" | "behind"
   /** Epoch number of the first record that failed, when one did. */
   failedAt?: number
 }
