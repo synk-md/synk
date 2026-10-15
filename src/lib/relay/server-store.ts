@@ -90,8 +90,12 @@ export class RelayStore {
     if (held.some((existing) => existing.id === snapshot.id)) return
     const next = [...held, snapshot]
     // Oldest out first: the chain is hash-linked, so a later snapshot already
-    // covers what the tail held.
-    while (next.length > this.quota.maxSnapshotsPerResource) next.shift()
+    // covers what the tail held. A checkpoint someone named goes last - it was
+    // kept on purpose, and an automatic point is only ever a convenience.
+    while (next.length > this.quota.maxSnapshotsPerResource) {
+      const automatic = next.findIndex((entry) => entry.kind !== "checkpoint")
+      next.splice(automatic >= 0 ? automatic : 0, 1)
+    }
     this.snapshots.set(snapshot.resourceId, next)
   }
 

@@ -10,20 +10,24 @@
 export type { TimelineAttribution } from "./attribution"
 export { resolveAll, resolveAttribution } from "./attribution"
 
-export type { BuildTimelineOptions, RestoreBlocker, RestorePoint } from "./timeline"
+export type { BuildTimelineOptions, RestoreBlocker, RestorePoint, SessionEntry } from "./timeline"
 export { buildTimeline, historyHorizon, restorePointsByDay, timelineFor } from "./timeline"
 
 export type {
+  ApplyRestoreOptions,
   RestoreBody,
   RestorePlan,
+  RestoreTarget,
   RestoreRecord,
   RestoreResult,
   RestoredRegion,
 } from "./restore"
 export {
   applyRestore,
+  applyRestoreToState,
   originalAuthors,
   planRestore,
+  planRestoreToState,
   RESTORE_VERSION,
   restoreBytes,
   verifyRestoreRecord,

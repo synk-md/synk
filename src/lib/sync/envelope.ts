@@ -23,7 +23,15 @@ import {
   type SigningKey,
 } from "@/lib/crypto"
 
-export const ENVELOPE_VERSION = 1
+/**
+ * 2 adds a signed `createdAt`, which history needs to say when something was
+ * written. 1 is still read: its bytes are unchanged, so it still verifies.
+ */
+export const ENVELOPE_VERSION = 2
+
+export type EnvelopeVersion = 1 | 2
+
+const isVersion = (v: unknown): v is EnvelopeVersion => v === 1 || v === 2
 
 /**
  * What the sealed payload is.
@@ -37,7 +45,7 @@ export const ENVELOPE_VERSION = 1
 export type EnvelopeKind = "update" | "presence"
 
 export interface EnvelopeHeader {
-  v: typeof ENVELOPE_VERSION
+  v: EnvelopeVersion
   kind: EnvelopeKind
   /** `did:key` of the authoring device's signing key. */
   author: string
@@ -48,6 +56,11 @@ export interface EnvelopeHeader {
   epoch: number
   /** base64url, 12 bytes. */
   nonce: string
+  /**
+   * When the author wrote it, by the author's clock. Present from version 2,
+   * and signed with the rest: the relay can delay an envelope but not re-date it.
+   */
+  createdAt?: number
 }
 
 export interface Envelope extends EnvelopeHeader {
@@ -72,6 +85,7 @@ export function headerBytes(header: EnvelopeHeader): Bytes {
       header.resourceId,
       String(header.epoch),
       header.nonce,
+      ...(header.v === 2 ? [String(header.createdAt)] : []),
     ].join("\n"),
   )
 }
@@ -94,6 +108,7 @@ export interface MakeEnvelopeOptions {
   kind?: EnvelopeKind
   /** Injectable for deterministic tests. */
   nonce?: Bytes
+  createdAt?: number
 }
 
 export async function makeEnvelope(options: MakeEnvelopeOptions): Promise<Envelope> {
@@ -109,6 +124,7 @@ export async function makeEnvelope(options: MakeEnvelopeOptions): Promise<Envelo
     resourceId,
     epoch,
     nonce: toBase64Url(nonce),
+    createdAt: options.createdAt ?? Date.now(),
   }
   const ct = toBase64Url(await aeadEncrypt(dek, nonce, update, headerBytes(header)))
   return { ...header, ct, sig: toBase64Url(await signingKey.sign(envelopeSignedBytes(header, ct))) }
@@ -124,6 +140,7 @@ export function envelopeHeader(envelope: Envelope): EnvelopeHeader {
     resourceId: envelope.resourceId,
     epoch: envelope.epoch,
     nonce: envelope.nonce,
+    ...(envelope.v === 2 ? { createdAt: envelope.createdAt } : {}),
   }
 }
 
@@ -136,7 +153,8 @@ export async function verifyEnvelopeSignature(
   authorPublicKey: Bytes,
 ): Promise<boolean> {
   try {
-    if (envelope.v !== ENVELOPE_VERSION) return false
+    if (!isVersion(envelope.v)) return false
+    if (envelope.v === 2 && !Number.isSafeInteger(envelope.createdAt)) return false
     if (!Number.isInteger(envelope.seq) || envelope.seq < 1) return false
     if (typeof envelope.ct !== "string" || typeof envelope.sig !== "string") return false
     if (fromBase64Url(envelope.nonce).length !== 12) return false
@@ -171,7 +189,8 @@ export function isEnvelopeShaped(value: unknown): value is Envelope {
   if (typeof value !== "object" || value === null) return false
   const e = value as Partial<Envelope>
   return (
-    e.v === ENVELOPE_VERSION &&
+    isVersion(e.v) &&
+    (e.v === 1 || typeof e.createdAt === "number") &&
     (e.kind === "update" || e.kind === "presence") &&
     typeof e.author === "string" &&
     typeof e.seq === "number" &&

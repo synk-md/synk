@@ -67,6 +67,8 @@ import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 import { CollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
 import { RemovedNotice, WriterNotice } from "@/components/custom-ui/connection/writer-notice"
 import { LinkDeviceDialog } from "@/components/custom-ui/device-manager/link-device-dialog"
+import { HistoryButton, NoteHistoryDialog } from "@/components/custom-ui/history/note-history-dialog"
+import { useNoteHistory } from "@/hooks/use-note-history"
 import { YourDevicesDialog } from "@/components/custom-ui/device-manager/your-devices-dialog"
 import { NotebookMembersDialog } from "@/components/custom-ui/members/notebook-members-dialog"
 import { MembersButton } from "@/components/custom-ui/members/members-button"
@@ -754,6 +756,14 @@ export function SimpleEditor({
   const shownLastSyncedAt = encryptedNote.state === "off" ? lastSyncedAt : encryptedNote.lastSyncedAt
   const isEditable =
     sharedPermission === "edit" && noteContentSynced && canWriteWith(docBinding) && !removedFromNotebook
+  const noteHistory = useNoteHistory({
+    notebookId: isSharedView ? null : (notebookId ?? null),
+    noteId: noteId ?? null,
+    doc: note?.doc ?? null,
+    canAuthor: docBinding.status === "writer" && !removedFromNotebook,
+    shared: fs.sharedWithMembers ?? false,
+  })
+  const [historyOpen, setHistoryOpen] = React.useState(false)
   // Read mode is a user preference layered on top of permission: it only
   // ever takes editing away, never grants it.
   const readMode = useReadMode()
@@ -1788,11 +1798,18 @@ export function SimpleEditor({
               />
             </div>
           </div>
+          <HistoryButton onOpen={() => setHistoryOpen(true)} />
           <MembersButton onOpen={() => setMembersOpen(true)} />
           <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} {...(openLinkDevice ? { onLinkDevice: openLinkDevice } : {})} {...(openDevices ? { onManageDevices: openDevices } : {})} />
         </div>
       )}
       <LinkDeviceDialog open={linkingDevice} onClose={() => setLinkingDevice(false)} />
+      <NoteHistoryDialog
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        state={noteHistory}
+        canRestore={isEditable}
+      />
       <YourDevicesDialog open={managingDevices} onClose={() => setManagingDevices(false)} notebookId={notebookId ?? null} />
       <NotebookMembersDialog
         open={membersOpen}

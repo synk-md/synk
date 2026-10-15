@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { generateAeadKey, generateSigningKey, toHex, utf8 } from "@/lib/crypto"
+import { aeadEncrypt, generateAeadKey, generateSigningKey, randomNonce, toBase64Url, toHex, utf8 } from "@/lib/crypto"
 import { didFromSigningKey } from "@/lib/identity"
 import {
   envelopeHeader,
+  envelopeSignedBytes,
   headerBytes,
   isEnvelopeShaped,
   makeEnvelope,
   openEnvelope,
   verifyEnvelopeSignature,
   type Envelope,
+  type EnvelopeHeader,
 } from "./envelope"
 
 const RESOURCE = "notebook:1"
@@ -120,5 +122,66 @@ describe("isEnvelopeShaped", () => {
     expect(isEnvelopeShaped({ ...envelope, kind: undefined })).toBe(false)
     expect(isEnvelopeShaped(null)).toBe(false)
     expect(isEnvelopeShaped({})).toBe(false)
+  })
+})
+
+describe("when an envelope was written", () => {
+  /** History needs to say when; the relay may delay an envelope but must not re-date it. */
+  it("carries a signed time that cannot be changed", async () => {
+    const signingKey = await generateSigningKey()
+    const author = didFromSigningKey(signingKey.publicKey)
+    const envelope = await makeEnvelope({
+      signingKey,
+      author,
+      seq: 1,
+      resourceId: "notebook:a/note:b",
+      epoch: 1,
+      dek: generateAeadKey(),
+      update: new Uint8Array([1, 2, 3]),
+      createdAt: 1_000,
+    })
+
+    expect(envelope.v).toBe(2)
+    expect(envelope.createdAt).toBe(1_000)
+    expect(await verifyEnvelopeSignature(envelope, signingKey.publicKey)).toBe(true)
+    expect(await verifyEnvelopeSignature({ ...envelope, createdAt: 2_000 }, signingKey.publicKey)).toBe(false)
+  })
+
+  /** Everything published before the time was added must still verify and open. */
+  it("still reads an envelope from before it carried one", async () => {
+    const signingKey = await generateSigningKey()
+    const dek = generateAeadKey()
+    const nonce = randomNonce()
+    const header: EnvelopeHeader = {
+      v: 1,
+      kind: "update",
+      author: didFromSigningKey(signingKey.publicKey),
+      seq: 1,
+      resourceId: "notebook:a/note:b",
+      epoch: 1,
+      nonce: toBase64Url(nonce),
+    }
+    const ct = toBase64Url(await aeadEncrypt(dek, nonce, new Uint8Array([7]), headerBytes(header)))
+    const legacy: Envelope = { ...header, ct, sig: toBase64Url(await signingKey.sign(envelopeSignedBytes(header, ct))) }
+
+    expect(isEnvelopeShaped(legacy)).toBe(true)
+    expect(await verifyEnvelopeSignature(legacy, signingKey.publicKey)).toBe(true)
+    expect(await openEnvelope(legacy, dek)).toEqual(new Uint8Array([7]))
+  })
+
+  it("rejects a version 2 envelope without a time", async () => {
+    const signingKey = await generateSigningKey()
+    const envelope = await makeEnvelope({
+      signingKey,
+      author: didFromSigningKey(signingKey.publicKey),
+      seq: 1,
+      resourceId: "notebook:a/note:b",
+      epoch: 1,
+      dek: generateAeadKey(),
+      update: new Uint8Array([1]),
+    })
+    const untimed: Partial<Envelope> = { ...envelope }
+    delete untimed.createdAt
+    expect(isEnvelopeShaped(untimed)).toBe(false)
   })
 })

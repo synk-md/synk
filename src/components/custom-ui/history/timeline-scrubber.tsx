@@ -3,6 +3,7 @@
 import * as React from "react"
 import {
   RiBookmark3Line,
+  RiEdit2Line,
   RiEyeOffLine,
   RiGitCommitLine,
   RiHistoryLine,
@@ -28,6 +29,15 @@ const KIND_ICON: Record<RestorePoint["kind"], React.ReactNode> = {
   join: <RiKey2Line />,
   promotion: <RiKey2Line />,
   automatic: <RiGitCommitLine />,
+  session: <RiEdit2Line />,
+}
+
+const TITLE: Record<RestorePoint["kind"], string> = {
+  checkpoint: "Checkpoint",
+  join: "Saved point",
+  promotion: "Saved point",
+  automatic: "Saved point",
+  session: "Edits",
 }
 
 function when(at: number, now: number): string {
@@ -79,7 +89,7 @@ export function TimelineScrubber({
   if (points.length === 0) {
     return (
       <p className="hx-empty" role="status">
-        No restore points yet. One is saved as you work, and whenever who can see this changes.
+        No restore points yet. Name one to keep the note as it is now.
       </p>
     )
   }
@@ -121,9 +131,14 @@ export function TimelineScrubber({
 
               <span className="hx-point-body">
                 <span className="hx-point-title">
-                  {point.label ?? (point.kind === "checkpoint" ? "Checkpoint" : "Saved point")}
+                  {point.label ?? TITLE[point.kind]}
                   {point.kind === "checkpoint" && point.label && (
                     <span className="hx-chip">Named</span>
+                  )}
+                  {point.kind === "session" && point.changes !== undefined && (
+                    <span className="hx-chip">
+                      {point.changes === 1 ? "1 change" : `${String(point.changes)} changes`}
+                    </span>
                   )}
                   {(point.kind === "join" || point.kind === "promotion") && (
                     <span className="hx-chip" title="Taken because who can see this changed">

@@ -98,7 +98,9 @@ export function RestoreDialog({
         <div className="hx-header">
           <div className="hx-heading-row">
             <h3 id="restore-heading">
-              Go back to {point.label ?? new Date(point.createdAt).toLocaleString()}?
+              {point.kind === "session"
+                ? `Go back to the end of ${point.attribution.label}'s edits?`
+                : `Go back to ${point.label ?? new Date(point.createdAt).toLocaleString()}?`}
             </h3>
           </div>
           <Button type="button" data-style="ghost" aria-label="Close" tooltip="Close" onClick={onClose}>

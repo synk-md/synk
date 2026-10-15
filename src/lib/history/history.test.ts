@@ -209,6 +209,36 @@ describe("buildTimeline", () => {
 
     expect(points.find((point) => point.id === recent.id)?.blocker).toBe("current")
   })
+
+  /** Credited to the person who wrote, in among the snapshots by time. */
+  it("places sessions on the timeline, each credited to its writer", async () => {
+    const { user, author, old, recent } = await fixture()
+    const session = (id: string, createdAt: number, epochs: number[]) => ({
+      id,
+      resourceId: RESOURCE,
+      domain: DOMAIN,
+      author: author.did,
+      createdAt,
+      epochs,
+      changes: 4,
+    })
+    const points = buildTimeline({
+      entries: [
+        { materialised: true, ...old },
+        { materialised: true, ...recent },
+      ],
+      sessions: [session("between", T0 + MINUTE / 2, [1]), session("sealed-before", T0 - MINUTE, [0, 1])],
+      users: [user],
+      readableEpochs: [1, 3],
+    })
+
+    expect(points.map((point) => point.id)).toEqual([recent.id, "between", old.id, "sealed-before"])
+    const between = points[1]
+    expect(between).toMatchObject({ kind: "session", changes: 4, restorable: true })
+    expect(between.attribution.label).toBe("Ada")
+    // Part of it sealed under an epoch this member never held.
+    expect(points[3].blocker).toBe("outside-visible-history")
+  })
 })
 
 /* ---- restore ------------------------------------------------------------- */

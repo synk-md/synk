@@ -304,8 +304,20 @@ function restoreFragment(live: Y.XmlFragment, target: Y.XmlFragment): number {
   return insert.length
 }
 
+/**
+ * What a restore goes back to: a snapshot, or a state rebuilt from an anchor
+ * and the envelopes after it. A snapshot is one already.
+ */
+export interface RestoreTarget {
+  id: string
+  resourceId: string
+  domain: string
+  /** Hash of the state, so the record names specific content. */
+  stateHash: string
+}
+
 export interface RestorePlan {
-  target: Snapshot
+  target: RestoreTarget
   /** Items or characters this restore would bring back or rewrite. */
   changed: number
   /** Who wrote the target's content. Survives into the record. */
@@ -330,7 +342,20 @@ export async function planRestore(options: {
   target: Snapshot
   keys: Pick<ReadKeySource, "keyFor">
 }): Promise<RestorePlan> {
-  const state = await openTarget(options.target, options.keys)
+  return planRestoreToState({
+    doc: options.doc,
+    target: options.target,
+    state: await openTarget(options.target, options.keys),
+  })
+}
+
+/** The same plan, for a state already in hand. */
+export function planRestoreToState(options: {
+  doc: Y.Doc
+  target: RestoreTarget
+  state: Bytes
+}): RestorePlan {
+  const state = options.state
 
   const targetDoc = new Y.Doc()
   Y.applyUpdate(targetDoc, state)
@@ -390,10 +415,8 @@ export interface RestoreResult {
  * published exactly like any other local change. Restore does not get a private
  * path to the document.
  */
-export async function applyRestore(options: {
+export interface ApplyRestoreOptions {
   doc: Y.Doc
-  target: Snapshot
-  keys: Pick<ReadKeySource, "keyFor">
   signingKey: SigningKey
   actor: string
   /** Checked before anything is written. */
@@ -403,15 +426,26 @@ export async function applyRestore(options: {
   /** Runs the mutation under the engine's local origin. */
   transact: (fn: () => void) => void
   restoredAt?: number
-}): Promise<RestoreResult> {
+}
+
+export async function applyRestore(
+  options: ApplyRestoreOptions & { target: Snapshot; keys: Pick<ReadKeySource, "keyFor"> },
+): Promise<RestoreResult> {
+  return applyRestoreToState({ ...options, state: await openTarget(options.target, options.keys) })
+}
+
+/** The same restore, for a state already in hand - one rebuilt from the log. */
+export async function applyRestoreToState(
+  options: ApplyRestoreOptions & { target: RestoreTarget; state: Bytes },
+): Promise<RestoreResult> {
   if (!(await options.canWrite(options.target.resourceId, options.actor))) {
     throw new Error("not authorized to restore this resource")
   }
 
-  const plan = await planRestore({ doc: options.doc, target: options.target, keys: options.keys })
+  const plan = planRestoreToState({ doc: options.doc, target: options.target, state: options.state })
 
   const targetDoc = new Y.Doc()
-  Y.applyUpdate(targetDoc, await openTarget(options.target, options.keys))
+  Y.applyUpdate(targetDoc, options.state)
   mirrorRoots(options.doc, targetDoc)
 
   options.transact(() => {

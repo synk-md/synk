@@ -26,7 +26,8 @@ export interface RestorePoint {
   id: string
   resourceId: string
   domain: string
-  kind: SnapshotEntry["kind"]
+  /** A session is someone's run of edits, rebuilt from the envelopes rather than stored. */
+  kind: SnapshotEntry["kind"] | "session"
   epoch: number
   createdAt: number
   /** User-given name, for a pinned checkpoint. */
@@ -37,10 +38,26 @@ export interface RestorePoint {
   materialised: boolean
   restorable: boolean
   blocker: RestoreBlocker | null
+  /** How many changes a session holds. */
+  changes?: number
+}
+
+/** A run of one person's edits, as the timeline needs it. */
+export interface SessionEntry {
+  id: string
+  resourceId: string
+  domain: string
+  author: string
+  /** When it ended, which is the point it restores to. */
+  createdAt: number
+  /** Every epoch its changes were sealed under. */
+  epochs: readonly number[]
+  changes: number
 }
 
 export interface BuildTimelineOptions {
   entries: readonly SnapshotEntry[]
+  sessions?: readonly SessionEntry[]
   users: readonly User[]
   /** Epochs this member can open. Anything else is outside their history. */
   readableEpochs: readonly number[]
@@ -54,12 +71,46 @@ export interface BuildTimelineOptions {
  */
 export function buildTimeline(options: BuildTimelineOptions): RestorePoint[] {
   const readable = new Set(options.readableEpochs)
+  const sessions = options.sessions ?? []
   const attributions = resolveAll(
-    options.entries.map((entry) => entry.author),
+    [...options.entries, ...sessions].map((entry) => entry.author),
     options.users,
   )
+  const attributionOf = (author: string): TimelineAttribution =>
+    attributions.get(author) ??
+    ({
+      author,
+      member: null,
+      label: author,
+      assurance: "self-asserted",
+      conflict: null,
+      unknown: true,
+    } satisfies TimelineAttribution)
 
-  return [...options.entries]
+  const sessionPoints = sessions.map((session): RestorePoint => {
+    const blocker: RestoreBlocker | null = !session.epochs.every((epoch) => readable.has(epoch))
+      ? "outside-visible-history"
+      : session.id === options.currentId
+        ? "current"
+        : null
+    return {
+      id: session.id,
+      resourceId: session.resourceId,
+      domain: session.domain,
+      kind: "session",
+      epoch: Math.max(...session.epochs),
+      createdAt: session.createdAt,
+      label: null,
+      parent: null,
+      attribution: attributionOf(session.author),
+      materialised: true,
+      restorable: blocker === null,
+      blocker,
+      changes: session.changes,
+    }
+  })
+
+  const snapshotPoints = [...options.entries]
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((entry): RestorePoint => {
       const materialised = isMaterialised(entry)
@@ -86,21 +137,14 @@ export function buildTimeline(options: BuildTimelineOptions): RestorePoint[] {
         createdAt: entry.createdAt,
         label: entry.label ?? null,
         parent: entry.parent,
-        attribution:
-          attributions.get(entry.author) ??
-          ({
-            author: entry.author,
-            member: null,
-            label: entry.author,
-            assurance: "self-asserted",
-            conflict: null,
-            unknown: true,
-          } satisfies TimelineAttribution),
+        attribution: attributionOf(entry.author),
         materialised,
         restorable: blocker === null,
         blocker,
       }
     })
+
+  return [...snapshotPoints, ...sessionPoints].sort((a, b) => b.createdAt - a.createdAt)
 }
 
 /** Where a member's own visible history begins. Null when they can see it all. */
