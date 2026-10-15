@@ -56,6 +56,10 @@ export class RelayClient implements Transport {
     return this.transport.vector()
   }
 
+  floor(): Promise<DeliveryVector> {
+    return this.transport.floor?.() ?? Promise.resolve({})
+  }
+
   depositSnapshot(snapshot: Snapshot): Promise<void> {
     return this.transport.depositSnapshot(snapshot)
   }

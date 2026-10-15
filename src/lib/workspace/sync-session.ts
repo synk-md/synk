@@ -61,6 +61,11 @@ export interface SyncSessionOptions {
   relay: RelayWatch
   baseline?: BaselineMemo
   /**
+   * Whose anchors may carry this device past envelopes the relay let go: the
+   * owner, since only the owner's anchors let the relay prune.
+   */
+  anchorAuthor?: () => string | null
+  /**
    * Whether this tab may author. A follower tab must not resume: it would
    * hand out numbers from the cursor the writing tab is using.
    */
@@ -113,6 +118,30 @@ export function openSyncSession(options: SyncSessionOptions): SyncSession {
     if (applied) options.baseline.record(snapshot.id)
   }
 
+  /**
+   * The relay lets envelopes go once an owner's anchor covers them. A device
+   * that was away longer, or is new, starts from that anchor instead.
+   */
+  const bridge = async () => {
+    const floor = (await options.transport.floor?.()) ?? {}
+    const ours = options.engine.deliveryVector()
+    const behind = Object.entries(floor).filter(([author, seq]) => (ours[author] ?? 0) < seq)
+    if (behind.length === 0) return
+    const readable = new Set(options.readableEpochs())
+    const author = options.anchorAuthor?.() ?? null
+    const anchors = (await options.transport.fetchSnapshots(options.resourceId))
+      .filter((snapshot) => author === null || snapshot.author === author)
+      .filter((snapshot) => snapshot.wraps.some((wrap) => readable.has(wrap.epoch)))
+      .filter((snapshot) => behind.every(([writer, seq]) => (snapshot.covers[writer] ?? 0) >= seq))
+      .sort((a, b) => b.createdAt - a.createdAt)
+    for (const anchor of anchors) {
+      const applied = await options.engine.applySnapshot(anchor, (candidate, signer) =>
+        verifySnapshot(candidate, signer.publicKey),
+      )
+      if (applied) return
+    }
+  }
+
   // Before anything is fetched, so the first catch-up asks only for what is new.
   const loadWatermark = async () => {
     if (loaded || !options.watermark) return
@@ -160,6 +189,7 @@ export function openSyncSession(options: SyncSessionOptions): SyncSession {
     try {
       await loadWatermark()
       await applyBaseline()
+      await bridge()
       if (options.recover === "publish-state") {
         await options.engine.sync()
         if (options.canAuthor && (await stateMissing())) await options.engine.publishState()

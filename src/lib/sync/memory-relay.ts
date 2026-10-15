@@ -49,6 +49,15 @@ export class MemoryRelay {
     return this.log.deliveryVector()
   }
 
+  /** Let envelopes go, as a relay does behind an anchor. */
+  prune(vector: DeliveryVector): number {
+    return this.log.prune(vector)
+  }
+
+  floor(): DeliveryVector {
+    return this.log.floor()
+  }
+
   /** Everything the relay is holding. Ciphertext only. */
   stored(): Envelope[] {
     return this.log.all()
@@ -100,6 +109,10 @@ export class RelayTransport implements Transport {
     // A disconnected client must not conclude the relay has everything, or it
     // would skip pushing its backlog on reconnect.
     return Promise.resolve(this.connected ? this.relay.vector() : {})
+  }
+
+  floor(): Promise<DeliveryVector> {
+    return Promise.resolve(this.connected ? this.relay.floor() : {})
   }
 
   depositSnapshot(snapshot: Snapshot): Promise<void> {

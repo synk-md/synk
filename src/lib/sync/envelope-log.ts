@@ -18,6 +18,8 @@ export type DeliveryVector = Record<string, number>
 interface AuthorState {
   bySeq: Map<number, Envelope>
   contiguousTo: number
+  /** Everything up to here was let go, behind a snapshot that covers it. */
+  prunedTo: number
 }
 
 export class EnvelopeLog {
@@ -27,7 +29,7 @@ export class EnvelopeLog {
   private state(author: string): AuthorState {
     let state = this.authors.get(author)
     if (!state) {
-      state = { bySeq: new Map(), contiguousTo: 0 }
+      state = { bySeq: new Map(), contiguousTo: 0, prunedTo: 0 }
       this.authors.set(author, state)
     }
     return state
@@ -40,7 +42,7 @@ export class EnvelopeLog {
   /** Returns false when the envelope was already held, so callers can dedup. */
   append(envelope: Envelope): boolean {
     const state = this.state(envelope.author)
-    if (state.bySeq.has(envelope.seq)) return false
+    if (state.bySeq.has(envelope.seq) || envelope.seq <= state.prunedTo) return false
 
     state.bySeq.set(envelope.seq, envelope)
     this.order.push(envelope)
@@ -93,11 +95,46 @@ export class EnvelopeLog {
     }
   }
 
+  /**
+   * Let go of everything up to `vector`, as far as it is held contiguously.
+   * The watermark stays, so what follows is still offered, and anything at or
+   * below it is refused rather than held again. Returns how many were dropped.
+   */
+  prune(vector: DeliveryVector): number {
+    let dropped = 0
+    const gone = new Set<Envelope>()
+    for (const [author, upTo] of Object.entries(vector)) {
+      const state = this.authors.get(author)
+      if (!state) continue
+      const to = Math.min(upTo, state.contiguousTo)
+      for (let seq = state.prunedTo + 1; seq <= to; seq += 1) {
+        const envelope = state.bySeq.get(seq)
+        if (envelope) gone.add(envelope)
+        state.bySeq.delete(seq)
+      }
+      if (to > state.prunedTo) state.prunedTo = to
+    }
+    if (gone.size > 0) {
+      const kept = this.order.filter((envelope) => !gone.has(envelope))
+      dropped = this.order.length - kept.length
+      this.order.length = 0
+      for (const envelope of kept) this.order.push(envelope)
+    }
+    return dropped
+  }
+
+  /** How far each author's envelopes were let go. Empty when nothing was. */
+  floor(): DeliveryVector {
+    const vector: DeliveryVector = {}
+    for (const [author, state] of this.authors) if (state.prunedTo > 0) vector[author] = state.prunedTo
+    return vector
+  }
+
   /** Highest sequence this author has authored here, for allocating the next. */
   highestSeq(author: string): number {
     const state = this.authors.get(author)
     if (!state) return 0
-    let highest = 0
+    let highest = state.prunedTo
     for (const seq of state.bySeq.keys()) if (seq > highest) highest = seq
     return highest
   }

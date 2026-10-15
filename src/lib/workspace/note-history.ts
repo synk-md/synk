@@ -77,6 +77,7 @@ export class NoteHistory {
   readonly resourceId: string
   /** The envelopes the sessions were last listed from, so a point opens what was shown. */
   private envelopes: Envelope[] = []
+  private floor: DeliveryVector = {}
   private listed: Session[] = []
 
   constructor(options: NoteHistoryOptions) {
@@ -120,11 +121,16 @@ export class NoteHistory {
     const transport = this.options.transport?.()
     if (!transport) return []
     try {
-      this.envelopes = await transport.fetchSince({})
+      const [envelopes, floor] = await Promise.all([transport.fetchSince({}), transport.floor?.() ?? {}])
+      this.envelopes = envelopes
+      this.floor = floor
     } catch {
       return this.listed
     }
-    this.listed = sessionsOf(this.envelopes.filter((envelope) => envelope.resourceId === this.resourceId))
+    this.listed = sessionsOf(
+      this.envelopes.filter((envelope) => envelope.resourceId === this.resourceId),
+      { floor: this.floor },
+    )
     return this.listed
   }
 
@@ -182,6 +188,7 @@ export class NoteHistory {
       anchors: await this.list(),
       envelopes: this.envelopes,
       keys: this.readable(),
+      floor: this.floor,
     })
     // Restoring a partial state would delete whatever could not be opened.
     if (!complete) throw new Error("Part of this point is sealed under a key this device does not hold.")

@@ -120,6 +120,10 @@ export class FailoverTransport implements Transport {
     return transport ? transport.vector() : {}
   }
 
+  async floor(): Promise<DeliveryVector> {
+    return (await this.active()?.floor?.()) ?? {}
+  }
+
   async depositSnapshot(snapshot: Snapshot): Promise<void> {
     await this.active()?.depositSnapshot(snapshot)
   }

@@ -8,7 +8,13 @@ import { useBackgroundNoteSync } from "@/hooks/use-background-note-sync"
 import { setLastOpenedNoteId } from "@/lib/notebook-settings"
 import { pickNotebookTargetNote } from "@/lib/resolve-notebook-target"
 import { currentDevice } from "@/lib/identity"
-import { commitCurrentKey, encryptedSyncEnabled, rotateAway } from "@/lib/workspace"
+import {
+  claimOwnershipAtRelay,
+  commitCurrentKey,
+  encryptedSyncEnabled,
+  relayWatch,
+  rotateAway,
+} from "@/lib/workspace"
 import { createNotebookIndexDoc } from "@/lib/yjs-utils"
 
 export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; noteId?: string }) {
@@ -52,17 +58,27 @@ export function NoteEditorPage({ notebookId, noteId }: { notebookId?: string; no
   const fileSystem = useNotebookFileSystem(activeNotebook, updateNotebookRoot, { replicate: true })
 
   // What only the owner can do, done the next time the owner opens it: commit
-  // a key from before commitments, and replace one a device unlinked since can
-  // still reach. Anywhere else both do nothing.
+  // a key from before commitments, replace one a device unlinked since can
+  // still reach, and tell the relay who owns it - again whenever the relay
+  // comes back, since it keeps nothing across a restart. Anywhere else all
+  // three do nothing.
   React.useEffect(() => {
     const device = currentDevice()
     if (!notebookId || !device) return
     const handle = createNotebookIndexDoc(notebookId)
     const owner = { doc: handle.doc, notebookId, owner: device.identity }
+    const claim = () =>
+      void handle.idb.whenSynced
+        .then(() => claimOwnershipAtRelay({ doc: handle.doc, notebookId, device: device.identity }))
+        .catch(() => undefined)
     void handle.idb.whenSynced
       .then(() => commitCurrentKey(owner))
       .then(() => rotateAway(owner))
       .catch(() => undefined)
+    claim()
+    return relayWatch.onChange((state) => {
+      if (state === "online") claim()
+    })
   }, [notebookId])
   const rootNodeId = activeNotebook?.root.id ?? null
   const hasNotebookContext = Boolean(activeNotebook)

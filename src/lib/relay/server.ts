@@ -11,8 +11,10 @@
  */
 
 import { utf8 } from "@/lib/crypto"
+import { publicKeyFromDid } from "@/lib/identity"
+import { verifySnapshot, type Snapshot } from "@/lib/snapshots"
 import type { Envelope } from "@/lib/sync"
-import type { Snapshot } from "@/lib/snapshots"
+import { verifyGenesis, type WorkspaceGenesis } from "@/lib/workspace/genesis"
 import { newChallenge, verifyChallenge } from "./auth"
 import type { Link } from "./link"
 import {
@@ -26,7 +28,7 @@ import {
   type ServerMessage,
   type TurnCredentials,
 } from "./protocol"
-import { RelayStore, type RelayQuota } from "./server-store"
+import { DEFAULT_PRUNE, RelayStore, type PrunePolicy, type RelayQuota } from "./server-store"
 
 /** Whether the relay bothers carrying an envelope. Never a grant. */
 export interface RelayWriteHint {
@@ -42,6 +44,7 @@ export interface RelayServerOptions {
   /** `did:key` or opaque id of this relay. Binds the auth challenge. */
   relayId: string
   quota?: RelayQuota
+  prune?: PrunePolicy
   hint?: RelayWriteHint
   turn?: TurnIssuer
   now?: () => number
@@ -64,6 +67,8 @@ export interface RelayMetrics {
   published: number
   fannedOut: number
   declinedByHint: number
+  /** Envelopes let go behind an owner's anchor. */
+  pruned: number
   refused: Record<RelayErrorCode, number>
 }
 
@@ -89,6 +94,7 @@ export class RelayServer {
     published: 0,
     fannedOut: 0,
     declinedByHint: 0,
+    pruned: 0,
     refused: emptyRefusals(),
   }
 
@@ -223,6 +229,17 @@ export class RelayServer {
           vector: this.store.vector(message.resourceId),
         })
 
+      case "floor":
+        return this.send(session, {
+          id: message.id,
+          ok: true,
+          re: "floor",
+          floor: this.store.floor(message.resourceId),
+        })
+
+      case "claim-owner":
+        return this.claimOwner(session, message.id, message.genesis)
+
       case "deposit-snapshot":
         return this.deposit(session, message.id, message.snapshot)
 
@@ -293,7 +310,7 @@ export class RelayServer {
       return this.send(session, { id, ok: true, re: "publish" })
     }
 
-    const fresh = this.store.append(envelope)
+    const fresh = this.store.append(envelope, this.now())
     this.metrics.published += 1
     this.send(session, { id, ok: true, re: "publish" })
 
@@ -307,12 +324,43 @@ export class RelayServer {
     }
   }
 
-  private deposit(session: Session, id: string, snapshot: Snapshot): void {
+  private async deposit(session: Session, id: string, snapshot: Snapshot): Promise<void> {
     if (!snapshot || typeof snapshot.resourceId !== "string") {
       return this.refuse(session, id, "malformed")
     }
-    this.store.archive(snapshot)
+    // Checked so that only a snapshot its author really signed can be an anchor.
+    // An unsigned one is still archived: clients verify for themselves.
+    let signed = false
+    try {
+      signed = await verifySnapshot(snapshot, publicKeyFromDid(snapshot.author, "ed25519"))
+    } catch {
+      signed = false
+    }
+    this.store.archive(snapshot, { signed })
     this.send(session, { id, ok: true, re: "deposit-snapshot" })
+    if (signed) this.prune(snapshot.resourceId)
+  }
+
+  /** Only the owner's own device, with a genesis that verifies. */
+  private async claimOwner(session: Session, id: string, genesis: WorkspaceGenesis): Promise<void> {
+    if (!genesis || genesis.owner !== session.did || !(await verifyGenesis(genesis))) {
+      return this.refuse(session, id, "malformed")
+    }
+    this.store.claimOwnership(genesis, this.now())
+    this.send(session, { id, ok: true, re: "claim-owner" })
+  }
+
+  private prune(resourceId: string): number {
+    const dropped = this.store.prune(resourceId, this.now(), this.options.prune ?? DEFAULT_PRUNE)
+    this.metrics.pruned += dropped
+    return dropped
+  }
+
+  /** Let go of whatever has aged behind an anchor. Run now and then. */
+  sweep(): number {
+    let dropped = 0
+    for (const resourceId of this.store.resourceIds) dropped += this.prune(resourceId)
+    return dropped
   }
 
   /**

@@ -132,6 +132,7 @@ export { hasNoOperations } from "./note-snapshots"
 export type { NoteEngineOptions } from "./note-relay"
 export type { RelaySettings } from "./note-relay"
 export {
+  claimOwnershipAtRelay,
   closeRelayConnection,
   configureRelay,
   createNoteEngine,

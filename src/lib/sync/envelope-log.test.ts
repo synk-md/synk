@@ -137,3 +137,36 @@ describe("bookkeeping", () => {
     expect(log.size).toBe(1)
   })
 })
+
+/** What a relay does behind a snapshot that covers the envelopes. */
+describe("prune", () => {
+  it("lets go of what is covered and still offers what follows", () => {
+    const log = new EnvelopeLog()
+    for (const seq of [1, 2, 3, 4]) log.append(env("a", seq))
+
+    expect(log.prune({ a: 2 })).toBe(2)
+    expect(log.floor()).toEqual({ a: 2 })
+    expect(log.deliveryVector()).toEqual({ a: 4 })
+    expect(log.selectSince({}).map((envelope) => envelope.seq)).toEqual([3, 4])
+  })
+
+  /** Republished by a device that never heard it was let go. */
+  it("refuses an envelope it already let go", () => {
+    const log = new EnvelopeLog()
+    for (const seq of [1, 2]) log.append(env("a", seq))
+    log.prune({ a: 2 })
+
+    expect(log.append(env("a", 1))).toBe(false)
+    expect(log.size).toBe(0)
+  })
+
+  it("never runs past a gap", () => {
+    const log = new EnvelopeLog()
+    log.append(env("a", 1))
+    log.append(env("a", 3))
+
+    log.prune({ a: 3 })
+    expect(log.floor()).toEqual({ a: 1 })
+    expect(log.has("a", 3)).toBe(true)
+  })
+})

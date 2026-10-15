@@ -9,6 +9,7 @@
 import type { Envelope } from "@/lib/sync"
 import type { DeliveryVector } from "@/lib/sync"
 import type { Snapshot } from "@/lib/snapshots"
+import type { WorkspaceGenesis } from "@/lib/workspace/genesis"
 
 export const RELAY_PROTOCOL_VERSION = 1
 
@@ -60,6 +61,10 @@ export type ClientMessage =
   | { op: "publish"; id: string; envelope: Envelope }
   | { op: "since"; id: string; resourceId: string; vector: DeliveryVector }
   | { op: "vector"; id: string; resourceId: string }
+  /** How far envelopes were let go, so a device behind it knows to start from an anchor. */
+  | { op: "floor"; id: string; resourceId: string }
+  /** The owner's genesis, which is what lets the relay prune behind their anchors. */
+  | { op: "claim-owner"; id: string; genesis: WorkspaceGenesis }
   | { op: "deposit-snapshot"; id: string; snapshot: Snapshot }
   | { op: "snapshots"; id: string; resourceId: string }
   | { op: "slice"; id: string; request: SliceRequest }
@@ -85,6 +90,8 @@ export type ServerReply =
   | { id: string; ok: true; re: "publish" }
   | { id: string; ok: true; re: "since"; envelopes: Envelope[] }
   | { id: string; ok: true; re: "vector"; vector: DeliveryVector }
+  | { id: string; ok: true; re: "floor"; floor: DeliveryVector }
+  | { id: string; ok: true; re: "claim-owner" }
   | { id: string; ok: true; re: "deposit-snapshot" }
   | { id: string; ok: true; re: "snapshots"; snapshots: Snapshot[] }
   | { id: string; ok: true; re: "slice"; envelopes: Envelope[]; complete: boolean }

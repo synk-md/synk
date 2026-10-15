@@ -22,6 +22,14 @@ export async function envelopesPublished(): Promise<number> {
   return health.metrics.published
 }
 
+/** Envelopes the test relay has let go behind the owner's anchors. */
+export async function envelopesPruned(): Promise<number> {
+  const health = (await (await fetch("http://localhost:4555/health")).json()) as {
+    metrics: { pruned: number }
+  }
+  return health.metrics.pruned
+}
+
 /** A separate browser profile: their own device keys, storage and notebooks. */
 export async function person(browser: Browser, name: string): Promise<Person> {
   const context = await browser.newContext()

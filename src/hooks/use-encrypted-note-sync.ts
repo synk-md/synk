@@ -127,6 +127,7 @@ export function useEncryptedNoteSync(options: UseEncryptedNoteSyncOptions): Encr
       readableEpochs: () => keyringRef.current?.readableEpochs() ?? [],
       relay: relayWatch,
       baseline: storedBaseline(did, resourceId),
+      anchorAuthor: () => owner,
       watermark: storedWatermark(getOrCreateYDoc(notebookId, noteId).idb),
       canAuthor,
       onStatus: setStatus,

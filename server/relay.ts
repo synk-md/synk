@@ -21,8 +21,13 @@ import { BlobStore, handleBlobRequest, RelayServer, SocketLink } from "../src/li
 const PORT = Number(process.env.RELAY_PORT ?? 4455)
 const RELAY_ID = process.env.RELAY_ID ?? "did:relay:dev"
 
+/** Overridable so a test run can see pruning without waiting a month. */
+const PRUNE_AFTER_MS = Number(process.env.RELAY_PRUNE_AFTER_MS ?? 30 * 24 * 60 * 60 * 1000)
+const PRUNE_SETTLE_MS = Number(process.env.RELAY_PRUNE_SETTLE_MS ?? 7 * 24 * 60 * 60 * 1000)
+
 const relay = new RelayServer({
   relayId: RELAY_ID,
+  prune: { olderThanMs: PRUNE_AFTER_MS, settleMs: PRUNE_SETTLE_MS },
   // A generous ceiling. It exists so one client cannot spin the process, not
   // as a real quota - that belongs with the billing this does not have.
   rateLimit: 200,
@@ -100,6 +105,9 @@ sockets.on("connection", (socket: WebSocket) => {
   socket.on("close", detach)
   socket.on("error", detach)
 })
+
+// Envelopes age into pruning without anything being deposited.
+setInterval(() => relay.sweep(), Math.min(60 * 60 * 1000, Math.max(1000, PRUNE_AFTER_MS))).unref()
 
 http.listen(PORT, () => {
   console.log(`relay listening on ws://localhost:${String(PORT)} as ${RELAY_ID}`)

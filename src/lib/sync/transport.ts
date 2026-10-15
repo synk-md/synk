@@ -30,6 +30,11 @@ export interface Transport {
    * while disconnected would otherwise be stranded holding the only copy.
    */
   vector(): Promise<DeliveryVector>
+  /**
+   * How far each author's envelopes were let go behind an anchor. A device
+   * behind it starts from that anchor. Absent where nothing is ever let go.
+   */
+  floor?(): Promise<DeliveryVector>
   /** Here so a joiner can collect it without any member being online. */
   depositSnapshot(snapshot: Snapshot): Promise<void>
   /** Archived snapshots for a resource, oldest first. */

@@ -12,6 +12,9 @@
  * that bounded: checkpoints someone named, the snapshots taken when someone
  * joins, and sparse automatic ones.
  *
+ * Once the relay lets envelopes go behind an owner's anchor, the timeline
+ * starts there: that anchor is where the earliest remaining point begins.
+ *
  * Replay checks what history needs and not what live sync does. An envelope
  * must verify against its author's own key, carry only that author's client
  * id, and open under a key this device holds - which nobody outside the
@@ -57,15 +60,19 @@ const dated = (envelope: Envelope): envelope is Dated => typeof envelope.created
 /**
  * Sessions, oldest first. Envelopes from before they carried a time have no
  * place on a timeline; what they wrote is in the anchors that came after.
+ * `floor` is how far the relay let envelopes go: every session ends past it.
  */
-export function sessionsOf(envelopes: readonly Envelope[], options: { pauseMs?: number } = {}): Session[] {
+export function sessionsOf(
+  envelopes: readonly Envelope[],
+  options: { pauseMs?: number; floor?: DeliveryVector } = {},
+): Session[] {
   const pause = options.pauseMs ?? SESSION_PAUSE_MS
   const ordered = envelopes
     .filter(dated)
     .sort((a, b) => a.createdAt - b.createdAt || (a.author < b.author ? -1 : 1) || a.seq - b.seq)
 
   const sessions: Session[] = []
-  const reached: DeliveryVector = {}
+  const reached: DeliveryVector = { ...options.floor }
   let current: { author: string; first: Dated; last: Dated; changes: number; epochs: Set<number> } | null = null
 
   const close = () => {
@@ -112,6 +119,8 @@ export async function stateAt(options: {
   anchors: readonly Snapshot[]
   envelopes: readonly Envelope[]
   keys: Pick<ReadKeySource, "keyFor" | "readableEpochs">
+  /** How far the relay let envelopes go. Only an anchor can supply what lies behind it. */
+  floor?: DeliveryVector
 }): Promise<RebuiltState> {
   const readable = new Set(options.keys.readableEpochs())
   const doc = new Y.Doc()
@@ -132,6 +141,10 @@ export async function stateAt(options: {
       base = anchor.covers
     }
   }
+
+  // What was let go and no anchor here holds: rebuilding without it would
+  // look whole and be missing the start of the note.
+  if (Object.entries(options.floor ?? {}).some(([author, seq]) => (base[author] ?? 0) < seq)) complete = false
 
   const replay = options.envelopes
     .filter((envelope) => envelope.seq > (base[envelope.author] ?? 0))

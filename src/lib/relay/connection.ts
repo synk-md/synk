@@ -13,6 +13,7 @@
 import type { SigningKey } from "@/lib/crypto"
 import type { Snapshot } from "@/lib/snapshots"
 import type { DeliveryVector, Envelope, Transport } from "@/lib/sync"
+import type { WorkspaceGenesis } from "@/lib/workspace/genesis"
 
 import { signChallenge } from "./auth"
 import type { Link, LinkState } from "./link"
@@ -248,6 +249,11 @@ export class RelayConnection {
         return reply?.ok && reply.re === "vector" ? reply.vector : {}
       },
 
+      floor: async (): Promise<DeliveryVector> => {
+        const reply = await this.call({ op: "floor", resourceId })
+        return reply?.ok && reply.re === "floor" ? reply.floor : {}
+      },
+
       depositSnapshot: async (snapshot: Snapshot): Promise<void> => {
         await this.call({ op: "deposit-snapshot", snapshot })
       },
@@ -274,6 +280,12 @@ export class RelayConnection {
     return reply?.ok && reply.re === "slice"
       ? { envelopes: reply.envelopes, complete: reply.complete }
       : { envelopes: [], complete: false }
+  }
+
+  /** As the owner, so the relay may let envelopes go behind this device's anchors. */
+  async claimOwnership(genesis: WorkspaceGenesis): Promise<boolean> {
+    const reply = await this.call({ op: "claim-owner", genesis })
+    return reply?.ok === true
   }
 
   async getRecords(workspace: string, kind?: HostedRecord["kind"]): Promise<HostedRecord[]> {

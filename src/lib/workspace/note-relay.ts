@@ -11,11 +11,13 @@
 
 import type * as Y from "yjs"
 
-import { currentDevice } from "@/lib/identity"
+import { currentDevice, type DeviceIdentity } from "@/lib/identity"
 import type { ReadKeySource } from "@/lib/keys"
 import { RelayConnection, WebSocketLink, type RelayConnectionState } from "@/lib/relay"
 import type { SyncCursor, SyncCursorStore, SyncEngine } from "@/lib/sync"
 
+import { resolveOwnership } from "./genesis"
+import { genesisClaims, workspaceIdFor } from "./notebook-workspace"
 import type { BaselineMemo, RelayWatch } from "./sync-session"
 import { createNoteSyncEngine, noteResourceId } from "./note-sync"
 
@@ -91,6 +93,24 @@ export function relayConnection(): RelayConnection | null {
     })
   }
   return connection
+}
+
+/**
+ * As the owner, say so to the relay - which is what lets it let envelopes go
+ * behind this device's anchors. Anywhere else, nothing.
+ */
+export async function claimOwnershipAtRelay(options: {
+  doc: Y.Doc
+  notebookId: string
+  device: DeviceIdentity
+}): Promise<boolean> {
+  const connection = relayConnection()
+  if (!connection) return false
+  const ownership = await resolveOwnership(genesisClaims(options.doc), {
+    workspace: workspaceIdFor(options.notebookId),
+  })
+  if (ownership.owner !== options.device.did || !ownership.genesis) return false
+  return connection.claimOwnership(ownership.genesis)
 }
 
 export function closeRelayConnection(): void {

@@ -110,6 +110,14 @@ describe("sessions", () => {
     expect(sessions[0].end).toEqual({ "did:key:zA": 2 })
   })
 
+  /** Someone whose writing was all let go still counts in where a session ends. */
+  it("ends every session past what the relay let go", () => {
+    const at = (seq: number, createdAt: number) =>
+      ({ author: "did:key:zA", seq, createdAt, epoch: 1 }) as unknown as Envelope
+    const [session] = sessionsOf([at(4, 0)], { floor: { "did:key:zA": 3, "did:key:zB": 9 } })
+    expect(session.end).toEqual({ "did:key:zA": 4, "did:key:zB": 9 })
+  })
+
   it("leaves out envelopes from before they carried a time", () => {
     const legacy = { author: "did:key:zA", seq: 1, epoch: 1 } as unknown as Envelope
     expect(sessionsOf([legacy])).toEqual([])
@@ -204,6 +212,31 @@ describe("rebuilding a point", () => {
 
     const rebuilt = await stateAt({ cut: { [notebook.ada.did]: 1 }, anchors: [], envelopes: [envelope], keys })
     expect(textOf(rebuilt.state)).toBe("")
+    expect(rebuilt.complete).toBe(false)
+  })
+
+  /**
+   * Without the anchor that holds it, Sindre's writing is simply not there -
+   * and Ada's, written after it elsewhere in the note, would look whole alone.
+   */
+  it("says so when what was let go is in no anchor here", async () => {
+    const notebook = await aNotebook()
+    const sindre = await writer(notebook, notebook.owner)
+    const ada = await writer(notebook, notebook.ada)
+    await write(sindre, "Let go. ", ada)
+    ada.engine.transact(() => ada.doc.getMap("meta").set("title", "Kept"))
+    await ada.engine.flush()
+    const floor = { [notebook.owner.did]: 1 }
+    const rest = notebook.relay.stored().filter((envelope) => envelope.author === notebook.ada.did)
+    const [session] = sessionsOf(rest, { floor })
+
+    const rebuilt = await stateAt({
+      cut: session.end,
+      anchors: [],
+      envelopes: rest,
+      keys: await keysOf(notebook, notebook.owner),
+      floor,
+    })
     expect(rebuilt.complete).toBe(false)
   })
 
