@@ -12,6 +12,7 @@ import {
   createDirectoryReplica,
   createTreeReplica,
   directoryChannel,
+  directoryWriters,
   encryptedSyncEnabled,
   liveKeys,
   NOTE_BATCH_MS,
@@ -20,6 +21,7 @@ import {
   relayWatch,
   treeResourceId,
   indexPresenceScope,
+  watchJoinRequests,
   type PresenceRoom,
   type SyncSession,
   type SyncSessionStatus,
@@ -76,6 +78,7 @@ export function useNotebookReplication(
         channel,
         device: device.identity,
         transport,
+        policy: directoryWriters(handle.doc, notebookId),
         // Not batched. Its writes are rare and are hand-offs to someone else -
         // an invitation, a grant, a removal - and a tab closed inside the
         // window would hold one back until it was next opened.
@@ -95,7 +98,16 @@ export function useNotebookReplication(
         onStatus: setDirectory,
         onError: warn("directory sync"),
       })
+      // On the owner's devices, requests to join arrive on channels of their own.
+      const stopWatching = watchJoinRequests({
+        notebookId,
+        directory: handle.doc,
+        device: device.identity,
+        access: { transportFor: (resourceId) => connection.transportFor(resourceId), relay: relayWatch },
+        onError: warn("join requests"),
+      })
       stop = () => {
+        stopWatching()
         session.close()
         engine.close()
       }

@@ -43,6 +43,8 @@ export interface PairingRequest {
 export interface PairedNotebook {
   id: string
   name: string
+  /** Its owner, as the linking device established it, so the new device need not take the notebook's word. */
+  owner?: string
 }
 
 export interface PairingApproval {

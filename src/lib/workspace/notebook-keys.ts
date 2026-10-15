@@ -17,6 +17,7 @@ import * as Y from "yjs"
 
 import type { AuthorizationContext } from "@/lib/authz"
 import type { Bytes } from "@/lib/crypto"
+import { slotFor } from "@/lib/directory"
 import {
   deriveChainedEpochKey,
   epochKeyCommitment,
@@ -69,8 +70,12 @@ function legacySealedKeyId(sealed: SealedEpochKey): string {
   return `${sealed.domain}|${String(sealed.epoch)}|${sealed.recipient}`
 }
 
+/**
+ * In a slot of its own. Two admins cutting the same epoch each keep theirs, and
+ * the timeline picks one the same way everywhere; nobody can replace a record.
+ */
 export function putEpochRecord(doc: Y.Doc, signed: SignedEpochRecord): void {
-  epochMap(doc).set(String(signed.record.epoch), signed)
+  epochMap(doc).set(slotFor(String(signed.record.epoch), signed.sig), signed)
 }
 
 export function putSealedKeys(doc: Y.Doc, sealed: readonly SealedEpochKey[]): void {
@@ -79,14 +84,12 @@ export function putSealedKeys(doc: Y.Doc, sealed: readonly SealedEpochKey[]): vo
 }
 
 export function storedEpochRecords(doc: Y.Doc, domain: string): SignedEpochRecord[] {
-  const out: SignedEpochRecord[] = []
-  for (const [key, signed] of epochMap(doc).entries()) {
-    // Filed under an epoch other than its own, or belonging to another domain.
-    if (signed?.record?.domain !== domain) continue
-    if (String(signed.record.epoch) !== key) continue
-    out.push(signed)
+  const out = new Map<string, SignedEpochRecord>()
+  for (const signed of epochMap(doc).values()) {
+    if (signed?.record?.domain !== domain || typeof signed.sig !== "string") continue
+    out.set(signed.sig, signed)
   }
-  return out.sort((a, b) => a.record.epoch - b.record.epoch)
+  return [...out.values()].sort((a, b) => a.record.epoch - b.record.epoch)
 }
 
 export function storedSealedKeys(doc: Y.Doc, domain: string): SealedEpochKey[] {

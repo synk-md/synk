@@ -139,7 +139,8 @@ export async function resolveOwnership(
   }
 
   if (verified.length === 0) return { status: "none", owner: null, genesis: null, claims: [] }
-  if (verified.length > 1) {
+  // Several claims by one owner are one claim; a rival is a different owner.
+  if (new Set(verified.map((claim) => claim.owner)).size > 1) {
     return { status: "disputed", owner: null, genesis: null, claims: verified }
   }
   return {

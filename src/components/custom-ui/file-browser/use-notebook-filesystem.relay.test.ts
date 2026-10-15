@@ -59,8 +59,8 @@ function admitSomeone(id: string) {
   const handle = createNotebookIndexDoc(id)
   act(() => {
     const admissions = handle.doc.getMap("directory:admissions")
-    admissions.set("did:key:zOwner", { member: "member:owner" })
-    admissions.set("did:key:zAda", { member: "member:ada" })
+    admissions.set("did:key:zOwner", { did: "did:key:zOwner", member: "member:owner" })
+    admissions.set("did:key:zAda", { did: "did:key:zAda", member: "member:ada" })
   })
 }
 

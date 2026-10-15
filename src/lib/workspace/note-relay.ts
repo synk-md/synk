@@ -108,8 +108,10 @@ export async function claimOwnershipAtRelay(options: {
 }): Promise<boolean> {
   const connection = relayConnection()
   if (!connection) return false
+  // Expecting itself, so a rival claim in the document cannot stop the real one.
   const ownership = await resolveOwnership(genesisClaims(options.doc), {
     workspace: workspaceIdFor(options.notebookId),
+    expectedOwner: options.device.did,
   })
   if (ownership.owner !== options.device.did || !ownership.genesis) return false
   const directory = await readDirectory(options.doc, [ownership.owner], {

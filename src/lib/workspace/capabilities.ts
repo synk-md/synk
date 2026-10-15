@@ -23,7 +23,7 @@ import {
   type Revocation,
 } from "@/lib/authz"
 import type { SigningKey } from "@/lib/crypto"
-import { readDirectory } from "@/lib/directory"
+import { readDirectory, slotFor } from "@/lib/directory"
 
 export const CAPABILITY_MAP = "workspace:capabilities"
 /** Withdrawn grants, by the cid they withdraw. Verified against the chain on read. */
@@ -47,7 +47,7 @@ export function putCapability(doc: Y.Doc, capability: Capability): void {
 }
 
 export function putRevocation(doc: Y.Doc, revocation: Revocation): void {
-  doc.getMap<Revocation>(REVOCATION_MAP).set(revocation.cid, revocation)
+  doc.getMap<Revocation>(REVOCATION_MAP).set(slotFor(revocation.cid, revocation.sig), revocation)
 }
 
 /**

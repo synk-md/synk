@@ -183,6 +183,14 @@ export function openSyncSession(options: SyncSessionOptions): SyncSession {
     if (options.unsent && (await options.engine.delivered())) options.unsent.clear()
   }
 
+  // Again while it brings something: a write refused because what authorises it
+  // had not arrived yet - a member's, before their admission - is fetched again.
+  const pull = async () => {
+    for (let round = 0; round < 4; round += 1) {
+      if ((await options.engine.sync()).pulled === 0) return
+    }
+  }
+
   const catchUp = async () => {
     if (closed) return
     report("connecting")
@@ -191,13 +199,13 @@ export function openSyncSession(options: SyncSessionOptions): SyncSession {
       await applyBaseline()
       await bridge()
       if (options.recover === "publish-state") {
-        await options.engine.sync()
+        await pull()
         if (options.canAuthor && (await stateMissing())) await options.engine.publishState()
         force = false
         await clearUnsent()
       } else {
         if (options.canAuthor) await options.engine.resume()
-        await options.engine.sync()
+        await pull()
       }
       if (closed) return
       persist()

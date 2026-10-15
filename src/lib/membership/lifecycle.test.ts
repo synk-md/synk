@@ -512,7 +512,7 @@ describe("the signed epoch timeline", () => {
 
   // The point of signing: a relay cannot claim a rotation was a chain step, or
   // the reverse, to confuse a member's derivation.
-  it("refuses a record whose kind was altered in transit", async () => {
+  it("passes over a record whose kind was altered in transit, and refuses a hole", async () => {
     const world = await newWorld()
     const { signEpochRecord } = await import("./epoch-timeline")
     const genesis = await signEpochRecord(
@@ -524,11 +524,22 @@ describe("the signed epoch timeline", () => {
     const signed = await signEpochRecord(cut.record, world.owner.signingKey, world.owner.did)
 
     const forged = { ...signed, record: { ...signed.record, kind: "rotation" as const } }
-    const verified = await verifyTimeline([genesis, forged], world.store.context(T0))
 
-    expect(verified.ok).toBe(false)
-    expect(verified.reason).toBe("unsigned-record")
-    expect(verified.failedAt).toBe(2)
+    // Beside the real one, the altered copy is passed over.
+    const beside = await verifyTimeline([genesis, forged, signed], world.store.context(T0))
+    expect(beside.ok).toBe(true)
+    expect(beside.timeline?.map((record) => record.kind)).toEqual([genesis.record.kind, signed.record.kind])
+    // Alone past the last real epoch, it is someone's junk and does not stop the rest.
+    const past = await verifyTimeline([genesis, forged], world.store.context(T0))
+    expect(past.ok).toBe(true)
+    expect(past.timeline).toHaveLength(1)
+    // Before a real epoch it is a hole, and refused.
+    const later = await world.keys.addMember({ sealingDid: world.owner.sealingDid })
+    const after = await signEpochRecord(later.record, world.owner.signingKey, world.owner.did)
+    const hole = await verifyTimeline([genesis, forged, after], world.store.context(T0))
+    expect(hole.ok).toBe(false)
+    expect(hole.reason).toBe("unsigned-record")
+    expect(hole.failedAt).toBe(2)
   })
 
   it("refuses a record asserted by a non-admin", async () => {

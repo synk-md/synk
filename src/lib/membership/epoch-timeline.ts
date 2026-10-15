@@ -109,8 +109,8 @@ export interface TimelineVerification {
 /**
  * The only route from records to a usable `EpochTimeline`.
  *
- * Every record must verify, and the sequence must be well formed - contiguous
- * from a single genesis, one domain. A timeline with a hole is refused whole
+ * Each epoch needs a record that verifies, and the sequence must be well formed
+ * - contiguous from a single genesis, one domain. A timeline with a hole is refused whole
  * rather than truncated: deriving against a partial structure is exactly the
  * confusion signing is meant to prevent.
  */
@@ -120,23 +120,58 @@ export async function verifyTimeline(
 ): Promise<TimelineVerification> {
   if (records.length === 0) return { ok: false, reason: "empty" }
 
-  const ordered = [...records].sort((a, b) => a.record.epoch - b.record.epoch)
-  for (const signed of ordered) {
-    const authentic = await verifySignedEpochRecord(signed, context)
-    if (!authentic) {
-      // Distinguish "not signed by that key" from "signed, but by a non-admin",
-      // because they mean different things to whoever is debugging.
-      const signatureOnly = await verifySignature(
-        publicKeyFromDid(signed.asserter, "ed25519"),
-        epochRecordBytes(signed.record, signed.asserter),
-        fromBase64Url(signed.sig),
-      ).catch(() => false)
-      return {
-        ok: false,
-        reason: signatureOnly ? "unauthorized-asserter" : "unsigned-record",
-        failedAt: signed.record.epoch,
+  // Any writer can add a record. One that does not verify is passed over, not
+  // allowed to stop the whole timeline - unless it is all an epoch has. Two
+  // that verify for one epoch are two admins cutting it at once; every device
+  // takes the same one.
+  const byEpoch = new Map<number, SignedEpochRecord[]>()
+  for (const signed of records) {
+    byEpoch.set(signed.record.epoch, [...(byEpoch.get(signed.record.epoch) ?? []), signed])
+  }
+  const epochs = [...byEpoch.keys()].sort((a, b) => a - b)
+  const chosen = new Map<number, SignedEpochRecord>()
+  for (const epoch of epochs) {
+    const candidates = [...(byEpoch.get(epoch) ?? [])].sort((a, b) => (a.sig < b.sig ? -1 : a.sig > b.sig ? 1 : 0))
+    for (const signed of candidates) {
+      if (await verifySignedEpochRecord(signed, context)) {
+        chosen.set(epoch, signed)
+        break
       }
     }
+  }
+  // Records past the last real epoch are someone's junk, not a hole. A hole
+  // before a real one means a record is missing, and that is refused.
+  const last = Math.max(-Infinity, ...chosen.keys())
+  const ordered: SignedEpochRecord[] = []
+  for (const epoch of epochs) {
+    if (epoch > last) break
+    const signed = chosen.get(epoch)
+    if (signed) {
+      ordered.push(signed)
+      continue
+    }
+    // Distinguish "not signed by that key" from "signed, but by a non-admin",
+    // because they mean different things to whoever is debugging.
+    const [first] = byEpoch.get(epoch) ?? []
+    const signatureOnly = await verifySignature(
+      publicKeyFromDid(first.asserter, "ed25519"),
+      epochRecordBytes(first.record, first.asserter),
+      fromBase64Url(first.sig),
+    ).catch(() => false)
+    return {
+      ok: false,
+      reason: signatureOnly ? "unauthorized-asserter" : "unsigned-record",
+      failedAt: epoch,
+    }
+  }
+  if (ordered.length === 0) {
+    const [first] = byEpoch.get(epochs[0]) ?? []
+    const signatureOnly = await verifySignature(
+      publicKeyFromDid(first.asserter, "ed25519"),
+      epochRecordBytes(first.record, first.asserter),
+      fromBase64Url(first.sig),
+    ).catch(() => false)
+    return { ok: false, reason: signatureOnly ? "unauthorized-asserter" : "unsigned-record", failedAt: epochs[0] }
   }
 
   const timeline = ordered.map((signed) => signed.record)

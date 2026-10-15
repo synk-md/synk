@@ -29,8 +29,12 @@ import {
   type InvitationRevocation,
   putDeviceRecord,
   putInvitation,
+  putAdmission,
   putRedemption,
   readDirectory,
+  redemptionsIn,
+  valuesIn,
+  DIRECTORY_MAPS,
   redeemInvitation,
   verifyInvitation,
   type DeviceRemoval,
@@ -47,8 +51,7 @@ import {
   readNotebookKeys,
   restoreDomainAdmin,
 } from "./notebook-keys"
-import { resolveOwnership } from "./genesis"
-import { genesisClaims, resourceIdFor, workspaceIdFor } from "./notebook-workspace"
+import { readNotebookWorkspace, resourceIdFor, workspaceIdFor } from "./notebook-workspace"
 
 /** Default life of an invitation. Long enough to hand over, short enough to lapse. */
 export const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000
@@ -71,10 +74,7 @@ export interface InviteOptions {
 export async function inviteToNotebook(options: InviteOptions): Promise<Invitation> {
   // Named in the invitation whenever there is one, so whoever joins checks the
   // notebook against the owner and not against the device that invited them.
-  const ownership = await resolveOwnership(genesisClaims(options.doc), {
-    workspace: workspaceIdFor(options.notebookId),
-    resource: resourceIdFor(options.notebookId),
-  })
+  const { ownership } = await readNotebookWorkspace({ doc: options.doc, notebookId: options.notebookId })
   const invitation = await createInvitation({
     adminSigningKey: options.admin.signingKey,
     adminDid: options.admin.did,
@@ -119,13 +119,9 @@ export async function redeemIntoNotebook(options: RedeemOptions): Promise<Redemp
 
 /** Invitation revocations recorded in this notebook. */
 export function invitationRevocationsInDoc(doc: Y.Doc): InvitationRevocation[] {
-  const out: InvitationRevocation[] = []
-  for (const [id, revocation] of doc
-    .getMap<InvitationRevocation>("directory:invitation-revocations")
-    .entries()) {
-    if (revocation?.invitationId === id) out.push(revocation)
-  }
-  return out
+  return valuesIn<InvitationRevocation>(doc, DIRECTORY_MAPS.invitationRevocations).filter(
+    (revocation) => typeof revocation.invitationId === "string",
+  )
 }
 
 /** Who may act as admin here: the owner, their own linked devices, and what was kept of former ones. */
@@ -344,7 +340,7 @@ export async function admitFromRedemption(options: AdmitOptions): Promise<Admiss
 
   options.doc.transact(() => {
     putDeviceRecord(options.doc, options.redemption.record)
-    options.doc.getMap("directory:admissions").set(admission.did, admission)
+    putAdmission(options.doc, admission)
     putEpochRecord(options.doc, signedEpoch)
     putSealedKeys(options.doc, cut.sealed)
     options.doc.getMap<string>("workspace:capabilities").set(capability.cid, capability.token)
@@ -361,11 +357,7 @@ export async function admitFromRedemption(options: AdmitOptions): Promise<Admiss
  * reused - overwriting would hide exactly what single-use enforcement needs.
  */
 function allRedemptions(doc: Y.Doc): Redemption[] {
-  const out: Redemption[] = []
-  for (const [, entries] of doc.getMap<Redemption[]>("directory:redemptions").entries()) {
-    if (Array.isArray(entries)) out.push(...entries)
-  }
-  return out
+  return redemptionsIn(doc)
 }
 
 /** Redemptions already recorded for an invitation, for the single-use check. */
@@ -381,8 +373,18 @@ export function redemptionsInDoc(doc: Y.Doc, invitationId: string): Redemption[]
  * owner's own, so one device's clock running ahead cannot strand a request.
  */
 function standing(doc: Y.Doc) {
-  const admissions = doc.getMap<DeviceAdmission>("directory:admissions")
-  const removals = doc.getMap<DeviceRemoval>("directory:removals")
+  // The latest of each, by its own time: several may be on file for one device.
+  const latest = <T extends { did?: string }>(name: string, at: (record: T) => number) => {
+    const out = new Map<string, T>()
+    for (const record of valuesIn<T>(doc, name)) {
+      if (typeof record.did !== "string") continue
+      const held = out.get(record.did)
+      if (!held || at(record) > at(held)) out.set(record.did, record)
+    }
+    return out
+  }
+  const admissions = latest<DeviceAdmission>(DIRECTORY_MAPS.admissions, (admission) => admission.issuedAt)
+  const removals = latest<DeviceRemoval>(DIRECTORY_MAPS.removals, (removal) => removal.removedAt)
   const ended = (did: string): number | null => {
     const admission = admissions.get(did)
     const removal = removals.get(did)
@@ -390,8 +392,8 @@ function standing(doc: Y.Doc) {
   }
   const invitations = new Map(invitationsInDoc(doc).map((invitation) => [invitation.invitationId, invitation]))
 
-  const links = doc.getMap<{ parent?: string; issuedAt?: number }>("directory:links")
-  const unlinked = doc.getMap<{ revokedAt?: number }>("directory:link-revocations")
+  const links = latest<{ did?: string; parent?: string; issuedAt?: number }>(DIRECTORY_MAPS.links, (link) => link.issuedAt ?? 0)
+  const unlinked = latest<{ did?: string; revokedAt?: number }>(DIRECTORY_MAPS.linkRevocations, (revocation) => revocation.revokedAt ?? 0)
 
   return {
     live: () => {
@@ -399,7 +401,7 @@ function standing(doc: Y.Doc) {
       const standing = new Set(admitted)
       // Another of a member's own devices holds the notebook too.
       const linked = [...links.entries()]
-        .filter(([, link]) => typeof link?.parent === "string" && standing.has(link.parent))
+        .filter(([, link]) => typeof link.parent === "string" && standing.has(link.parent))
         // Taken back out by its member: a lost phone holds nothing any more.
         .filter(([did, link]) => (unlinked.get(did)?.revokedAt ?? -1) < (link.issuedAt ?? 0))
         .map(([did]) => did)
@@ -486,9 +488,9 @@ export function grantedInvitationIds(doc: Y.Doc): Set<string> {
 
 /** Invitations this notebook has issued, newest first. */
 export function invitationsInDoc(doc: Y.Doc): Invitation[] {
-  const out: Invitation[] = []
-  for (const [id, invitation] of doc.getMap<Invitation>("directory:invitations").entries()) {
-    if (invitation?.invitationId === id) out.push(invitation)
+  const out = new Map<string, Invitation>()
+  for (const invitation of valuesIn<Invitation>(doc, DIRECTORY_MAPS.invitations)) {
+    if (typeof invitation.invitationId === "string") out.set(invitation.sig, invitation)
   }
-  return out.sort((a, b) => b.issuedAt - a.issuedAt)
+  return [...out.values()].sort((a, b) => b.issuedAt - a.issuedAt)
 }

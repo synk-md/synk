@@ -17,7 +17,14 @@
 import type * as Y from "yjs"
 
 import type { Revocation } from "@/lib/authz"
-import { putLinkRevocation, putRatification, ratify, readDirectory } from "@/lib/directory"
+import {
+  DIRECTORY_MAPS,
+  putLinkRevocation,
+  putRatification,
+  ratify,
+  readDirectory,
+  valuesIn,
+} from "@/lib/directory"
 import type { DeviceIdentity } from "@/lib/identity"
 import { segmentStart, type KeyRecipient } from "@/lib/keys"
 import { revokeLink, signEpochRecord } from "@/lib/membership"
@@ -135,8 +142,8 @@ export async function rotateAway(options: RotateAwayOptions): Promise<boolean> {
     workspace: workspaceIdFor(options.notebookId),
   })
   const departed = new Set<string>()
-  for (const [did, record] of options.doc.getMap<{ did: string; sealingDid: string }>("directory:devices").entries()) {
-    if (directory.removed.has(did) && record?.did === did) departed.add(record.sealingDid)
+  for (const record of valuesIn<{ did: string; sealingDid: string }>(options.doc, DIRECTORY_MAPS.devices)) {
+    if (directory.removed.has(record.did)) departed.add(record.sealingDid)
   }
   // Whether anyone taken out holds a key the current one derives from. Asked
   // of the stored copies rather than of timestamps: who could reach which

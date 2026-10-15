@@ -108,9 +108,9 @@ describe("WorkspacePanel", () => {
 
   it("reports records that failed verification instead of quietly shortening the list", async () => {
     const { doc, owner } = await founded()
-    // A record filed under someone else's key. Signed, well formed, worthless.
+    // Well formed, and altered after it was signed.
     const attacker = await aDevice()
-    doc.getMap("directory:devices").set("did:key:zNotThisOne", attacker.record)
+    doc.getMap("directory:devices").set("did:key:zNotThisOne", { ...attacker.record, createdAt: attacker.record.createdAt + 1 })
 
     render(<WorkspacePanel workspace={await read(doc, owner.did)} />)
 

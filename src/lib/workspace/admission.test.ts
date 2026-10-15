@@ -2,7 +2,7 @@ import * as Y from "yjs"
 import { describe, expect, it } from "vitest"
 
 import { generateSealingKey, generateSigningKey } from "@/lib/crypto"
-import { generateInvitationSecret } from "@/lib/directory"
+import { generateInvitationSecret, valuesIn } from "@/lib/directory"
 import {
   createDeviceRecord,
   didFromSigningKey,
@@ -108,7 +108,7 @@ describe("redeeming", () => {
     const { doc, joiner, redemption } = await upToRedemption()
 
     expect(redemption.did).toBe(joiner.did)
-    expect(doc.getMap("directory:devices").has(joiner.did)).toBe(true)
+    expect(valuesIn<{ did: string }>(doc, "directory:devices").some((record) => record.did === joiner.did)).toBe(true)
     expect(pendingRedemptions(doc)).toHaveLength(1)
   })
 

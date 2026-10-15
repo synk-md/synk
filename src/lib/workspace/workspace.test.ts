@@ -343,7 +343,8 @@ describe("reading a notebook workspace", () => {
     })
     doc.getMap(GENESIS_MAP_NAME).set("did:key:zSomeoneElse", genesis)
 
-    expect(genesisClaims(doc)).toHaveLength(0)
+    // Read by what it says: it is the owner's claim, whatever it was filed under.
+    expect(genesisClaims(doc).map((claim) => claim.owner)).toEqual([owner.did])
   })
 })
 

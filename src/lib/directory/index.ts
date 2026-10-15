@@ -72,6 +72,9 @@ export {
   rawEntries,
   readDirectory,
   redemptionsFor,
+  redemptionsIn,
+  slotFor,
+  valuesIn,
   sealingBundleFor,
 } from "./directory"
 
@@ -88,6 +91,7 @@ export type {
   InvitationRevocationBody,
   RevokeInvitationOptions,
 } from "./invitation-revocation"
+export { guardRecords } from "./guard"
 export type { Ratification, RatificationBody } from "./ratification"
 export { RATIFICATION_VERSION, ratificationBytes, ratify, verifyRatification } from "./ratification"
 export type { DeviceRemoval, DeviceRemovalBody, RemoveDeviceOptions } from "./device-removal"

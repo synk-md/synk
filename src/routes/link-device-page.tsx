@@ -45,7 +45,7 @@ export function LinkDevicePage() {
       setSkipped(approval.skipped)
       setCollected(approval.notebooks.map((notebook) => ({ ...notebook, state: "waiting" })))
       for (const notebook of approval.notebooks) {
-        const root = await fetchNotebook(notebook.id, device.identity).catch(() => null)
+        const root = await fetchNotebook(notebook.id, device.identity, notebook.owner).catch(() => null)
         if (root) adoptNotebook(notebook.id, root)
         setCollected((previous) =>
           previous.map((entry) => (entry.id === notebook.id ? { ...entry, state: root ? "ready" : "missing" } : entry)),

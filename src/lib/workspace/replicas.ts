@@ -1,13 +1,14 @@
 /**
  * The notebook's two shared documents, synced through the relay.
  *
- * The directory has to be reachable by someone who holds no key yet - an
- * invitee writes their redemption into it - and it holds the very keys
+ * The directory has to be readable by someone who holds no key yet - an
+ * invitee checks their invitation in it - and it holds the very keys
  * everything else is sealed under, so it cannot itself be sealed under them.
- * Every record in it is signed and re-verified on read, so who wrote an
- * update proves nothing and nothing here checks it. It is sealed under a key
- * derived from the notebook id: readable by whoever holds the link, which is
- * who could join its WebRTC room before, and not by the relay.
+ * It is sealed under a key derived from the notebook id: readable by whoever
+ * holds the link, which is who could join its WebRTC room before, and not by
+ * the relay. Every record in it is signed and re-verified on read, but a
+ * record can still be overwritten or deleted, so only the owner and current
+ * members' writes are taken. An invitee asks on a channel of their own.
  *
  * The tree is content - titles and folders - and is sealed under the epoch
  * keys and written only by members with write capability, as a note is.
@@ -25,6 +26,7 @@ import { publicKeyFromDid } from "@/lib/identity"
 import type { ReadKeySource } from "@/lib/keys"
 import {
   DirectoryAuthorResolver,
+  laneOwner,
   lanedAuthors,
   lanedPolicy,
   newLane,
@@ -37,7 +39,8 @@ import {
 
 import { authorizationContext, linkedPrincipal } from "./capabilities"
 import { notebookKeyProvider } from "./note-sync"
-import { resourceIdFor, workspaceIdFor } from "./notebook-workspace"
+import { readNotebookWorkspace, resourceIdFor, workspaceIdFor } from "./notebook-workspace"
+import { pinnedOwner } from "./owner-pins"
 
 export interface ReplicaDevice {
   did: string
@@ -75,13 +78,36 @@ const selfCertifying: AuthorResolver = {
   },
 }
 
-const anyone: WritePolicy = { canWrite: () => true }
+/** For channels whose records prove themselves: a pairing, a join request. */
+export const anyone: WritePolicy = { canWrite: () => true }
+
+/**
+ * The owner and current members' devices, judged from the directory as it
+ * stands. Until an owner is known - established, or remembered - there is
+ * nothing to protect yet. A member's write that arrives
+ * before their admission is refused, not lost: it is fetched again next time.
+ */
+export function directoryWriters(doc: Y.Doc, notebookId: string): WritePolicy {
+  return {
+    async canWrite(_resourceId, author) {
+      const workspace = await readNotebookWorkspace({ doc, notebookId })
+      // Remembered before the directory itself has arrived - a new device, or
+      // one joining - so even the first writes are judged.
+      const owner = workspace.ownership.owner ?? pinnedOwner(notebookId)
+      if (!owner) return true
+      const device = laneOwner(author)
+      return device === owner || (workspace.directory?.devices.some((entry) => entry.record.did === device) ?? false)
+    },
+  }
+}
 
 export interface DirectoryReplicaOptions {
   doc: Y.Doc
   channel: DirectoryChannel
   device: ReplicaDevice
   transport: Transport
+  /** Whose writes count. Anyone's unless said: a notebook's directory says `directoryWriters`. */
+  policy?: WritePolicy
   batchMs?: number
   onError?: (error: unknown) => void
 }
@@ -95,7 +121,7 @@ export function createDirectoryReplica(options: DirectoryReplicaOptions): SyncEn
     clientId: options.doc.clientID,
     transport: options.transport,
     authors: lanedAuthors(selfCertifying),
-    policy: anyone,
+    policy: options.policy ?? anyone,
     keys: options.channel.keys,
     attributeOperations: false,
     ...(options.batchMs === undefined ? {} : { batchMs: options.batchMs }),

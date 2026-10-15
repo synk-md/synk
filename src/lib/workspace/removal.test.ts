@@ -1,7 +1,7 @@
 import * as Y from "yjs"
 import { describe, expect, it } from "vitest"
 
-import { generateInvitationSecret, putRemoval, readDirectory, removeDevice } from "@/lib/directory"
+import { generateInvitationSecret, putRemoval, readDirectory, removeDevice, valuesIn } from "@/lib/directory"
 import { generateSealingKey, generateSigningKey } from "@/lib/crypto"
 import { createDeviceRecord, didFromSigningKey, type DeviceAdmission, type DeviceIdentity } from "@/lib/identity"
 import type { ReadKeySource } from "@/lib/keys"
@@ -292,7 +292,7 @@ describe("what removal does not do", () => {
   /** Anyone holding the link can write to the directory. Only an admin's removal counts. */
   it("ignores a removal nobody entitled signed", async () => {
     const notebook = await aNotebook()
-    const directoryEntry = notebook.directory.getMap<DeviceAdmission>("directory:admissions").get(notebook.ada.did)!
+    const directoryEntry = valuesIn<DeviceAdmission>(notebook.directory, "directory:admissions").find((each) => each.did === notebook.ada.did)!
     putRemoval(
       notebook.directory,
       await removeDevice({ signingKey: notebook.grace.signingKey, admin: notebook.grace.did, admission: directoryEntry }),

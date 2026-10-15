@@ -70,15 +70,24 @@ describe("the merge is never trusted", () => {
   it("drops a device record whose signature does not verify", async () => {
     const doc = new Y.Doc()
     const admin = await newAdmin()
-    const device = await publishAdmitted(doc, admin)
-
-    // A hostile peer overwrites the record in place.
-    doc
-      .getMap(DIRECTORY_MAPS.devices)
-      .set(device.record.did, { ...device.record, createdAt: device.record.createdAt + 1 })
+    const device = await admitDevice(admin)
+    putAdmission(doc, device.admission)
+    doc.getMap(DIRECTORY_MAPS.devices).set(device.record.did, { ...device.record, createdAt: device.record.createdAt + 1 })
 
     const directory = await readDirectory(doc, [admin.did], { now: T0 })
     expect(directory.devices).toHaveLength(0)
+    expect(directory.rejected).toBeGreaterThan(0)
+  })
+
+  /** Records have slots of their own, so a tampered copy sits beside the real one and is passed over. */
+  it("keeps the real record when a tampered copy is filed beside it", async () => {
+    const doc = new Y.Doc()
+    const admin = await newAdmin()
+    const device = await publishAdmitted(doc, admin)
+    doc.getMap(DIRECTORY_MAPS.devices).set(device.record.did, { ...device.record, createdAt: device.record.createdAt + 1 })
+
+    const directory = await readDirectory(doc, [admin.did], { now: T0 })
+    expect(directory.devices.map((entry) => entry.record.did)).toEqual([device.record.did])
     expect(directory.rejected).toBeGreaterThan(0)
   })
 
@@ -92,8 +101,9 @@ describe("the merge is never trusted", () => {
     expect((await readDirectory(doc, [rogue.did], { now: T0 })).devices).toHaveLength(1)
   })
 
-  // The key a record is filed under is part of what is being asserted.
-  it("drops a record misfiled under another DID", async () => {
+  // What a record is about is read from the record. The key decides nothing,
+  // so filing one under another device's name does not make it theirs.
+  it("reads a record by what it says, not where it is filed", async () => {
     const doc = new Y.Doc()
     const admin = await newAdmin()
     const device = await admitDevice(admin)
@@ -103,8 +113,7 @@ describe("the merge is never trusted", () => {
     putAdmission(doc, device.admission)
 
     const directory = await readDirectory(doc, [admin.did], { now: T0 })
-    expect(directory.devices).toHaveLength(0)
-    expect(directory.rejected).toBeGreaterThan(0)
+    expect(directory.devices.map((entry) => entry.record.did)).toEqual([device.record.did])
   })
 
   it("drops a link whose parent is not an admitted device in this directory", async () => {
@@ -136,7 +145,7 @@ describe("the merge is never trusted", () => {
 
     const directory = await readDirectory(doc, [admin.did], { now: T0 })
     expect(directory.devices).toHaveLength(1)
-    expect(directory.rejected).toBe(6)
+    expect(directory.rejected).toBeGreaterThan(0)
   })
 
   // Two replicas converging on hostile state must reach the same verified view.

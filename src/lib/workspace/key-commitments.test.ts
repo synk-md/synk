@@ -129,8 +129,11 @@ function withoutCommitment(record: EpochRecord): EpochRecord {
 
 describe("epochs from before commitments", () => {
   /** What every notebook created before this change looks like. */
+  /** A notebook from before commitments: its records, without them, and nothing else. */
   async function withoutCommitments(notebook: Notebook) {
-    for (const signed of storedEpochRecords(notebook.doc, DOMAIN)) {
+    const records = storedEpochRecords(notebook.doc, DOMAIN)
+    notebook.doc.getMap("workspace:epochs").clear()
+    for (const signed of records) {
       putEpochRecord(
         notebook.doc,
         await signEpochRecord(withoutCommitment(signed.record), notebook.owner.signingKey, notebook.owner.did),

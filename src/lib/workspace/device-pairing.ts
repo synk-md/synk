@@ -21,8 +21,15 @@ import { rotateAway, unlinkDevice } from "./unlinking"
 import { readNotebookKeys } from "./notebook-keys"
 import { readNotebookWorkspace } from "./notebook-workspace"
 import { claimOwnershipAtRelay, liveKeys, relayConnection, relayWatch } from "./note-relay"
+import { pinOwner } from "./owner-pins"
 import { pairingChannel, type PairedNotebook } from "./pairing"
-import { createDirectoryReplica, createTreeReplica, directoryChannel, treeResourceId } from "./replicas"
+import {
+  createDirectoryReplica,
+  createTreeReplica,
+  directoryChannel,
+  directoryWriters,
+  treeResourceId,
+} from "./replicas"
 import { storedWatermark } from "./stored-watermark"
 import { openSyncSession, type DeliveryWatermark, type UnsentFlag } from "./sync-session"
 
@@ -104,7 +111,13 @@ async function syncDirectory(notebookId: string, device: DeviceIdentity, done?: 
   const channel = await directoryChannel(notebookId)
   const transport = connection().transportFor(channel.resourceId)
   return once({
-    engine: createDirectoryReplica({ doc: handle.doc, channel, device, transport }),
+    engine: createDirectoryReplica({
+      doc: handle.doc,
+      channel,
+      device,
+      transport,
+      policy: directoryWriters(handle.doc, notebookId),
+    }),
     doc: handle.doc,
     transport,
     resourceId: channel.resourceId,
@@ -212,7 +225,7 @@ export async function linkEverywhere(options: LinkEverywhereOptions) {
       })
       // As the owner, the new device's anchors now count at the relay too.
       await claimOwnershipAtRelay({ doc: handle.doc, notebookId: notebook.id, device: options.device })
-      linked.push(notebook)
+      linked.push({ ...notebook, owner })
     } catch (error) {
       skipped.push({ ...notebook, reason: error instanceof Error ? error.message : "could not be linked" })
     }
@@ -256,18 +269,24 @@ export async function unlinkEverywhere(options: {
  * The new device's side: the notebook's directory until this device holds its
  * keys, then the tree until there is one to show. Null when it does not arrive.
  */
-export async function fetchNotebook(notebookId: string, device: DeviceIdentity): Promise<TreeNode | null> {
+export async function fetchNotebook(
+  notebookId: string,
+  device: DeviceIdentity,
+  /** Named by the linking device; remembered before anything is read. */
+  owner?: string,
+): Promise<TreeNode | null> {
+  if (owner) pinOwner(notebookId, owner)
   const handle = createNotebookIndexDoc(notebookId)
   await handle.idb.whenSynced
-  let owner: string | null = null
+  let established: string | null = null
   let keyring: ReadKeySource | null = null
   const linked = await syncDirectory(notebookId, device, async () => {
-    owner ??= await ownerOf(notebookId, device)
-    keyring = owner ? await readableKeys(notebookId, device, owner) : null
+    established ??= await ownerOf(notebookId, device)
+    keyring = established ? await readableKeys(notebookId, device, established) : null
     return keyring !== null
   })
-  if (!linked || !owner || !keyring) return null
+  if (!linked || !established || !keyring) return null
   const arrived = () => readNotebookIndexTree(handle).root !== undefined
-  await syncTree(notebookId, device, owner, keyring, arrived)
+  await syncTree(notebookId, device, established, keyring, arrived)
   return readNotebookIndexTree(handle).root ?? null
 }

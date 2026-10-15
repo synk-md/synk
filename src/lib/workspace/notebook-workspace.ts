@@ -20,6 +20,8 @@ import {
   putAdmission,
   putDeviceRecord,
   readDirectory,
+  slotFor,
+  valuesIn,
   type VerifiedDirectory,
 } from "@/lib/directory"
 import {
@@ -31,6 +33,7 @@ import {
   type User,
 } from "@/lib/identity"
 
+import { pinnedOwner, pinOwner } from "./owner-pins"
 import {
   createGenesis,
   resolveOwnership,
@@ -54,18 +57,17 @@ export function memberIdFor(did: string): string {
   return `member:${did.slice(-16)}`
 }
 
+/** In a slot of its own, so a rival's claim can sit beside it but never replace it. */
 export function putGenesis(doc: Y.Doc, genesis: WorkspaceGenesis): void {
-  doc.getMap<WorkspaceGenesis>(GENESIS_MAP).set(genesis.owner, genesis)
+  doc.getMap<WorkspaceGenesis>(GENESIS_MAP).set(slotFor(genesis.owner, genesis.sig), genesis)
 }
 
 export function genesisClaims(doc: Y.Doc): WorkspaceGenesis[] {
-  const claims: WorkspaceGenesis[] = []
-  for (const [owner, claim] of doc.getMap<WorkspaceGenesis>(GENESIS_MAP).entries()) {
-    // Filed under a DID other than its own is a misfiled or hostile entry; the
-    // key is part of what is being asserted.
-    if (claim?.owner === owner) claims.push(claim)
+  const claims = new Map<string, WorkspaceGenesis>()
+  for (const claim of valuesIn<WorkspaceGenesis>(doc, GENESIS_MAP)) {
+    if (typeof claim.owner === "string" && typeof claim.sig === "string") claims.set(claim.sig, claim)
   }
-  return claims
+  return [...claims.values()]
 }
 
 export interface FoundOptions {
@@ -96,7 +98,7 @@ export async function foundNotebookWorkspace(
   const resource = resourceIdFor(options.notebookId)
   const member = memberIdFor(options.device.did)
 
-  const existing = doc0(options.doc).get(options.device.did)
+  const existing = genesisClaims(options.doc).find((claim) => claim.owner === options.device.did)
   if (existing) {
     return { genesis: existing, workspace, resource, member }
   }
@@ -128,10 +130,6 @@ export async function foundNotebookWorkspace(
   })
 
   return { genesis, workspace, resource, member }
-}
-
-function doc0(doc: Y.Doc): Y.Map<WorkspaceGenesis> {
-  return doc.getMap<WorkspaceGenesis>(GENESIS_MAP)
 }
 
 export interface NotebookWorkspace {
@@ -171,11 +169,14 @@ export async function readNotebookWorkspace(
   const workspace = workspaceIdFor(options.notebookId)
   const resource = resourceIdFor(options.notebookId)
 
+  // An owner this device established before outranks whatever claims arrive since.
+  const expectedOwner = options.expectedOwner ?? pinnedOwner(options.notebookId) ?? undefined
   const ownership = await resolveOwnership(genesisClaims(options.doc), {
     workspace,
     resource,
-    ...(options.expectedOwner === undefined ? {} : { expectedOwner: options.expectedOwner }),
+    ...(expectedOwner === undefined ? {} : { expectedOwner }),
   })
+  if (ownership.status === "established" && ownership.owner) pinOwner(options.notebookId, ownership.owner)
 
   const base: NotebookWorkspace = {
     notebookId: options.notebookId,

@@ -11,6 +11,7 @@ import {
   type TreeNode,
 } from "@/components/custom-ui/file-browser/tree";
 import { bindDoc, type BoundDoc, type DocBinding } from "./doc-binding";
+import { guardRecords } from "./directory/guard";
 
 
 const docs = new Map<string, { doc: Y.Doc, idb: IndexeddbPersistence, bound: BoundDoc }>()
@@ -345,6 +346,8 @@ export function createNotebookIndexDoc(notebookId: string) {
     const whenSynced = Promise.all([treeIdb.whenSynced, directoryIdb.whenSynced]).then(() => {
       migrateDirectoryRecords(tree, doc)
     })
+    // Signed records someone else deletes or replaces are put back.
+    guardRecords(doc, isDirectoryMap)
     // From the start, so nothing written locally - the migration included - can
     // go unnoticed by the sessions that decide whether to republish.
     trackUnsent(doc, notebookId, "directory")

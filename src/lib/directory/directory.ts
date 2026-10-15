@@ -91,24 +91,61 @@ function map<T>(doc: Y.Doc, name: string): Y.Map<T> {
   return doc.getMap<T>(name)
 }
 
+/**
+ * Where a signed record is filed: under what it is about and its own
+ * signature. Two records about one thing - a device admitted again, an epoch
+ * two admins cut at once - each keep a slot of their own, so a write can add a
+ * record and never replace one. What a record is about is read from the
+ * record; the key decides nothing.
+ */
+export function slotFor(subject: string, sig: string): string {
+  return `${subject}|${sig}`
+}
+
+/** Every record in a map, whatever it is filed under. */
+export function valuesIn<T>(doc: Y.Doc, name: string): T[] {
+  return [...map<T>(doc, name).values()].filter((value) => typeof value === "object" && value !== null)
+}
+
+function put<T extends { sig: string }>(doc: Y.Doc, name: string, subject: string, record: T): void {
+  map<T>(doc, name).set(slotFor(subject, record.sig), record)
+}
+
+/** Newest first, then by signature, so every device picks the same one. */
+function newestFirst<T extends { sig: string }>(records: readonly T[], at: (record: T) => number): T[] {
+  return [...records].sort((a, b) => at(b) - at(a) || (a.sig < b.sig ? -1 : a.sig > b.sig ? 1 : 0))
+}
+
+function bySubject<T>(records: readonly T[], subject: (record: T) => unknown): Map<string, T[]> {
+  const out = new Map<string, T[]>()
+  for (const record of records) {
+    const key = subject(record)
+    if (typeof key !== "string") continue
+    const bucket = out.get(key)
+    if (bucket) bucket.push(record)
+    else out.set(key, [record])
+  }
+  return out
+}
+
 // ---------------------------------------------------------------------------
 // Writing. Any peer may write; nothing here grants anything.
 // ---------------------------------------------------------------------------
 
 export function putDeviceRecord(doc: Y.Doc, record: DeviceRecord): void {
-  map<DeviceRecord>(doc, DIRECTORY_MAPS.devices).set(record.did, record)
+  put(doc, DIRECTORY_MAPS.devices, record.did, record)
 }
 
 export function putAdmission(doc: Y.Doc, admission: DeviceAdmission): void {
-  map<DeviceAdmission>(doc, DIRECTORY_MAPS.admissions).set(admission.did, admission)
+  put(doc, DIRECTORY_MAPS.admissions, admission.did, admission)
 }
 
 export function putLinkRevocation(doc: Y.Doc, revocation: LinkRevocation): void {
-  map<LinkRevocation>(doc, DIRECTORY_MAPS.linkRevocations).set(revocation.did, revocation)
+  put(doc, DIRECTORY_MAPS.linkRevocations, revocation.did, revocation)
 }
 
 export function putRemoval(doc: Y.Doc, removal: DeviceRemoval): void {
-  map<DeviceRemoval>(doc, DIRECTORY_MAPS.removals).set(removal.did, removal)
+  put(doc, DIRECTORY_MAPS.removals, removal.did, removal)
 }
 
 /**
@@ -116,46 +153,52 @@ export function putRemoval(doc: Y.Doc, removal: DeviceRemoval): void {
  * connection is worth opening, never for deciding who may do anything.
  */
 export function removedDidsUnverified(doc: Y.Doc): Set<string> {
-  return new Set(map<DeviceRemoval>(doc, DIRECTORY_MAPS.removals).keys())
+  return new Set(
+    valuesIn<DeviceRemoval>(doc, DIRECTORY_MAPS.removals)
+      .map((removal) => removal.did)
+      .filter((did) => typeof did === "string"),
+  )
 }
 
-/** Filed by device and time, so keeping more later adds rather than replaces. */
 export function putRatification(doc: Y.Doc, ratification: Ratification): void {
-  map<Ratification>(doc, DIRECTORY_MAPS.ratifications).set(
-    `${ratification.device}@${String(ratification.at)}`,
-    ratification,
-  )
+  put(doc, DIRECTORY_MAPS.ratifications, ratification.device, ratification)
 }
 
 export function putLink(doc: Y.Doc, link: DeviceLink): void {
-  map<DeviceLink>(doc, DIRECTORY_MAPS.links).set(link.did, link)
+  put(doc, DIRECTORY_MAPS.links, link.did, link)
 }
 
 export function putPrekeyBundle(doc: Y.Doc, bundle: PrekeyBundle): void {
-  map<PrekeyBundle>(doc, DIRECTORY_MAPS.prekeys).set(bundle.did, bundle)
+  put(doc, DIRECTORY_MAPS.prekeys, bundle.did, bundle)
 }
 
 export function putInvitationRevocation(doc: Y.Doc, revocation: InvitationRevocation): void {
-  map<InvitationRevocation>(doc, DIRECTORY_MAPS.invitationRevocations).set(
-    revocation.invitationId,
-    revocation,
-  )
+  put(doc, DIRECTORY_MAPS.invitationRevocations, revocation.invitationId, revocation)
 }
 
 export function putInvitation(doc: Y.Doc, invitation: Invitation): void {
-  map<Invitation>(doc, DIRECTORY_MAPS.invitations).set(invitation.invitationId, invitation)
+  put(doc, DIRECTORY_MAPS.invitations, invitation.invitationId, invitation)
 }
 
 /**
- * Redemptions are appended per invitation rather than keyed singly, because
- * seeing a *second* redemption is the signal that an invitation was reused.
- * Overwriting would hide exactly what single-use enforcement needs to notice.
+ * Each its own slot, so a second redemption of one invitation - the sign it
+ * was reused - sits beside the first rather than replacing it.
  */
 export function putRedemption(doc: Y.Doc, redemption: Redemption): void {
-  const store = map<Redemption[]>(doc, DIRECTORY_MAPS.redemptions)
-  const existing = store.get(redemption.invitationId) ?? []
-  if (existing.some((prior) => prior.sig === redemption.sig)) return
-  store.set(redemption.invitationId, [...existing, redemption])
+  put(doc, DIRECTORY_MAPS.redemptions, redemption.invitationId, redemption)
+}
+
+/** Every redemption, including those filed as a list per invitation before they had slots. */
+export function redemptionsIn(doc: Y.Doc): Redemption[] {
+  const out = new Map<string, Redemption>()
+  for (const value of map<Redemption | Redemption[]>(doc, DIRECTORY_MAPS.redemptions).values()) {
+    for (const redemption of Array.isArray(value) ? value : [value]) {
+      if (typeof redemption?.sig === "string" && typeof redemption.invitationId === "string") {
+        out.set(redemption.sig, redemption)
+      }
+    }
+  }
+  return [...out.values()]
 }
 
 // ---------------------------------------------------------------------------
@@ -203,67 +246,80 @@ async function readWith(
   const now = options.now ?? Date.now()
   let rejected = 0
 
-  const records = new Map<string, DeviceRecord>()
-  for (const [did, record] of map<DeviceRecord>(doc, DIRECTORY_MAPS.devices).entries()) {
-    // A record filed under a DID other than its own is a misfiled or hostile
-    // entry; the key is part of what is being asserted.
-    if (record?.did === did && (await verifyDeviceRecord(record))) records.set(did, record)
-    else rejected += 1
+  // Every valid record per device: it may have published more than one.
+  const records = new Map<string, DeviceRecord[]>()
+  for (const record of valuesIn<DeviceRecord>(doc, DIRECTORY_MAPS.devices)) {
+    if (typeof record.did === "string" && (await verifyDeviceRecord(record))) {
+      records.set(record.did, [...(records.get(record.did) ?? []), record])
+    } else rejected += 1
   }
+  const recordFor = (did: string, sealingDid: string) =>
+    records.get(did)?.find((record) => record.sealingDid === sealingDid) ?? records.get(did)?.[0]
 
-  // Admissions first: links can only be rooted in an admitted parent.
+  // Admissions first: links can only be rooted in an admitted parent. The
+  // newest valid admission of a device stands, unless a removal came after it.
   const admitted = new Map<string, AdmittedDevice>()
-  const removals = map<DeviceRemoval>(doc, DIRECTORY_MAPS.removals)
+  const removals = bySubject(valuesIn<DeviceRemoval>(doc, DIRECTORY_MAPS.removals), (removal) => removal.did)
   const removed = new Set<string>()
-  for (const [did, admission] of map<DeviceAdmission>(doc, DIRECTORY_MAPS.admissions).entries()) {
-    const record = records.get(did)
-    if (!record || admission?.did !== did) {
+  const admissions = bySubject(valuesIn<DeviceAdmission>(doc, DIRECTORY_MAPS.admissions), (admission) => admission.did)
+  for (const [did, candidates] of admissions) {
+    let standing: AdmittedDevice | null = null
+    for (const admission of newestFirst(candidates, (each) => each.issuedAt)) {
+      const record = recordFor(did, admission.sealingDid)
+      const device = record ? { record, admission } : null
+      if (device && (await verifyAdmittedDevice(device, trustedAdminDids, options))) {
+        standing = device
+        break
+      }
       rejected += 1
-      continue
     }
-    const device: AdmittedDevice = { record, admission }
-    if (!(await verifyAdmittedDevice(device, trustedAdminDids, options))) {
-      rejected += 1
-      continue
-    }
+    if (!standing) continue
     // Removed is not rejected: the admission was real, and an admin ended it.
     // Leaving it out here is what stops everything built on the directory -
     // the author check, the member list - from honouring it.
-    const removal = removals.get(did)
-    if (removal && (await verifyDeviceRemoval(removal, admission, trustedAdminDids))) {
+    let ended = false
+    for (const removal of removals.get(did) ?? []) {
+      if (await verifyDeviceRemoval(removal, standing.admission, trustedAdminDids)) ended = true
+    }
+    if (ended) {
       removed.add(did)
       continue
     }
-    admitted.set(did, device)
+    admitted.set(did, standing)
   }
 
   const linked: LinkedDevice[] = []
-  const revocations = map<LinkRevocation>(doc, DIRECTORY_MAPS.linkRevocations)
+  const revocations = bySubject(valuesIn<LinkRevocation>(doc, DIRECTORY_MAPS.linkRevocations), (revocation) => revocation.did)
   const admittedDevices = [...admitted.values()].map((device) => ({ kind: "admitted" as const, ...device }))
-  for (const [did, link] of map<DeviceLink>(doc, DIRECTORY_MAPS.links).entries()) {
-    const record = records.get(did)
-    const parent = link ? admitted.get(link.parent) : undefined
-    if (!record || !parent || link.did !== did) {
+  const links = bySubject(valuesIn<DeviceLink>(doc, DIRECTORY_MAPS.links), (link) => link.did)
+  for (const [did, candidates] of links) {
+    if (admitted.has(did)) continue
+    let standing: LinkedDevice | null = null
+    for (const link of newestFirst(candidates, (each) => each.issuedAt)) {
+      const parent = admitted.get(link.parent)
+      for (const record of parent ? (records.get(did) ?? []) : []) {
+        if (await verifyLinkedDevice({ record, link }, parent!, trustedAdminDids, options)) {
+          standing = { record, link }
+          break
+        }
+      }
+      if (standing) break
       rejected += 1
-      continue
     }
-    const device: LinkedDevice = { record, link }
-    if (!(await verifyLinkedDevice(device, parent, trustedAdminDids, options))) {
-      rejected += 1
-      continue
-    }
+    if (!standing) continue
     // Unlinked by one of the member's own admitted devices - a lost phone. It
     // applies to links issued before it, so the device can be linked again.
-    const revocation = revocations.get(did)
-    if (
-      revocation &&
-      revocation.revokedAt >= link.issuedAt &&
-      (await verifyLinkRevocation(revocation, link, admittedDevices))
-    ) {
+    let unlinked = false
+    for (const revocation of revocations.get(did) ?? []) {
+      if (revocation.revokedAt >= standing.link.issuedAt && (await verifyLinkRevocation(revocation, standing.link, admittedDevices))) {
+        unlinked = true
+      }
+    }
+    if (unlinked) {
       removed.add(did)
       continue
     }
-    linked.push(device)
+    linked.push(standing)
   }
 
   const devices: MemberDevice[] = [
@@ -272,28 +328,35 @@ async function readWith(
   ]
 
   const prekeys = new Map<string, PrekeyBundle>()
-  for (const [did, bundle] of map<PrekeyBundle>(doc, DIRECTORY_MAPS.prekeys).entries()) {
+  const bundles = bySubject(valuesIn<PrekeyBundle>(doc, DIRECTORY_MAPS.prekeys), (bundle) => bundle.did)
+  for (const [did, candidates] of bundles) {
     // Only devices that are actually present may publish a sealing target.
     const present = admitted.has(did) || linked.some((device) => device.record.did === did)
-    if (present && bundle?.did === did && (await verifyPrekeyBundle(bundle, { now })))
-      prekeys.set(did, bundle)
-    else rejected += 1
+    for (const bundle of newestFirst(candidates, (each) => each.publishedAt)) {
+      if (present && (await verifyPrekeyBundle(bundle, { now }))) {
+        prekeys.set(did, bundle)
+        break
+      }
+      rejected += 1
+    }
   }
 
   const signedInvitations: Invitation[] = []
-  for (const [id, invitation] of map<Invitation>(doc, DIRECTORY_MAPS.invitations).entries()) {
-    if (
-      invitation?.invitationId === id &&
-      (await verifyInvitation(invitation, trustedAdminDids, { ...options, now }))
-    ) {
-      signedInvitations.push(invitation)
-    } else rejected += 1
+  const issued = bySubject(valuesIn<Invitation>(doc, DIRECTORY_MAPS.invitations), (invitation) => invitation.invitationId)
+  for (const candidates of issued.values()) {
+    for (const invitation of newestFirst(candidates, (each) => each.issuedAt)) {
+      if (await verifyInvitation(invitation, trustedAdminDids, { ...options, now })) {
+        signedInvitations.push(invitation)
+        break
+      }
+      rejected += 1
+    }
   }
 
   // A withdrawn invitation is not a rejected record - it verified, and an admin
   // took it back. It simply stops being offered.
   const revoked = await revokedInvitationIds(
-    [...map<InvitationRevocation>(doc, DIRECTORY_MAPS.invitationRevocations).values()],
+    valuesIn<InvitationRevocation>(doc, DIRECTORY_MAPS.invitationRevocations),
     signedInvitations,
     trustedAdminDids,
   )
@@ -303,18 +366,11 @@ async function readWith(
 
   const byId = new Map(invitations.map((invitation) => [invitation.invitationId, invitation]))
   const redemptions = new Map<string, Redemption[]>()
-  for (const [id, entries] of map<Redemption[]>(doc, DIRECTORY_MAPS.redemptions).entries()) {
-    const invitation = byId.get(id)
-    if (!invitation || !Array.isArray(entries)) {
-      rejected += 1
-      continue
-    }
-    const valid: Redemption[] = []
-    for (const redemption of entries) {
-      if (await verifyRedemption(redemption, invitation, { now })) valid.push(redemption)
-      else rejected += 1
-    }
-    if (valid.length > 0) redemptions.set(id, valid)
+  for (const redemption of redemptionsIn(doc)) {
+    const invitation = byId.get(redemption.invitationId)
+    if (invitation && (await verifyRedemption(redemption, invitation, { now }))) {
+      redemptions.set(redemption.invitationId, [...(redemptions.get(redemption.invitationId) ?? []), redemption])
+    } else rejected += 1
   }
 
   return { devices, prekeys, invitations, revokedInvitations: revoked, redemptions, removed, rejected }

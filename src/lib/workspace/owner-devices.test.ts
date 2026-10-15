@@ -9,6 +9,7 @@ import {
   putLink,
   putRatification,
   ratify,
+  valuesIn,
   verifyInvitation,
 } from "@/lib/directory"
 import {
@@ -268,7 +269,7 @@ describe("joining by an invitation from the owner's phone", () => {
     await inviteToNotebook({ doc: notebook.directory, notebookId: NOTEBOOK, admin: notebook.phone, secret, label: "Ada" })
     const rival = await aDevice()
     await foundNotebookWorkspace({ doc: notebook.directory, notebookId: NOTEBOOK, device: rival, label: "Mallory" })
-    const rivalAdmission = notebook.directory.getMap<DeviceAdmission>("directory:admissions").get(rival.did)!
+    const rivalAdmission = valuesIn<DeviceAdmission>(notebook.directory, "directory:admissions").find((each) => each.did === rival.did)!
     putLink(
       notebook.directory,
       await createDeviceLink({

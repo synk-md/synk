@@ -132,6 +132,8 @@ export { hasNoOperations } from "./note-snapshots"
 
 export type { NoteEngineOptions } from "./note-relay"
 export type { RelaySettings } from "./note-relay"
+export type { OwnerPins } from "./owner-pins"
+export { configureOwnerPins, localOwnerPins, memoryOwnerPins, pinnedOwner, pinOwner } from "./owner-pins"
 export {
   claimOwnershipAtRelay,
   closeRelayConnection,
@@ -182,11 +184,22 @@ export type {
   TreeReplicaOptions,
 } from "./replicas"
 export {
+  anyone,
   createDirectoryReplica,
   createTreeReplica,
   directoryChannel,
+  directoryWriters,
   treeResourceId,
 } from "./replicas"
+
+export type { JoinChannelAccess } from "./join-requests"
+export {
+  copyJoinRequests,
+  joinChannel,
+  outstandingInvitations,
+  requestToJoin,
+  watchJoinRequests,
+} from "./join-requests"
 
 export type { NoteAdmissionOptions, NoteAdmissionResult, NoteOutcome } from "./admit-notes"
 export { markCovered, noteRefsFor, runNoteAdmission } from "./admit-notes"

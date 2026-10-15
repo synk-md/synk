@@ -206,12 +206,13 @@ describe("reading a notebook's keys", () => {
     expect(keys.keyring).toBeNull()
   })
 
-  it("drops an epoch record filed under the wrong epoch", async () => {
+  /** The key decides nothing: a record filed under the wrong epoch is still about its own. */
+  it("reads an epoch record by its own epoch, wherever it is filed", async () => {
     const { doc, owner } = await founded()
     const signed = await signEpochRecord(genesisEpoch(DOMAIN, T0), owner.signingKey, owner.did)
     doc.getMap("workspace:epochs").set("99", signed)
 
-    expect(storedEpochRecords(doc, DOMAIN)).toHaveLength(1)
+    expect(storedEpochRecords(doc, DOMAIN).map((each) => each.record.epoch)).not.toContain(99)
   })
 
   it("ignores sealed keys belonging to another notebook", async () => {

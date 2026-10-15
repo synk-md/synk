@@ -13,6 +13,9 @@ import {
   readNotebookKeys,
   readNotebookWorkspace,
   redeemIntoNotebook,
+  relayConnection,
+  relayWatch,
+  requestToJoin,
 } from "@/lib/workspace"
 import {
   createNotebookIndexDoc,
@@ -162,20 +165,26 @@ export function JoinNotebookPage() {
 
   // Somebody coming back to the link has already asked, and may already be in.
   // Asking for the code again would send a second request for the same thing.
+  // Looked for again as the directory changes: the request reaches it only
+  // once one of the owner's devices has brought it across.
   React.useEffect(() => {
     if (!notebookReady || !notebookId || stage !== "entering") return
     const device = currentDevice()
     if (!device) return
+    const { doc } = createNotebookIndexDoc(notebookId)
     let cancelled = false
-    void findOwnRedemption(createNotebookIndexDoc(notebookId).doc, device.identity.did).then(
-      (match) => {
+    const check = () => {
+      void findOwnRedemption(doc, device.identity.did).then((match) => {
         if (cancelled || !match) return
         setExpectedOwner(match.expectedOwner)
         setStage("waiting")
-      },
-    )
+      })
+    }
+    doc.on("update", check)
+    check()
     return () => {
       cancelled = true
+      doc.off("update", check)
     }
   }, [notebookReady, notebookId, stage])
 
@@ -283,7 +292,19 @@ export function JoinNotebookPage() {
       }
 
       setExpectedOwner(match.expectedOwner)
-      await redeemIntoNotebook({ doc, secret, device: device.identity })
+      const connection = relayConnection()
+      if (relayed && connection) {
+        // The directory takes only members' writes; the request goes on the
+        // invitation's own channel, for the owner's device to bring across.
+        await requestToJoin({
+          secret,
+          invitation: match.invitation,
+          device: device.identity,
+          access: { transportFor: (resourceId) => connection.transportFor(resourceId), relay: relayWatch },
+        })
+      } else {
+        await redeemIntoNotebook({ doc, secret, device: device.identity })
+      }
       setStage("waiting")
     } catch (cause) {
       setError(

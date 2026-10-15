@@ -2,7 +2,7 @@ import * as Y from "yjs"
 import { describe, expect, it } from "vitest"
 
 import { generateSealingKey, generateSigningKey } from "@/lib/crypto"
-import { generateInvitationSecret, putLinkRevocation, readDirectory } from "@/lib/directory"
+import { generateInvitationSecret, putLinkRevocation, readDirectory, valuesIn } from "@/lib/directory"
 import { createDeviceRecord, didFromSigningKey, type DeviceIdentity, type DeviceLink } from "@/lib/identity"
 import type { ReadKeySource } from "@/lib/keys"
 import { revokeLink } from "@/lib/membership"
@@ -222,7 +222,7 @@ describe("who may unlink", () => {
   /** Anyone holding the link can file a record. Only the member's own signature counts. */
   it("ignores an unlinking nobody entitled signed", async () => {
     const notebook = await aNotebook()
-    const link = notebook.directory.getMap<DeviceLink>("directory:links").get(notebook.phone.did)!
+    const link = valuesIn<DeviceLink>(notebook.directory, "directory:links").find((each) => each.did === notebook.phone.did)!
     putLinkRevocation(
       notebook.directory,
       await revokeLink({ signingKey: notebook.grace.signingKey, revoker: notebook.grace.did, link }),
