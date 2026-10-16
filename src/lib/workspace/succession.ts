@@ -37,6 +37,11 @@ export interface StandbyBody {
   owner: string
   /** The device that may take over. */
   device: string
+  /**
+   * Not only if the owner's device is lost: the owner offers ownership now,
+   * and keeps their device. Signed, so the offer is the owner's word.
+   */
+  handover?: true
   at: number
 }
 
@@ -63,7 +68,18 @@ export interface Succession extends SuccessionBody {
 }
 
 function standbyBytes(body: StandbyBody): Bytes {
-  return utf8(["synk/standby/v1", String(body.v), body.workspace, body.owner, body.device, String(body.at)].join("\n"))
+  return utf8(
+    [
+      "synk/standby/v1",
+      String(body.v),
+      body.workspace,
+      body.owner,
+      body.device,
+      String(body.at),
+      // Only when present, so a standby from before verifies unchanged.
+      ...(body.handover ? ["handover"] : []),
+    ].join("\n"),
+  )
 }
 
 function successionBytes(body: SuccessionBody): Bytes {
@@ -96,6 +112,7 @@ export async function nameStandby(options: {
   owner: string
   workspace: string
   device: string
+  handover?: boolean
   at?: number
 }): Promise<Standby> {
   const body: StandbyBody = {
@@ -103,6 +120,7 @@ export async function nameStandby(options: {
     workspace: options.workspace,
     owner: options.owner,
     device: options.device,
+    ...(options.handover ? { handover: true as const } : {}),
     at: options.at ?? Date.now(),
   }
   return { ...body, sig: toBase64Url(await options.signingKey.sign(standbyBytes(body))) }
@@ -114,6 +132,13 @@ export async function signSuccession(
   const { signingKey, at, ...rest } = options
   const body: SuccessionBody = { v: VERSION, ...rest, at: at ?? Date.now() }
   return { ...body, sig: toBase64Url(await signingKey.sign(successionBytes(body))) }
+}
+
+/** Signed by the owner it names, for this workspace. */
+export async function verifyStandby(standby: Standby, workspace: string): Promise<boolean> {
+  if (standby?.v !== VERSION || standby.workspace !== workspace) return false
+  const { sig, ...body } = standby
+  return signedBy(standby.owner, standbyBytes(body), sig)
 }
 
 export function putStandby(doc: Y.Doc, standby: Standby): void {

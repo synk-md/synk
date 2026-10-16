@@ -6,8 +6,8 @@ import { RiShieldUserLine } from "@remixicon/react"
 import { Button } from "@/components/tiptap-ui-primitive/button"
 import type { MemberDevice, User } from "@/lib/identity"
 import type { DeviceIdentity } from "@/lib/identity"
-import { isStandby, type PairedNotebook } from "@/lib/workspace"
-import { nameStandbyEverywhere, takeOverEverywhere } from "@/lib/workspace/device-pairing"
+import { isOfferedOwnership, isStandby, type PairedNotebook } from "@/lib/workspace"
+import { acceptOwnershipEverywhere, nameStandbyEverywhere, takeOverEverywhere } from "@/lib/workspace/device-pairing"
 import { createNotebookIndexDoc } from "@/lib/yjs-utils"
 
 export type SuccessionSectionProps = {
@@ -56,38 +56,95 @@ export function SuccessionSection({ notebookId, owner, device, user, notebooks }
         </h4>
         <p className="dm-body-text">
           Let one of your other devices take over as owner, so losing this one does not leave nobody able to run the
-          notebook. Your recovery code works too, even if every device is gone.
+          notebook - or make it the owner now, keeping this one as an ordinary device of yours. Your recovery code
+          works too, even if every device is gone.
         </p>
         {others.length === 0 ? (
           <p className="dm-subtle">Link another device first.</p>
         ) : (
           <ul className="dm-list">
             {others.map((entry) => {
-              const named = isStandby(doc, owner, entry.record.did)
+              const did = entry.record.did
+              const named = isStandby(doc, owner, did)
+              const offered = isOfferedOwnership(doc, owner, did)
+              const plural = (count: number) => `${String(count)} notebook${count === 1 ? "" : "s"}`
               return (
-                <li key={entry.record.did} className="dm-row">
+                <li key={did} className="dm-row">
                   <span>{nameOf(entry)}</span>
-                  {named ? (
-                    <span className="dm-subtle">Can take over</span>
-                  ) : (
-                    <Button
-                      data-style="ghost"
-                      disabled={busy !== null}
-                      onClick={() =>
-                        void run(entry.record.did, async () => {
-                          const done = await nameStandbyEverywhere({ device, standby: entry.record.did, notebooks })
-                          return `It can now take over ${String(done.length)} notebook${done.length === 1 ? "" : "s"}.`
-                        })
-                      }
-                    >
-                      <span className="tiptap-button-text">{busy === entry.record.did ? "Saving…" : "Let it take over"}</span>
-                    </Button>
-                  )}
+                  <span className="dm-row-actions">
+                    {offered ? (
+                      <span className="dm-subtle">Offered ownership - accept it on that device</span>
+                    ) : (
+                      <>
+                        {named ? (
+                          <span className="dm-subtle">Can take over</span>
+                        ) : (
+                          <Button
+                            data-style="ghost"
+                            disabled={busy !== null}
+                            onClick={() =>
+                              void run(did, async () => {
+                                const done = await nameStandbyEverywhere({ device, standby: did, notebooks })
+                                return `It can now take over ${plural(done.length)}.`
+                              })
+                            }
+                          >
+                            <span className="tiptap-button-text">{busy === did ? "Saving…" : "Let it take over"}</span>
+                          </Button>
+                        )}
+                        <Button
+                          data-style="ghost"
+                          disabled={busy !== null}
+                          onClick={() =>
+                            void run(`${did}:handover`, async () => {
+                              const done = await nameStandbyEverywhere({ device, standby: did, notebooks, handover: true })
+                              return `Offered ownership of ${plural(done.length)}. Accept it on that device.`
+                            })
+                          }
+                        >
+                          <span className="tiptap-button-text">
+                            {busy === `${did}:handover` ? "Offering…" : "Make it the owner"}
+                          </span>
+                        </Button>
+                      </>
+                    )}
+                  </span>
                 </li>
               )
             })}
           </ul>
         )}
+        {result && <p className="dm-subtle" role="status">{result}</p>}
+      </section>
+    )
+  }
+
+  if (isOfferedOwnership(doc, owner, self)) {
+    return (
+      <section className="dm-section" aria-labelledby="succession-heading">
+        <h4 id="succession-heading" className="dm-section-title">
+          <RiShieldUserLine aria-hidden="true" /> Become the owner
+        </h4>
+        <p className="dm-body-text">
+          Your other device offered to make this one the owner of your notebooks. It stays in them as an ordinary
+          device of yours; this one runs them from now on.
+        </p>
+        <div className="dm-actions">
+          <Button
+            className="dm-primary-btn is-active"
+            disabled={busy !== null}
+            onClick={() =>
+              void run("accept", async () => {
+                const { accepted, failed } = await acceptOwnershipEverywhere({ device, notebooks })
+                return failed.length > 0
+                  ? `Accepted ${String(accepted.length)}; ${String(failed.length)} could not be: ${failed.map((each) => each.reason).join("; ")}`
+                  : `You own ${String(accepted.length)} notebook${accepted.length === 1 ? "" : "s"} now.`
+              })
+            }
+          >
+            <span className="tiptap-button-text">{busy ? "Accepting…" : "Accept ownership"}</span>
+          </Button>
+        </div>
         {result && <p className="dm-subtle" role="status">{result}</p>}
       </section>
     )

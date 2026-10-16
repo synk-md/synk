@@ -75,3 +75,34 @@ test("a new device recovers the notebook with its code", async ({ browser }) => 
   await fresh.page.getByRole("link", { name: "Open the notebook" }).click()
   await expect(editor(fresh.page)).toContainText("Written before everything was lost.", { timeout: 60_000 })
 })
+
+/** Not lost, only handed on: the laptop stays, as one of Maren's devices like any other. */
+test("the owner hands ownership to their phone and keeps the laptop", async ({ browser }) => {
+  const laptop = await person(browser, "Maren")
+  const phone = await person(browser, "Maren's phone")
+
+  await createNotebook(laptop, "Travel")
+  await linkDevice(laptop, phone)
+
+  const devices = await yourDevices(laptop.page)
+  await devices.getByRole("button", { name: "Make it the owner" }).click()
+  await expect(devices.getByText(/Offered ownership/).first()).toBeVisible({ timeout: 30_000 })
+  await devices.getByRole("button", { name: "Close" }).first().click()
+
+  const onPhone = await yourDevices(phone.page)
+  await onPhone.getByRole("button", { name: "Accept ownership" }).click()
+  await expect(onPhone.getByText(/You own 1 notebook now/)).toBeVisible({ timeout: 60_000 })
+  await onPhone.getByRole("button", { name: "Close" }).first().click()
+
+  const phoneShare = await openShare(phone.page)
+  await expect(phoneShare.getByRole("button", { name: /Invite someone/ })).toBeVisible({ timeout: 30_000 })
+  await expect(phoneShare.getByText("1 member")).toBeVisible()
+  await phoneShare.getByRole("button", { name: "Close" }).first().click()
+
+  const laptopShare = await openShare(laptop.page)
+  await expect(laptopShare.getByText(/Only the notebook's owner/)).toBeVisible({ timeout: 30_000 })
+  await laptopShare.getByRole("button", { name: "Close" }).first().click()
+
+  await type(laptop, " Still writing from the laptop.")
+  await expect(editor(phone.page)).toContainText("Still writing from the laptop.")
+})

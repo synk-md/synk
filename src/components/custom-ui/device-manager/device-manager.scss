@@ -483,3 +483,11 @@
   gap: 12px;
   font-size: 13px;
 }
+
+.dm-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

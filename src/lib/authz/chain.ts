@@ -57,12 +57,6 @@ export interface AuthorizationContext {
   kept?: ReadonlySet<string>
 }
 
-/** Who a capability's issuer acts as: a deputy for its principal, a kept one for the owner. */
-function issuerPrincipal(capability: Capability, context: AuthorizationContext): string {
-  const issuer = capability.payload.iss
-  return context.deputies?.get(issuer) ?? (context.kept?.has(capability.cid) ? context.owner : issuer)
-}
-
 /** Who a principal holds capabilities as. */
 export function principalFor(did: string, context: AuthorizationContext): string {
   return context.deputies?.get(did) ?? did
@@ -111,15 +105,16 @@ export async function verifyChain(
     chain.push(current)
 
     if (current.payload.prf === null) {
-      // A root is only a root if the owner issued it - or an owner before them,
-      // whose root the owner now kept on taking over.
-      if (current.payload.iss !== context.owner && !context.kept?.has(current.cid)) {
-        return deny(
-          "root-not-owner",
-          `root was issued by ${current.payload.iss}, not the owner ${context.owner}`,
-        )
+      // A root is only a root if the owner issued it.
+      if (current.payload.iss === context.owner) return { authorized: true, chain: chain.reverse() }
+      // Or an owner before them, whose root the owner kept on taking over - and
+      // then only for what was granted under it before: every link above it
+      // must have been kept too, so nothing new is built on it, and on its
+      // own it is nothing.
+      if (context.kept?.has(current.cid) && chain.length > 1 && chain.slice(0, -1).every((link) => context.kept?.has(link.cid))) {
+        return { authorized: true, chain: chain.reverse() }
       }
-      return { authorized: true, chain: chain.reverse() }
+      return deny("root-not-owner", `root was issued by ${current.payload.iss}, not the owner ${context.owner}`)
     }
 
     const parent = context.proofs.get(current.payload.prf)
@@ -127,10 +122,13 @@ export async function verifyChain(
       return deny("broken-proof", `proof ${current.payload.prf} is not available`)
     }
     // A deputy issues as the principal it acts for, so its grants rest on that
-    // principal's. Only when the issuer is not itself the proof's audience: a
-    // former owner's kept grant rests on that owner's own kept root.
+    // principal's. A kept grant rests on whatever its proof names: it was a
+    // deputy's, of an owner who is gone, and stands as it was signed.
     const issuer =
-      current.payload.iss === parent.payload.aud ? current.payload.iss : issuerPrincipal(current, context)
+      current.payload.iss === parent.payload.aud
+        ? current.payload.iss
+        : context.deputies?.get(current.payload.iss) ??
+          (context.kept?.has(current.cid) ? parent.payload.aud : current.payload.iss)
     const failure = checkAttenuation({ ...current.payload, iss: issuer }, parent.payload)
     if (failure) return deny("attenuation", `${failure.rule}: ${failure.detail}`)
     current = parent

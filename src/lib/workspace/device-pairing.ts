@@ -26,7 +26,14 @@ import { readNotebookWorkspace } from "./notebook-workspace"
 import { claimOwnershipAtRelay, liveKeys, relayConnection, relayWatch } from "./note-relay"
 import { pinOwner } from "./owner-pins"
 import type { RecoveryCode } from "./recovery-code"
-import { isStandby, nameStandbyDevice, recoverWithCode, takeOverAsStandby } from "./takeover"
+import {
+  acceptOwnership,
+  isOfferedOwnership,
+  isStandby,
+  nameStandbyDevice,
+  recoverWithCode,
+  takeOverAsStandby,
+} from "./takeover"
 import { pairingChannel, type PairedNotebook } from "./pairing"
 import {
   createDirectoryReplica,
@@ -304,13 +311,21 @@ export async function nameStandbyEverywhere(options: {
   device: DeviceIdentity
   standby: string
   notebooks: readonly PairedNotebook[]
+  /** Offer ownership now, not only if this device is lost. */
+  handover?: boolean
 }): Promise<PairedNotebook[]> {
   const named: PairedNotebook[] = []
   for (const notebook of options.notebooks) {
     const handle = createNotebookIndexDoc(notebook.id)
     await handle.idb.whenSynced
     if ((await ownerOf(notebook.id, options.device)) !== options.device.did) continue
-    await nameStandbyDevice({ doc: handle.doc, notebookId: notebook.id, owner: options.device, device: options.standby })
+    await nameStandbyDevice({
+      doc: handle.doc,
+      notebookId: notebook.id,
+      owner: options.device,
+      device: options.standby,
+      ...(options.handover ? { handover: true } : {}),
+    })
     named.push(notebook)
     if (relayConnection()) await syncDirectory(notebook.id, options.device)
   }
@@ -366,10 +381,10 @@ export async function recoverNotebook(options: { code: RecoveryCode; device: Dev
     code: options.code,
     // The tree first, so there is a list of notes to gather.
     beforeRemoval: async () => {
-      if (!(await syncDirectory(notebookId, options.device))) throw new Error("Could not reach the relay to recover.")
-      const keyring = await readableKeys(notebookId, options.device, options.device.did)
-      if (keyring) {
-        await syncTree(notebookId, options.device, options.device.did, keyring, () => readNotebookIndexTree(handle).root !== undefined)
+      const owner = await ownerOf(notebookId, options.device)
+      const keyring = owner ? await readableKeys(notebookId, options.device, owner) : null
+      if (owner && keyring) {
+        await syncTree(notebookId, options.device, owner, keyring, () => readNotebookIndexTree(handle).root !== undefined)
       }
       await anchorEveryNote(notebookId, options.device)
     },
@@ -392,7 +407,10 @@ export async function recoverNotebook(options: { code: RecoveryCode; device: Dev
  */
 async function anchorEveryNote(notebookId: string, device: DeviceIdentity): Promise<void> {
   const handle = createNotebookIndexDoc(notebookId)
-  const keyring = await readableKeys(notebookId, device, device.did)
+  // Still the old owner's notebook: gathered before anything changes hands.
+  const owner = await ownerOf(notebookId, device)
+  if (!owner) throw new Error("This notebook's ownership is not settled here.")
+  const keyring = await readableKeys(notebookId, device, owner)
   if (!keyring) throw new Error("This device cannot open the notebook's keys, so it cannot keep its notes.")
   const shared = connection()
   for (const noteId of collectLeaves(readNotebookIndexTree(handle).root).noteIds) {
@@ -405,7 +423,7 @@ async function anchorEveryNote(notebookId: string, device: DeviceIdentity): Prom
       notebookId,
       noteId,
       index: handle.doc,
-      owner: device.did,
+      owner,
       author: device.did,
       signingKey: device.signingKey,
       clientId: device.clientId,
@@ -456,4 +474,28 @@ async function anchorEveryNote(notebookId: string, device: DeviceIdentity): Prom
       engine.close()
     }
   }
+}
+
+/** Accept ownership of every notebook whose owner offered it to this device. Their device stays in. */
+export async function acceptOwnershipEverywhere(options: { device: DeviceIdentity; notebooks: readonly PairedNotebook[] }) {
+  const accepted: PairedNotebook[] = []
+  const failed: (PairedNotebook & { reason: string })[] = []
+  for (const notebook of options.notebooks) {
+    try {
+      const handle = createNotebookIndexDoc(notebook.id)
+      await handle.idb.whenSynced
+      if (relayConnection()) await syncDirectory(notebook.id, options.device)
+      const owner = await ownerOf(notebook.id, options.device)
+      if (!owner || owner === options.device.did || !isOfferedOwnership(handle.doc, owner, options.device.did)) continue
+      await acceptOwnership({ doc: handle.doc, notebookId: notebook.id, device: options.device })
+      accepted.push(notebook)
+      if (relayConnection()) {
+        await syncDirectory(notebook.id, options.device)
+        await claimOwnershipAtRelay({ doc: handle.doc, notebookId: notebook.id, device: options.device })
+      }
+    } catch (error) {
+      failed.push({ ...notebook, reason: error instanceof Error ? error.message : "could not be accepted" })
+    }
+  }
+  return { accepted, failed }
 }

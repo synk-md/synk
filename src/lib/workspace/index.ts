@@ -141,7 +141,7 @@ export { generateRecoveryCode, parseRecoveryCode, recoveryIdentity, recoveryKeyO
 export type { Lineage, Standby, Succession } from "./succession"
 export { resolveLineage, standbysIn, successionsIn } from "./succession"
 export type { TakeoverOptions } from "./takeover"
-export { isStandby, nameStandbyDevice, recoverWithCode, takeOverAsStandby } from "./takeover"
+export { acceptOwnership, isOfferedOwnership, isStandby, nameStandbyDevice, recoverWithCode, takeOverAsStandby } from "./takeover"
 export type { GrantOptions, SharingOptions } from "./sharing"
 export { changeAccess, grantAccess, mayEditNote, mayEditTree, mayWrite, withdrawGrants } from "./sharing"
 export type { RememberedEpochs } from "./remembered-epochs"

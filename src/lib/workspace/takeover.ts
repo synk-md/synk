@@ -27,6 +27,8 @@ import { createDeviceAdmission, type DeviceIdentity } from "@/lib/identity"
 import { sealEpochKey, type KeyRecipient } from "@/lib/keys"
 import { signEpochRecord } from "@/lib/membership"
 
+import { issueCapability } from "@/lib/authz"
+
 import { issueOwnerRoot, putCapability } from "./capabilities"
 import { signedBy } from "./kept-records"
 import {
@@ -43,7 +45,15 @@ import {
   workspaceIdFor,
 } from "./notebook-workspace"
 import { generateRecoveryCode, recoveryIdentity, recoveryKeyOf, type RecoveryCode } from "./recovery-code"
-import { nameStandby, putStandby, putSuccession, signSuccession, standbysIn, type Succession } from "./succession"
+import {
+  nameStandby,
+  putStandby,
+  putSuccession,
+  signSuccession,
+  standbysIn,
+  verifyStandby,
+  type Succession,
+} from "./succession"
 
 export interface TakeoverOptions {
   doc: Y.Doc
@@ -51,11 +61,18 @@ export interface TakeoverOptions {
   /** The device becoming the owner. */
   device: DeviceIdentity
   /**
-   * Run once this device owns the notebook and before the lost one is taken
-   * out: while its writing is still accepted, so it can be gathered up and
-   * kept in snapshots this device signs.
+   * Run before anything changes hands: while the old owner is still owner and
+   * its writing is still accepted, so it can be gathered up and kept in
+   * snapshots this device signs. Once it is taken over from, what it wrote is
+   * refused by any device that did not already hold it.
    */
   beforeRemoval?: () => Promise<void>
+  /**
+   * The owner handed ownership over and keeps their device: it stays in as an
+   * ordinary member, so nothing is gathered, nobody is removed, and the key
+   * stands.
+   */
+  keepPrevious?: boolean
   now?: number
 }
 
@@ -65,6 +82,8 @@ export async function nameStandbyDevice(options: {
   notebookId: string
   owner: DeviceIdentity
   device: string
+  /** Offer ownership now, rather than only if this device is lost. */
+  handover?: boolean
   now?: number
 }): Promise<void> {
   const workspace = await readNotebookWorkspace({ doc: options.doc, notebookId: options.notebookId })
@@ -76,9 +95,27 @@ export async function nameStandbyDevice(options: {
       owner: options.owner.did,
       workspace: workspaceIdFor(options.notebookId),
       device: options.device,
+      ...(options.handover ? { handover: true } : {}),
       ...(options.now === undefined ? {} : { at: options.now }),
     }),
   )
+}
+
+/** Whether the owner offered this device ownership now. Unverified: for what to offer. */
+export function isOfferedOwnership(doc: Y.Doc, owner: string, device: string): boolean {
+  return standbysIn(doc).some((standby) => standby.owner === owner && standby.device === device && standby.handover)
+}
+
+/** Accept ownership the owner offered, keeping their device in the notebook. */
+export async function acceptOwnership(options: Omit<TakeoverOptions, "keepPrevious" | "beforeRemoval">): Promise<void> {
+  const workspace = await readNotebookWorkspace({ doc: options.doc, notebookId: options.notebookId })
+  const from = workspace.ownership.owner
+  const offers = standbysIn(options.doc).filter(
+    (standby) => standby.owner === from && standby.device === options.device.did && standby.handover,
+  )
+  const verified = await Promise.all(offers.map((offer) => verifyStandby(offer, workspace.workspace)))
+  if (!from || !verified.includes(true)) throw new Error("The owner has not offered this device ownership.")
+  await takeOverAsStandby({ ...options, keepPrevious: true })
 }
 
 /** Whether a device has been named able to take over from the owner now. Unverified: for what to offer. */
@@ -150,6 +187,8 @@ async function complete(options: TakeoverOptions & { from: string; succession: S
   const workspaceId = workspaceIdFor(notebookId)
   const now = options.now ?? Date.now()
 
+  if (!options.keepPrevious) await options.beforeRemoval?.()
+
   // What the old owner, and every device acting as them, signed.
   const before = await readDirectory(doc, [from], { workspace: workspaceId })
   const deputies = [...before.deputies].filter(([, principal]) => principal === from).map(([did]) => did)
@@ -169,15 +208,32 @@ async function complete(options: TakeoverOptions & { from: string; succession: S
   })
   const ratification = await ratify({ signingKey: device.signingKey, admin: device.did, workspace: workspaceId, device: from, kept, at: now })
   const root = await issueOwnerRoot({ signingKey: device.signingKey, owner: device.did, resource: resourceIdFor(notebookId), now })
+  // Handed over, the old owner stays as an ordinary device, and writes like one.
+  // Its old root made it an admin; it does not make it anything now.
+  const stays = options.keepPrevious
+    ? await issueCapability({
+        signingKey: device.signingKey,
+        issuer: device.did,
+        audience: from,
+        resource: resourceIdFor(notebookId),
+        ability: "write",
+        depth: 0,
+        proof: root.cid,
+        notBefore: now,
+        expiresAt: root.payload.exp,
+      })
+    : null
   doc.transact(() => {
     putSuccession(doc, options.succession)
     putRatification(doc, ratification)
     putDeviceRecord(doc, device.record)
     putAdmission(doc, admission)
     putCapability(doc, root)
+    if (stays) putCapability(doc, stays)
   })
 
-  await options.beforeRemoval?.()
+  // Handed over: the old owner stays in, everything they did stays, the key stands.
+  if (options.keepPrevious) return
 
   // The lost device out, and its other devices with it: they stood on it.
   if (self) putRemoval(doc, await removeDevice({ signingKey: device.signingKey, admin: device.did, admission: self, removedAt: now }))
