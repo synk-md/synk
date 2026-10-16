@@ -35,7 +35,7 @@ async function aDevice(): Promise<DeviceIdentity> {
 async function aNotebook(quota?: RelayQuota) {
   const directory = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner })
   const ada = await aDevice()
   const { secret } = generateInvitationSecret()
@@ -166,22 +166,22 @@ async function aLateDevice(notebook: Notebook, device: DeviceIdentity) {
 
 /** A month and a bit, with the owner's claim and anchor in place. */
 async function aPrunedNote(notebook: Notebook) {
-  const sindre = await theOwner(notebook)
-  expect(await sindre.claim()).toBe(true)
-  await sindre.writes("Flights booked.")
-  await sindre.anchor()
+  const maren = await theOwner(notebook)
+  expect(await maren.claim()).toBe(true)
+  await maren.writes("Flights booked.")
+  await maren.anchor()
   notebook.clock.now += 31 * DAY
-  await sindre.writes("Hotel near the station.")
-  return sindre
+  await maren.writes("Hotel near the station.")
+  return maren
 }
 
 describe("letting envelopes go behind the owner's anchor", () => {
   it("lets go of what the anchor covers once it is a month old", async () => {
     const notebook = await aNotebook()
-    const sindre = await aPrunedNote(notebook)
+    const maren = await aPrunedNote(notebook)
 
     expect(notebook.server.sweep()).toBeGreaterThan(0)
-    expect(await sindre.transport.floor!()).toEqual({ [notebook.owner.did]: 1 })
+    expect(await maren.transport.floor!()).toEqual({ [notebook.owner.did]: 1 })
     expect(notebook.server.store.envelopeCount(RESOURCE)).toBe(1)
   })
 
@@ -198,10 +198,10 @@ describe("letting envelopes go behind the owner's anchor", () => {
 
   it("lets nothing go while it is younger than a month", async () => {
     const notebook = await aNotebook()
-    const sindre = await theOwner(notebook)
-    await sindre.claim()
-    await sindre.writes("Flights booked.")
-    await sindre.anchor()
+    const maren = await theOwner(notebook)
+    await maren.claim()
+    await maren.writes("Flights booked.")
+    await maren.anchor()
     notebook.clock.now += 29 * DAY
 
     expect(notebook.server.sweep()).toBe(0)
@@ -210,10 +210,10 @@ describe("letting envelopes go behind the owner's anchor", () => {
   /** Only the owner's anchors: a member's claim of what one covers is not trusted. */
   it("lets nothing go behind a member's anchor", async () => {
     const notebook = await aNotebook()
-    const sindre = await theOwner(notebook)
-    await sindre.claim()
-    await sindre.writes("Flights booked.")
-    await sindre.anchor(notebook.ada)
+    const maren = await theOwner(notebook)
+    await maren.claim()
+    await maren.writes("Flights booked.")
+    await maren.anchor(notebook.ada)
     notebook.clock.now += 31 * DAY
 
     expect(notebook.server.sweep()).toBe(0)
@@ -221,9 +221,9 @@ describe("letting envelopes go behind the owner's anchor", () => {
 
   it("lets nothing go for a notebook whose owner never said so", async () => {
     const notebook = await aNotebook()
-    const sindre = await theOwner(notebook)
-    await sindre.writes("Flights booked.")
-    await sindre.anchor()
+    const maren = await theOwner(notebook)
+    await maren.writes("Flights booked.")
+    await maren.anchor()
     notebook.clock.now += 31 * DAY
 
     expect(notebook.server.sweep()).toBe(0)
@@ -232,8 +232,8 @@ describe("letting envelopes go behind the owner's anchor", () => {
   /** A rival claim cannot win; it can only stop letting go altogether. */
   it("lets nothing go once someone else has claimed the notebook too", async () => {
     const notebook = await aNotebook()
-    const sindre = await theOwner(notebook)
-    await sindre.claim()
+    const maren = await theOwner(notebook)
+    await maren.claim()
     const { createGenesis } = await import("./genesis")
     const rival = await createGenesis({
       signingKey: notebook.ada.signingKey,
@@ -242,8 +242,8 @@ describe("letting envelopes go behind the owner's anchor", () => {
       resource: `notebook:${NOTEBOOK}`,
     })
     expect(await connect(notebook, notebook.ada).claimOwnership(rival)).toBe(true)
-    await sindre.writes("Flights booked.")
-    await sindre.anchor()
+    await maren.writes("Flights booked.")
+    await maren.anchor()
     notebook.clock.now += 31 * DAY
 
     expect(notebook.server.sweep()).toBe(0)
@@ -252,12 +252,12 @@ describe("letting envelopes go behind the owner's anchor", () => {
   /** Partway would leave the floor where no anchor is, and nothing to rebuild from. */
   it("lets nothing go behind an anchor until all it covers is old", async () => {
     const notebook = await aNotebook()
-    const sindre = await theOwner(notebook)
-    await sindre.claim()
-    await sindre.writes("Flights booked.")
+    const maren = await theOwner(notebook)
+    await maren.claim()
+    await maren.writes("Flights booked.")
     notebook.clock.now += 20 * DAY
-    await sindre.writes("Hotel near the station.")
-    await sindre.anchor()
+    await maren.writes("Hotel near the station.")
+    await maren.anchor()
     notebook.clock.now += 11 * DAY
 
     expect(notebook.server.sweep()).toBe(0)
@@ -268,11 +268,11 @@ describe("letting envelopes go behind the owner's anchor", () => {
   /** The anchor holds what was let go, so the archive's quota must not shed it. */
   it("keeps the anchor the floor relies on, however many points follow", async () => {
     const notebook = await aNotebook({ ...DEFAULT_QUOTA, maxSnapshotsPerResource: 2 })
-    const sindre = await aPrunedNote(notebook)
+    const maren = await aPrunedNote(notebook)
     notebook.server.sweep()
     for (const text of [" One.", " Two.", " Three."]) {
-      await sindre.writes(text)
-      await sindre.anchor(notebook.ada)
+      await maren.writes(text)
+      await maren.anchor(notebook.ada)
     }
 
     const ada = await aLateDevice(notebook, notebook.ada)
@@ -284,16 +284,16 @@ describe("letting envelopes go behind the owner's anchor", () => {
   it("lets go behind an anchor from a device the owner names, until it stops naming it", async () => {
     const notebook = await aNotebook()
     const phone = await aDevice()
-    const sindre = await theOwner(notebook)
-    await sindre.claim([phone.did])
-    await sindre.writes("Flights booked.")
-    await sindre.anchor(phone)
+    const maren = await theOwner(notebook)
+    await maren.claim([phone.did])
+    await maren.writes("Flights booked.")
+    await maren.anchor(phone)
     notebook.clock.now += 31 * DAY
     expect(notebook.server.sweep()).toBe(1)
 
-    await sindre.claim([])
-    await sindre.writes("Hotel near the station.")
-    await sindre.anchor(phone)
+    await maren.claim([])
+    await maren.writes("Hotel near the station.")
+    await maren.anchor(phone)
     notebook.clock.now += 31 * DAY
     expect(notebook.server.sweep()).toBe(0)
   })
@@ -325,24 +325,24 @@ describe("history once envelopes are let go", () => {
     const notebook = await aNotebook()
     // Envelopes are dated by their author, so the writing follows the same clock.
     vi.spyOn(Date, "now").mockImplementation(() => notebook.clock.now)
-    const sindre = await aPrunedNote(notebook)
+    const maren = await aPrunedNote(notebook)
     notebook.server.sweep()
     notebook.clock.now += DAY
-    await sindre.writes("Dinner reservations nobody wanted.")
+    await maren.writes("Dinner reservations nobody wanted.")
 
     const history = new NoteHistory({
       notebookId: NOTEBOOK,
       noteId: "kyoto",
-      doc: sindre.doc,
+      doc: maren.doc,
       storage: aStore(),
       device: notebook.owner,
-      keys: () => sindre.keys,
-      transport: () => sindre.transport,
+      keys: () => maren.keys,
+      transport: () => maren.transport,
     })
     const sessions = await history.sessions()
     const hotel = sessions.find((session) => session.end[notebook.owner.did] === 2)!
     await history.restore(hotel.id)
 
-    expect(read(sindre.doc)).toBe("Flights booked.Hotel near the station.")
+    expect(read(maren.doc)).toBe("Flights booked.Hotel near the station.")
   })
 })

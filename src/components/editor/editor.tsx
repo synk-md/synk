@@ -65,13 +65,13 @@ import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 
 // --- Custom UI ---
 import { CollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
-import { RemovedNotice, WriterNotice } from "@/components/custom-ui/connection/writer-notice"
+import { ReadOnlyNotice, RemovedNotice, WriterNotice } from "@/components/custom-ui/connection/writer-notice"
+import { ShareAccessDialog } from "@/components/custom-ui/sharing/share-access-dialog"
+import { useMayEditNote } from "@/hooks/use-may-edit-note"
 import { LinkDeviceDialog } from "@/components/custom-ui/device-manager/link-device-dialog"
 import { HistoryButton, NoteHistoryDialog } from "@/components/custom-ui/history/note-history-dialog"
 import { useNoteHistory } from "@/hooks/use-note-history"
 import { YourDevicesDialog } from "@/components/custom-ui/device-manager/your-devices-dialog"
-import { NotebookMembersDialog } from "@/components/custom-ui/members/notebook-members-dialog"
-import { MembersButton } from "@/components/custom-ui/members/members-button"
 import { canWriteWith, useDocBinding } from "@/hooks/use-doc-binding"
 import { useEncryptedNoteSync } from "@/hooks/use-encrypted-note-sync"
 import { useRemovedFromNotebook } from "@/hooks/use-removed-from-notebook"
@@ -709,7 +709,7 @@ export function SimpleEditor({
   // A second tab of the same browser holds the same derived client id, so only
   // one of them may author. Blocked here rather than letting its edits be
   // rejected later, which would look like typing vanishing.
-  const [membersOpen, setMembersOpen] = React.useState(false)
+  const [sharingOpen, setSharingOpen] = React.useState(false)
   const [linkingDevice, setLinkingDevice] = React.useState(false)
   const [managingDevices, setManagingDevices] = React.useState(false)
   // Only where these are this device's own notebooks, not a link guest's view.
@@ -754,13 +754,24 @@ export function SimpleEditor({
           ? "connecting"
           : "offline"
   const shownLastSyncedAt = encryptedNote.state === "off" ? lastSyncedAt : encryptedNote.lastSyncedAt
+  // With others in the notebook, what this device may edit is what they will
+  // accept from it. Held read-only until known, so nothing typed is refused.
+  const editGated = !isSharedView && (fs.sharedWithMembers ?? false)
+  const mayEdit = useMayEditNote(editGated ? (notebookId ?? null) : null, noteId ?? null)
+  const readOnlyHere = editGated && mayEdit === false
+  const editAccessKnown = !editGated || mayEdit !== null
   const isEditable =
-    sharedPermission === "edit" && noteContentSynced && canWriteWith(docBinding) && !removedFromNotebook
+    sharedPermission === "edit" &&
+    noteContentSynced &&
+    canWriteWith(docBinding) &&
+    !removedFromNotebook &&
+    editAccessKnown &&
+    !readOnlyHere
   const noteHistory = useNoteHistory({
     notebookId: isSharedView ? null : (notebookId ?? null),
     noteId: noteId ?? null,
     doc: note?.doc ?? null,
-    canAuthor: docBinding.status === "writer" && !removedFromNotebook,
+    canAuthor: docBinding.status === "writer" && !removedFromNotebook && !readOnlyHere,
     shared: fs.sharedWithMembers ?? false,
   })
   const [historyOpen, setHistoryOpen] = React.useState(false)
@@ -1071,15 +1082,25 @@ export function SimpleEditor({
 
       // The CollaborationCaret extension need to wait for provider.awareness to be ready
       if (collaborationActive && providerReady){
+        // The caret plugin skips its own entry by the doc's client id, but
+        // Yjs reassigns that when IndexedDB replays this device's own edits,
+        // leaving it apart from the awareness id. Match on awareness instead.
+        const isOwn = (clientId?: number) =>
+          clientId != null && clientId === providerRef.current?.awareness.clientID
         base.push(
           CollaborationCaret.configure({
             provider: providerRef.current,
             user: currentUser,
+            selectionRender: (user: Record<string, any>, clientId?: number) =>
+              isOwn(clientId)
+                ? {}
+                : { style: `background-color: ${user.color}70`, class: "ProseMirror-yjs-selection" },
             // A collaborator selecting an image already gets a labeled
             // outline on the image itself (see AssetImage) — skip the
             // floating text-cursor caret for them so it doesn't show up
             // disconnected from the image right after it.
             render: (user: Record<string, any>, clientId?: number) => {
+              if (isOwn(clientId)) return document.createElement("span")
               const hasImageSelected =
                 clientId != null &&
                 Boolean(
@@ -1799,11 +1820,25 @@ export function SimpleEditor({
             </div>
           </div>
           <HistoryButton onOpen={() => setHistoryOpen(true)} />
-          <MembersButton onOpen={() => setMembersOpen(true)} />
           <SettingsMenu name={currentUser.name} onNameChange={handleGuestNameChange} {...(openLinkDevice ? { onLinkDevice: openLinkDevice } : {})} {...(openDevices ? { onManageDevices: openDevices } : {})} />
         </div>
       )}
       <LinkDeviceDialog open={linkingDevice} onClose={() => setLinkingDevice(false)} />
+      {!isSharedView && notebookId && (
+        <ShareAccessDialog
+          open={sharingOpen}
+          onClose={() => setSharingOpen(false)}
+          notebookId={notebookId}
+          notebookName={fs.tree?.name || "this notebook"}
+          note={
+            typeof selectedNoteId === "string"
+              ? { id: selectedNoteId, linkAccess, onLinkAccessChange: handleLinkAccessChange }
+              : null
+          }
+          viewers={users}
+          joinLinkFor={(id) => `${window.location.origin}/join/${id}`}
+        />
+      )}
       <NoteHistoryDialog
         open={historyOpen}
         onClose={() => setHistoryOpen(false)}
@@ -1811,12 +1846,6 @@ export function SimpleEditor({
         canRestore={isEditable}
       />
       <YourDevicesDialog open={managingDevices} onClose={() => setManagingDevices(false)} notebookId={notebookId ?? null} />
-      <NotebookMembersDialog
-        open={membersOpen}
-        onClose={() => setMembersOpen(false)}
-        notebookId={notebookId ?? null}
-        joinLinkFor={(id) => `${window.location.origin}/join/${id}`}
-      />
       <div className="editor-wrapper">
         <div className="horizontal-main-container">
           {/* <div className={`side-panel-row ${isSidePanelOpen ? "is-open" : ""}`}>
@@ -1984,10 +2013,8 @@ export function SimpleEditor({
                           <CollaborationStatusMenu
                             users={users}
                             portal={isMobile}
-                            notebookId={notebookId}
-                            noteId={selectedNoteId}
-                            onLinkAccessChange={handleLinkAccessChange}
                             linkAccess={linkAccess}
+                            onShare={() => setSharingOpen(true)}
                           />
                         </ToolbarGroup>
                       )}
@@ -2086,6 +2113,7 @@ export function SimpleEditor({
                     )}
                     <WriterNotice binding={docBinding} className="simple-editor-writer-notice" />
                     {removedFromNotebook && <RemovedNotice className="simple-editor-writer-notice" />}
+                    {readOnlyHere && !removedFromNotebook && <ReadOnlyNotice className="simple-editor-writer-notice" />}
                     <EditorContent
                       editor={editor}
                       role="presentation"

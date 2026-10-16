@@ -2,15 +2,7 @@ import * as React from "react"
 import type { LinkAccess } from "@/lib/note-meta"
 
 // --- Icons ---
-import { ChevronDownIcon } from "@/components/tiptap-icons/chevron-down-icon"
-import {
-  RiGroupLine,
-  RiEdit2Line,
-  RiGlobalLine,
-  RiEyeLine,
-  RiLock2Line,
-  RiCloseLine,
-} from "@remixicon/react"
+import { RiGroupLine, RiGlobalLine } from "@remixicon/react"
 
 // --- Tiptap UI ---
 import { useCollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
@@ -22,7 +14,6 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem
 } from "@/components/tiptap-ui-primitive/dropdown-menu"
 
 import {
@@ -59,17 +50,11 @@ export interface CollaborationStatusMenuProps
    */
   label?: string
 
-  /** Notebook id for sharing context */
-  notebookId?: string
-
-  /** Note id for sharing context */
-  noteId?: string | null
-
-  /** The current access mode for the note */
+  /** The note's link setting, shown when a link is on. */
   linkAccess?: LinkAccess
 
-  /** Callback when the access mode changes */
-  onLinkAccessChange?: (access: LinkAccess) => void
+  /** Opens the sharing dialog. */
+  onShare?: () => void
 }
 
 const getInitials = (name: string) => {
@@ -137,21 +122,15 @@ export const Avatar: React.FC<{ name: string; color?: string }> = ({
   )
 }
 
-const sortAccessUsers = (a: ActiveUser, b: ActiveUser) => {
-  const aActive = a.active !== false
-  const bActive = b.active !== false
-
-  if (aActive !== bActive) return aActive ? -1 : 1
-  if ((a.isYou ? 1 : 0) !== (b.isYou ? 1 : 0)) return a.isYou ? -1 : 1
-
-  return a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+const LINK_DESCRIPTION: Record<LinkAccess, string> = {
+  restricted: "Link sharing is off",
+  view: "Anyone with the link can read this note",
+  edit: "Anyone with the link can edit this note",
 }
 
-
 /**
- * A button with a dropdown that lists active collaborators.
- * For now this is a read-only presence list. Wire it up to your
- * collab provider later by feeding the `users` prop.
+ * Who is here now, and the way into sharing. Sharing itself - people, the
+ * link, who is looking - is one dialog, opened from here.
  */
 export const CollaborationStatusMenu = React.forwardRef<
   HTMLButtonElement,
@@ -165,54 +144,24 @@ export const CollaborationStatusMenu = React.forwardRef<
       onOpenChange,
       onInviteClick,
       label = "Collaboration",
-      notebookId,
-      noteId,
-      linkAccess: controlledLinkAccess,
-      onLinkAccessChange,
+      linkAccess = "restricted",
+      onShare,
       ...buttonProps
     },
     ref
   ) => {
     const [isOpen, setIsOpen] = React.useState(false)
-    const [isShareOpen, setIsShareOpen] = React.useState(false)
-    const [copied, setCopied] = React.useState(false)
-    const [linkAccess, setLinkAccess] = React.useState<LinkAccess>(controlledLinkAccess ?? "edit")
-    const [isAccessMenuOpen, setIsAccessMenuOpen] = React.useState(false)
-
-    React.useEffect(() => {
-      if (controlledLinkAccess) {
-        setLinkAccess(controlledLinkAccess)
-      }
-    }, [controlledLinkAccess])
-
-    const handleLinkAccessChange = (access: LinkAccess) => {
-      setLinkAccess(access)
-      onLinkAccessChange?.(access)
-    }
-
-    const isPublicLink = linkAccess === "view" || linkAccess === "edit"
-
-    const resolvedShareUrl = React.useMemo(() => {
-      const origin = window.location.origin
-      return `${origin}/s/${notebookId}/${noteId}`
-    }, [notebookId, noteId])
 
     const filteredUsers = React.useMemo(
       () => (hideCurrentUser ? users.filter(u => !u.isYou) : users),
       [hideCurrentUser, users]
     )
 
-    const {
-      users: sorted,
-      ariaLabel,
-      label: computedLabel,
-    } = useCollaborationStatusMenu({
+    const { users: sorted, ariaLabel } = useCollaborationStatusMenu({
       users: filteredUsers,
       label,
       hideWhenEmpty: false,
     })
-
-    // if (!isVisible) return null
 
     const handleOpenChange = (open: boolean) => {
       setIsOpen(open)
@@ -221,57 +170,7 @@ export const CollaborationStatusMenu = React.forwardRef<
 
     const activeUsers = sorted.filter(u => u.active !== false)
     const visibleActiveUsers = activeUsers.slice(0, 2)
-    const overflowCount = Math.max(
-      0,
-      activeUsers.length - visibleActiveUsers.length
-    )
-
-    const handleCopy = () => {
-      if (navigator?.clipboard?.writeText) {
-        navigator.clipboard.writeText(resolvedShareUrl).then(() => {
-          setCopied(true)
-          setTimeout(() => setCopied(false), 1500)
-        })
-      }
-    }
-
-    const accessDescriptionMap: Record<typeof linkAccess, string> = {
-      restricted: "Link sharing is off — only you can access this note.",
-      view: "Anyone with the link can view this note.",
-      edit: "Anyone with the link can view and edit this note.",
-    }
-
-    const accessOptions: {
-      value: typeof linkAccess
-      label: string
-      description: string
-      Icon: typeof RiLock2Line
-    }[] = [
-        {
-          value: "restricted",
-          label: "Restricted access",
-          description: "Only you can access this note.",
-          Icon: RiLock2Line,
-        },
-        {
-          value: "view",
-          label: "Anyone with the link can view",
-          description: "People with the link can view the note.",
-          Icon: RiEyeLine,
-        },
-        {
-          value: "edit",
-          label: "Anyone with the link can edit",
-          description: "People with the link can edit the note.",
-          Icon: RiEdit2Line,
-        },
-      ]
-
-
-    const peopleWithAccess = React.useMemo(
-      () => [...users].sort(sortAccessUsers),
-      [users]
-    )
+    const overflowCount = Math.max(0, activeUsers.length - visibleActiveUsers.length)
 
     return (
       <DropdownMenu modal open={isOpen} onOpenChange={handleOpenChange}>
@@ -287,16 +186,15 @@ export const CollaborationStatusMenu = React.forwardRef<
             )}
           </div>
 
-          {isPublicLink && (
+          {linkAccess !== "restricted" && (
             <Button
               type="button"
               role="button"
               data-style="ghost"
-              aria-label={accessDescriptionMap[linkAccess]}
-              tooltip={accessDescriptionMap[linkAccess]}
-              onClick={() => setIsShareOpen(true)}
+              aria-label={LINK_DESCRIPTION[linkAccess]}
+              tooltip={LINK_DESCRIPTION[linkAccess]}
+              onClick={onShare}
               {...buttonProps}
-              ref={ref}
             >
               <RiGlobalLine className="tiptap-button-icon" style={{ color: "var(--tt-brand-color-300)" }} />
             </Button>
@@ -306,9 +204,9 @@ export const CollaborationStatusMenu = React.forwardRef<
             type="button"
             role="button"
             data-style="ghost"
-            aria-label={computedLabel ?? "Share note"}
-            tooltip={computedLabel ?? "Share note"}
-            onClick={() => setIsShareOpen(true)}
+            aria-label="Share"
+            tooltip="Who has access, and sharing"
+            onClick={onShare}
             {...buttonProps}
             ref={ref}
           >
@@ -351,127 +249,6 @@ export const CollaborationStatusMenu = React.forwardRef<
               </div>
             )}
           </DropdownMenuContent>
-
-          {isShareOpen && (
-            <div
-              className="share-modal-backdrop"
-              onClick={() => setIsShareOpen(false)}
-            >
-              <div
-                className="share-modal"
-                onClick={e => e.stopPropagation()}
-              >
-                <div className="share-modal-header">
-                  <div className="share-modal-heading">
-                    <h3>Share note</h3>
-                    <div className="share-modal-subtitle">{accessDescriptionMap[linkAccess]}</div>
-                  </div>
-                  <div className="share-modal-header-actions">
-                    <Button
-                      type="button"
-                      data-style="ghost"
-                      aria-label="Close"
-                      tooltip="Close"
-                      onClick={() => setIsShareOpen(false)}
-                    >
-                      <RiCloseLine className="tiptap-button-icon" />
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="share-modal-body">
-                  <div className="share-input-row">
-                    <input
-                      readOnly
-                      value={resolvedShareUrl}
-                      onFocus={e => e.currentTarget.select()}
-                      data-muted={linkAccess === "restricted" || undefined}
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleCopy}
-                      aria-label={linkAccess === "restricted" ? "Link sharing is off" : "Copy"}
-                      tooltip={linkAccess === "restricted" ? "Link sharing is off" : "Copy"}
-                      disabled={linkAccess === "restricted"}
-                    >
-                      {copied ? "Copied!" : "Copy"}
-                    </Button>
-                  </div>
-
-                  <div className="share-access-setting" aria-label="Link access">
-                    <label htmlFor="link-access-select">Link access</label>
-                    <DropdownMenu
-                      open={isAccessMenuOpen}
-                      onOpenChange={setIsAccessMenuOpen}
-                    >
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          className="link-access-trigger"
-                          aria-label="Select link access"
-                        >
-                          {React.createElement(
-                            accessOptions.find(option => option.value === linkAccess)
-                              ?.Icon ?? RiLock2Line,
-                            { className: "tiptap-button-icon" }
-                          )}
-                          <span className="tiptap-button-text">
-                            {accessOptions.find(option => option.value === linkAccess)
-                              ?.label ?? "Select access"}
-                          </span>
-                          <ChevronDownIcon className="link-access-caret" />
-                        </Button>
-                      </DropdownMenuTrigger>
-
-                      <DropdownMenuContent
-                        className="collab-dropdown-content link-access-menu"
-                        align="start"
-                        portal={portal}
-                      >
-                        {accessOptions.map(({ value, label, description, Icon }) => (
-                          <DropdownMenuItem
-                            key={value}
-                            className="link-access-item"
-                            onSelect={() => handleLinkAccessChange(value)}
-                          >
-                            <Icon className="tiptap-button-icon" />
-                            <div className="link-access-text">
-                              <span className="link-access-label">{label}</span>
-                              <span className="link-access-description">{description}</span>
-                            </div>
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-
-                  <div className="share-access-section" aria-label="Currently viewing">
-                    <div className="share-section-header">
-                      <span className="share-section-label">Currently viewing</span>
-                      <span className="share-section-line" aria-hidden />
-                      <span className="share-section-count">{peopleWithAccess.length}</span>
-                    </div>
-
-                    <div className="share-access-list">
-                      {peopleWithAccess.map(user => (
-                        <div className="share-access-row" key={user.id}>
-                          <Avatar name={user.name} color={user.color} />
-                          <div className="share-access-meta">
-                            <span className="share-access-name">
-                              {user.name} {user.isYou ? <em className="user-you-tag">(you)</em> : null}
-                            </span>
-                            <span className="share-access-permission">
-                              {user.active === false ? "Inactive" : (user.isYou || linkAccess !== "view") ? "Can edit" : "View only"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </DropdownMenu>
     )

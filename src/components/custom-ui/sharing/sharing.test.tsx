@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { generateSigningKey, type SigningKey } from "@/lib/crypto"
@@ -21,8 +21,7 @@ import {
 } from "./access-model"
 import { AccessLevelPicker } from "./access-level-picker"
 import { AccessList } from "./access-list"
-import { ShareDialog } from "./share-dialog"
-import { SharingDialog } from "./sharing-dialog"
+import { ShareDialog, type ShareScope } from "./share-dialog"
 
 const T0 = 1_700_000_000_000
 const DAY = 24 * 60 * 60 * 1000
@@ -280,6 +279,19 @@ describe("AccessLevelPicker", () => {
     expect(screen.getByText(/at most your own level/)).toBeInTheDocument()
   })
 
+  /** Where everyone already reads, read is no level to give. */
+  it("locks levels below the floor too, and gives the reason", () => {
+    const onChange = vi.fn()
+    render(
+      <AccessLevelPicker value="write" onChange={onChange} min="write" floorReason="Everyone here can already read it." />,
+    )
+
+    expect(screen.getByLabelText(/Can read/)).toBeDisabled()
+    expect(screen.getByText(/can already read it/)).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText(/Can read/))
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
   it("does not report a choice the ceiling forbids", () => {
     const onChange = vi.fn()
     render(<AccessLevelPicker value="read" onChange={onChange} max="read" />)
@@ -295,7 +307,9 @@ async function shareSetup(
   options: {
     capabilities?: Capability[]
     actorIsOwner?: boolean
-    scopes?: { resource: string; label: string; covers: string }[]
+    scopes?: ShareScope[]
+    ceiling?: Ability
+    ceilingReason?: string
   } = {},
 ) {
   const owner = await party()
@@ -323,6 +337,8 @@ async function shareSetup(
       context={context}
       actor={owner.did}
       onGrant={onGrant}
+      {...(options.ceiling ? { ceiling: options.ceiling } : {})}
+      {...(options.ceilingReason ? { ceilingReason: options.ceilingReason } : {})}
     />,
   )
 
@@ -331,6 +347,28 @@ async function shareSetup(
 }
 
 describe("ShareDialog", () => {
+  /** On a note, reading is already everyone's; what can be given is editing. */
+  it("gives editing on a scope where reading means nothing", async () => {
+    const { onGrant } = await shareSetup({
+      scopes: [{ resource: NOTE, label: "this note", covers: "Editing this note.", min: "write", minReason: "Everyone can already read it." }],
+    })
+
+    fireEvent.click(screen.getByText("Ada Lovelace"))
+    expect(screen.getByLabelText(/Can read/)).toBeDisabled()
+    fireEvent.click(screen.getByRole("button", { name: /^Give edit/ }))
+    await waitFor(() => expect(onGrant).toHaveBeenCalled())
+    expect(onGrant.mock.calls[0][0]).toMatchObject({ ability: "write" })
+  })
+
+  /** Even an owner, who holds everything, is offered only what will be honoured. */
+  it("offers nothing above the ceiling, and says why", async () => {
+    await shareSetup({ ceiling: "write", ceilingReason: "Managing access stays with the owner." })
+
+    fireEvent.click(screen.getByText("Ada Lovelace"))
+    expect(screen.getByLabelText(/Can manage access/)).toBeDisabled()
+    expect(screen.getByText(/stays with the owner/)).toBeInTheDocument()
+  })
+
   it("defaults to the narrowest scope, and says what the wider one reaches", async () => {
     await shareSetup()
 
@@ -623,12 +661,12 @@ describe("AccessList", () => {
         resourceLabel="this notebook"
         context={contextOf(owner.did, [])}
         actor={owner.did}
-        people={[person(owner.did, "Sindre")]}
+        people={[person(owner.did, "Maren")]}
         onRevoke={vi.fn()}
       />,
     )
 
-    const ownerRow = await screen.findByText("Sindre")
+    const ownerRow = await screen.findByText("Maren")
     expect(ownerRow).toBeInTheDocument()
     expect(screen.getByText(/cannot be removed/)).toBeInTheDocument()
     expect(screen.getByText(/Nobody else has access/)).toBeInTheDocument()
@@ -691,65 +729,3 @@ describe("AccessList", () => {
 })
 
 /* ---- the container ------------------------------------------------------- */
-
-describe("SharingDialog", () => {
-  async function setup() {
-    const owner = await party()
-    const ada = await party()
-    const notebookCap = await grant(owner, ada, { ability: "write", resource: NOTEBOOK })
-    const capabilities = [notebookCap]
-
-    render(
-      <SharingDialog
-        open
-        onClose={vi.fn()}
-        scopes={[
-          { resource: NOTE, label: "this note", covers: "Only this note." },
-          {
-            resource: NOTEBOOK,
-            label: "the whole notebook",
-            covers: "Every note in it, including ones added later.",
-          },
-        ]}
-        capabilities={capabilities}
-        context={contextOf(owner.did, capabilities)}
-        actor={owner.did}
-        candidates={[person(ada.did, "Ada Lovelace")]}
-        onGrant={vi.fn()}
-        onRevoke={vi.fn()}
-      />,
-    )
-    return { owner, ada }
-  }
-
-  /** Who can already see this is the question that decides whether to share. */
-  it("shows who has access before offering to share, not behind a tab", async () => {
-    await setup()
-
-    await screen.findByText("Ada Lovelace")
-    expect(screen.getByRole("button", { name: /Share this note/ })).toBeInTheDocument()
-    expect(screen.queryByRole("heading", { name: /^Share/ })).not.toBeInTheDocument()
-  })
-
-  it("switching scope changes what the list is about", async () => {
-    await setup()
-    await screen.findByText(/not granted on this note/)
-
-    fireEvent.click(screen.getByRole("tab", { name: "the whole notebook" }))
-
-    await waitFor(() =>
-      expect(screen.getByText(/Granted on the whole notebook/)).toBeInTheDocument(),
-    )
-    expect(screen.queryByText(/not granted on this note/)).not.toBeInTheDocument()
-  })
-
-  it("opens the share step already scoped to what is being looked at", async () => {
-    await setup()
-    await screen.findByText("Ada Lovelace")
-
-    fireEvent.click(screen.getByRole("button", { name: /Share this note/ }))
-
-    const dialog = await screen.findByRole("dialog", { name: /Share this note/ })
-    expect(within(dialog).getByRole("radio", { name: /this note/ })).toBeChecked()
-  })
-})

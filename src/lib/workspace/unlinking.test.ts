@@ -37,7 +37,7 @@ async function admit(directory: Y.Doc, owner: DeviceIdentity, device: DeviceIden
 async function aNotebook() {
   const directory = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner })
   const laptop = await aDevice()
   const grace = await aDevice()
@@ -250,7 +250,7 @@ describe("a notebook used alone again", () => {
   it("stops counting as shared once its only other device is unlinked", async () => {
     const directory = new Y.Doc()
     const owner = await aDevice()
-    await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+    await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Maren" })
     await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner })
     const phone = await aDevice()
     await linkIntoNotebook({ doc: directory, notebookId: NOTEBOOK, parent: owner, record: phone.record })

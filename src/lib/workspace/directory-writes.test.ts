@@ -68,11 +68,11 @@ async function aNotebook() {
   const relay = aRelay()
   const owner = await aDevice()
   pinOwner(NOTEBOOK, owner.did)
-  const sindre = await directoryOn(relay, owner)
-  await foundNotebookWorkspace({ doc: sindre.doc, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
-  await foundNotebookKeys({ doc: sindre.doc, notebookId: NOTEBOOK, device: owner })
-  await sindre.sync()
-  return { relay, owner, sindre }
+  const maren = await directoryOn(relay, owner)
+  await foundNotebookWorkspace({ doc: maren.doc, notebookId: NOTEBOOK, device: owner, label: "Maren" })
+  await foundNotebookKeys({ doc: maren.doc, notebookId: NOTEBOOK, device: owner })
+  await maren.sync()
+  return { relay, owner, maren }
 }
 
 type Notebook = Awaited<ReturnType<typeof aNotebook>>
@@ -80,10 +80,10 @@ type Notebook = Awaited<ReturnType<typeof aNotebook>>
 async function admitAda(notebook: Notebook) {
   const ada = await aDevice()
   const { secret } = generateInvitationSecret()
-  const invitation = await inviteToNotebook({ doc: notebook.sindre.doc, notebookId: NOTEBOOK, admin: notebook.owner, secret, label: "Ada" })
-  const redemption = await redeemIntoNotebook({ doc: notebook.sindre.doc, secret, device: ada })
-  const admitted = await admitFromRedemption({ doc: notebook.sindre.doc, notebookId: NOTEBOOK, owner: notebook.owner, invitation, redemption, ability: "write" })
-  await notebook.sindre.sync()
+  const invitation = await inviteToNotebook({ doc: notebook.maren.doc, notebookId: NOTEBOOK, admin: notebook.owner, secret, label: "Ada" })
+  const redemption = await redeemIntoNotebook({ doc: notebook.maren.doc, secret, device: ada })
+  const admitted = await admitFromRedemption({ doc: notebook.maren.doc, notebookId: NOTEBOOK, owner: notebook.owner, invitation, redemption, ability: "write" })
+  await notebook.maren.sync()
   const copy = await directoryOn(notebook.relay, ada)
   await copy.sync()
   return { device: ada, member: admitted.member, copy }
@@ -134,9 +134,9 @@ describe("who may write to a notebook's directory", () => {
     const ada = await admitAda(notebook)
     ada.copy.doc.getMap("notes").set("from-ada", "hello")
     await ada.copy.sync()
-    await notebook.sindre.sync()
+    await notebook.maren.sync()
 
-    expect(notebook.sindre.doc.getMap("notes").get("from-ada")).toBe("hello")
+    expect(notebook.maren.doc.getMap("notes").get("from-ada")).toBe("hello")
     expect(genesisClaims(ada.copy.doc)).toHaveLength(1)
   })
 
@@ -149,9 +149,9 @@ describe("who may write to a notebook's directory", () => {
     await foundNotebookWorkspace({ doc: theirs.doc, notebookId: NOTEBOOK, device: mallory, label: "Mallory" })
     theirs.doc.getMap("workspace:genesis").delete(notebook.owner.did)
     await theirs.sync()
-    await notebook.sindre.sync()
+    await notebook.maren.sync()
 
-    expect(genesisClaims(notebook.sindre.doc).map((claim) => claim.owner)).toEqual([notebook.owner.did])
+    expect(genesisClaims(notebook.maren.doc).map((claim) => claim.owner)).toEqual([notebook.owner.did])
   })
 
   /** Before its directory arrives, a new device already knows whose writes to take. */
@@ -170,14 +170,14 @@ describe("who may write to a notebook's directory", () => {
   it("refuses a member's write once they are removed", async () => {
     const notebook = await aNotebook()
     const ada = await admitAda(notebook)
-    await removeFromNotebook({ doc: notebook.sindre.doc, notebookId: NOTEBOOK, owner: notebook.owner, member: ada.member })
-    await notebook.sindre.sync()
+    await removeFromNotebook({ doc: notebook.maren.doc, notebookId: NOTEBOOK, owner: notebook.owner, member: ada.member })
+    await notebook.maren.sync()
     await ada.copy.sync()
 
     ada.copy.doc.getMap("directory:removals").clear()
     await ada.copy.sync()
-    await notebook.sindre.sync()
-    const directory = await readDirectory(notebook.sindre.doc, [notebook.owner.did], { workspace: workspaceIdFor(NOTEBOOK) })
+    await notebook.maren.sync()
+    const directory = await readDirectory(notebook.maren.doc, [notebook.owner.did], { workspace: workspaceIdFor(NOTEBOOK) })
     expect(directory.removed.has(ada.device.did)).toBe(true)
   })
 
@@ -199,16 +199,16 @@ describe("asking to join on the invitation's own channel", () => {
     const notebook = await aNotebook()
     const stop = watchJoinRequests({
       notebookId: NOTEBOOK,
-      directory: notebook.sindre.doc,
+      directory: notebook.maren.doc,
       device: notebook.owner,
       access: notebook.relay.access(notebook.owner),
     })
     const { secret } = generateInvitationSecret()
-    const invitation = await inviteToNotebook({ doc: notebook.sindre.doc, notebookId: NOTEBOOK, admin: notebook.owner, secret, label: "Ada" })
+    const invitation = await inviteToNotebook({ doc: notebook.maren.doc, notebookId: NOTEBOOK, admin: notebook.owner, secret, label: "Ada" })
     const ada = await aDevice()
 
     await requestToJoin({ secret, invitation, device: ada, access: notebook.relay.access(ada) })
-    await expect.poll(() => pendingRedemptions(notebook.sindre.doc).map((redemption) => redemption.did)).toEqual([ada.did])
+    await expect.poll(() => pendingRedemptions(notebook.maren.doc).map((redemption) => redemption.did)).toEqual([ada.did])
     stop()
   })
 
@@ -217,12 +217,12 @@ describe("asking to join on the invitation's own channel", () => {
     const notebook = await aNotebook()
     const stop = watchJoinRequests({
       notebookId: NOTEBOOK,
-      directory: notebook.sindre.doc,
+      directory: notebook.maren.doc,
       device: notebook.owner,
       access: notebook.relay.access(notebook.owner),
     })
     const { secret } = generateInvitationSecret()
-    const invitation = await inviteToNotebook({ doc: notebook.sindre.doc, notebookId: NOTEBOOK, admin: notebook.owner, secret, label: "Ada" })
+    const invitation = await inviteToNotebook({ doc: notebook.maren.doc, notebookId: NOTEBOOK, admin: notebook.owner, secret, label: "Ada" })
     // Made with a code of their own and filed under this invitation, so it names
     // the right invitation and cannot prove it holds its code.
     const { secret: wrong } = generateInvitationSecret()
@@ -241,7 +241,7 @@ describe("asking to join on the invitation's own channel", () => {
     request.getMap<unknown[]>("directory:redemptions").set(invitation.invitationId, [forged])
     await engine.flush()
     await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(pendingRedemptions(notebook.sindre.doc)).toEqual([])
+    expect(pendingRedemptions(notebook.maren.doc)).toEqual([])
     stop()
   })
 
@@ -255,8 +255,8 @@ describe("asking to join on the invitation's own channel", () => {
       access: notebook.relay.access(member.device),
     })
     const { secret } = generateInvitationSecret()
-    const invitation = await inviteToNotebook({ doc: notebook.sindre.doc, notebookId: NOTEBOOK, admin: notebook.owner, secret, label: "Bob" })
-    await notebook.sindre.sync()
+    const invitation = await inviteToNotebook({ doc: notebook.maren.doc, notebookId: NOTEBOOK, admin: notebook.owner, secret, label: "Bob" })
+    await notebook.maren.sync()
     await member.copy.sync()
     const bob = await aDevice()
 

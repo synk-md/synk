@@ -18,37 +18,37 @@ import {
 } from "./people"
 
 test("two people join a notebook and write in the same note", async ({ browser }) => {
-  const sindre = await person(browser, "Sindre")
+  const maren = await person(browser, "Maren")
   const ada = await person(browser, "Ada")
 
-  await createNotebook(sindre, "Travel")
-  const { link, code } = await invite(sindre, "Ada")
+  await createNotebook(maren, "Travel")
+  const { link, code } = await invite(maren, "Ada")
   const deviceCode = await askToJoin(ada, link, code)
-  await admit(sindre, deviceCode)
+  await admit(maren, deviceCode)
   await enter(ada)
 
-  await type(sindre, " Written by Sindre.")
-  await expect(editor(ada.page)).toContainText("Written by Sindre.")
+  await type(maren, " Written by Maren.")
+  await expect(editor(ada.page)).toContainText("Written by Maren.")
 
   await type(ada, " And by Ada.")
-  await expect(editor(sindre.page)).toContainText("And by Ada.")
+  await expect(editor(maren.page)).toContainText("And by Ada.")
 })
 
 /** A transaction per keystroke used to be an envelope per keystroke, kept forever. */
 test("typing a sentence costs the relay a few envelopes, not one per key", async ({ browser }) => {
-  const sindre = await person(browser, "Sindre")
+  const maren = await person(browser, "Maren")
   const ada = await person(browser, "Ada")
-  await createNotebook(sindre, "Travel")
-  const { link, code } = await invite(sindre, "Ada")
-  await admit(sindre, await askToJoin(ada, link, code))
+  await createNotebook(maren, "Travel")
+  const { link, code } = await invite(maren, "Ada")
+  await admit(maren, await askToJoin(ada, link, code))
   await enter(ada)
-  await type(sindre, " Warm up.")
+  await type(maren, " Warm up.")
   await expect(editor(ada.page)).toContainText("Warm up.")
-  await sindre.page.waitForTimeout(1_000)
+  await maren.page.waitForTimeout(1_000)
 
   const before = await envelopesPublished()
   const sentence = " Thirty-two characters of typing."
-  await type(sindre, sentence)
+  await type(maren, sentence)
   await expect(editor(ada.page)).toContainText(sentence.trim())
   const spent = (await envelopesPublished()) - before
 
@@ -62,21 +62,21 @@ test("typing a sentence costs the relay a few envelopes, not one per key", async
  * invited still reaches her.
  */
 test("someone joins while the owner is away, and is let in while they are away", async ({ browser }) => {
-  let sindre = await person(browser, "Sindre")
+  let maren = await person(browser, "Maren")
   let ada = await person(browser, "Ada")
 
-  const notebookId = await createNotebook(sindre, "Travel")
-  await type(sindre, " Written before Ada was invited.")
-  const { link, code } = await invite(sindre, "Ada")
-  await sindre.page.close()
+  const notebookId = await createNotebook(maren, "Travel")
+  await type(maren, " Written before Ada was invited.")
+  const { link, code } = await invite(maren, "Ada")
+  await maren.page.close()
 
   const deviceCode = await askToJoin(ada, link, code)
   await ada.page.close()
 
-  sindre = await comeBack(sindre)
-  await sindre.page.goto(`/nb/${notebookId}`)
-  await admit(sindre, deviceCode)
-  await sindre.page.close()
+  maren = await comeBack(maren)
+  await maren.page.goto(`/nb/${notebookId}`)
+  await admit(maren, deviceCode)
+  await maren.page.close()
 
   ada = await comeBack(ada)
   await ada.page.goto(new URL(link).pathname)
@@ -86,42 +86,42 @@ test("someone joins while the owner is away, and is let in while they are away",
 
 /** Sequence numbers that restarted after a reload were silently dropped as duplicates. */
 test("edits keep arriving after either of them reloads", async ({ browser }) => {
-  const sindre = await person(browser, "Sindre")
+  const maren = await person(browser, "Maren")
   const ada = await person(browser, "Ada")
 
-  await createNotebook(sindre, "Travel")
-  const { link, code } = await invite(sindre, "Ada")
-  await admit(sindre, await askToJoin(ada, link, code))
+  await createNotebook(maren, "Travel")
+  const { link, code } = await invite(maren, "Ada")
+  await admit(maren, await askToJoin(ada, link, code))
   await enter(ada)
-  await type(sindre, " Before any reload.")
+  await type(maren, " Before any reload.")
   await expect(editor(ada.page)).toContainText("Before any reload.")
 
   await ada.page.reload()
   await type(ada, " Ada, after reloading.")
-  await expect(editor(sindre.page)).toContainText("Ada, after reloading.")
+  await expect(editor(maren.page)).toContainText("Ada, after reloading.")
 
-  await sindre.page.reload()
-  await type(sindre, " Sindre, after reloading.")
-  await expect(editor(ada.page)).toContainText("Sindre, after reloading.")
+  await maren.page.reload()
+  await type(maren, " Maren, after reloading.")
+  await expect(editor(ada.page)).toContainText("Maren, after reloading.")
 })
 
 test("a removed member is told, and gets nothing written afterwards", async ({ browser }) => {
-  const sindre = await person(browser, "Sindre")
+  const maren = await person(browser, "Maren")
   const ada = await person(browser, "Ada")
 
-  await createNotebook(sindre, "Travel")
-  const { link, code } = await invite(sindre, "Ada")
-  await admit(sindre, await askToJoin(ada, link, code))
+  await createNotebook(maren, "Travel")
+  const { link, code } = await invite(maren, "Ada")
+  await admit(maren, await askToJoin(ada, link, code))
   await enter(ada)
-  await type(sindre, " Before removal.")
+  await type(maren, " Before removal.")
   await expect(editor(ada.page)).toContainText("Before removal.")
 
-  await remove(sindre, "Ada")
+  await remove(maren, "Ada")
 
   await expect(ada.page.getByText("You no longer have access to this notebook")).toBeVisible()
   await expect(editor(ada.page)).toHaveAttribute("contenteditable", "false")
 
-  await type(sindre, " After removal.")
+  await type(maren, " After removal.")
   // Absence has no event to wait for; give it longer than a delivery takes.
   await ada.page.waitForTimeout(4_000)
   await expect(editor(ada.page)).not.toContainText("After removal.")
@@ -130,19 +130,19 @@ test("a removed member is told, and gets nothing written afterwards", async ({ b
 
 /** The old transfer needed whoever had the image to still be online. */
 test("an image reaches a member after whoever added it has gone", async ({ browser }) => {
-  const sindre = await person(browser, "Sindre")
+  const maren = await person(browser, "Maren")
   let ada = await person(browser, "Ada")
 
-  const notebookId = await createNotebook(sindre, "Travel")
-  const { link, code } = await invite(sindre, "Ada")
-  await admit(sindre, await askToJoin(ada, link, code))
+  const notebookId = await createNotebook(maren, "Travel")
+  const { link, code } = await invite(maren, "Ada")
+  await admit(maren, await askToJoin(ada, link, code))
   await enter(ada)
   await ada.page.close()
 
-  await addImage(sindre, "kyoto.png", aPng())
-  await expect.poll(() => imagesShown(sindre.page)).toBe(1)
-  await sindre.page.waitForTimeout(1_000)
-  await sindre.page.close()
+  await addImage(maren, "kyoto.png", aPng())
+  await expect.poll(() => imagesShown(maren.page)).toBe(1)
+  await maren.page.waitForTimeout(1_000)
+  await maren.page.close()
 
   ada = await comeBack(ada)
   await ada.page.goto(`/nb/${notebookId}`)

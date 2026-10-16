@@ -19,8 +19,8 @@ import {
  * linked, writes as them, and counts as one member, not two.
  */
 test("a person links their phone, and it is them, not a second member", async ({ browser }) => {
-  const laptop = await person(browser, "Sindre")
-  const phone = await person(browser, "Sindre's phone")
+  const laptop = await person(browser, "Maren")
+  const phone = await person(browser, "Maren's phone")
 
   await createNotebook(laptop, "Travel")
   await type(laptop, " Written on the laptop before the phone existed.")
@@ -44,8 +44,8 @@ test("a person links their phone, and it is them, not a second member", async ({
 
 /** The owner cannot be removed, so before unlinking an owner's lost phone could never be cut off. */
 test("the owner takes a lost phone out, and it gets nothing written afterwards", async ({ browser }) => {
-  const laptop = await person(browser, "Sindre")
-  const phone = await person(browser, "Sindre's phone")
+  const laptop = await person(browser, "Maren")
+  const phone = await person(browser, "Maren's phone")
 
   await createNotebook(laptop, "Travel")
   await type(laptop, " Before the phone was lost.")
@@ -69,8 +69,8 @@ test("the owner takes a lost phone out, and it gets nothing written afterwards",
  * when the phone is later lost and unlinked, the person it let in stays in.
  */
 test("the owner's phone lets someone in, and they stay in once the phone is unlinked", async ({ browser }) => {
-  const laptop = await person(browser, "Sindre")
-  const phone = await person(browser, "Sindre's phone")
+  const laptop = await person(browser, "Maren")
+  const phone = await person(browser, "Maren's phone")
   const ada = await person(browser, "Ada")
 
   await createNotebook(laptop, "Travel")

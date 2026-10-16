@@ -15,7 +15,7 @@ const T0 = 1_700_000_000_000
 /** A member with one admin-admitted laptop and one self-linked phone. */
 async function memberWithPhone() {
   const admin = await newAdmin()
-  const laptop = await admitDevice(admin, { member: "member:sindre", label: "Sindre" })
+  const laptop = await admitDevice(admin, { member: "member:maren", label: "Maren" })
   const phone = await linkDevice(laptop)
   const devices: MemberDevice[] = [asAdmitted(laptop), asLinked(phone)]
   return { admin, laptop, phone, devices }

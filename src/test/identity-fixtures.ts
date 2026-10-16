@@ -53,8 +53,8 @@ export async function admitDevice(
     adminSigningKey: admin.key,
     adminDid: admin.did,
     record,
-    member: options.member ?? "member:sindre",
-    label: options.label ?? "Sindre",
+    member: options.member ?? "member:maren",
+    label: options.label ?? "Maren",
     workspace: options.workspace ?? WORKSPACE,
     issuedAt: options.issuedAt ?? 1_700_000_000_000,
   })

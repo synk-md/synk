@@ -22,6 +22,9 @@ export type ShareScope = {
   label: string
   /** What it reaches. The part people misjudge. */
   covers: string
+  /** Weakest level that means anything here, and why. */
+  min?: Ability
+  minReason?: string
 }
 
 export type ShareDialogProps = {
@@ -36,6 +39,11 @@ export type ShareDialogProps = {
   context: AuthorizationContext
   actor: string
   onGrant: (request: GrantRequest) => Promise<void> | void
+  /** Strongest level on offer here, whatever the actor holds, and why. */
+  ceiling?: Ability
+  ceilingReason?: string
+  /** How a resource reads in a sentence, for access that comes from elsewhere. */
+  nameOf?: (resource: string) => string
   className?: string
 }
 
@@ -63,6 +71,9 @@ export function ShareDialog({
   context,
   actor,
   onGrant,
+  ceiling,
+  ceilingReason,
+  nameOf,
   className,
 }: ShareDialogProps) {
   const [scopeIndex, setScopeIndex] = React.useState(0)
@@ -109,9 +120,16 @@ export function ShareDialog({
 
   if (!open) return null
 
-  const maxAbility = budget?.maxAbility ?? null
+  const held = budget?.maxAbility ?? null
+  const capped = held !== null && ceiling !== undefined && abilityStrength(ceiling) < abilityStrength(held)
+  const maxAbility = capped ? ceiling : held
+  const minAbility: Ability = scope.min ?? "read"
   const clampedAbility: Ability =
-    maxAbility && abilityStrength(ability) > abilityStrength(maxAbility) ? maxAbility : ability
+    maxAbility && abilityStrength(ability) > abilityStrength(maxAbility)
+      ? maxAbility
+      : abilityStrength(ability) < abilityStrength(minAbility)
+        ? minAbility
+        : ability
   const expiresAt = budget ? Math.min(budget.notBefore + durationMs, budget.notAfter) : 0
   const cappedByProof = budget !== null && budget.notBefore + durationMs > budget.notAfter
   const existing = entries.find((entry) => entry.principal === audience)
@@ -153,7 +171,7 @@ export function ShareDialog({
       >
         <div className="shr-header">
           <div className="shr-heading">
-            <h3 id="share-heading">Share {scope.label}</h3>
+            <h3 id="share-heading">Give access to {scope.label}</h3>
           </div>
           <Button type="button" data-style="ghost" aria-label="Close" tooltip="Close" onClick={onClose}>
             <RiCloseLine className="tiptap-button-icon" />
@@ -211,7 +229,7 @@ export function ShareDialog({
                 <div>
                   <strong>
                     They already have {ABILITY_COPY[existing.ability].short.toLowerCase()} here
-                    {existing.inheritedFrom ? `, through ${existing.inheritedFrom}` : ""}.
+                    {existing.inheritedFrom ? `, through ${nameOf?.(existing.inheritedFrom) ?? existing.inheritedFrom}` : ""}.
                   </strong>
                   <p>
                     {wouldNotReduce
@@ -254,7 +272,9 @@ export function ShareDialog({
               value={clampedAbility}
               onChange={setAbility}
               max={maxAbility ?? "read"}
-              ceilingReason={budget?.reason}
+              ceilingReason={capped ? ceilingReason : budget?.reason}
+              min={minAbility}
+              {...(scope.minReason ? { floorReason: scope.minReason } : {})}
               name="share-level"
               disabled={busy}
             />

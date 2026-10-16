@@ -29,7 +29,7 @@ async function aDevice(): Promise<DeviceIdentity> {
 async function aNotebook() {
   const directory = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner })
   const ada = await aDevice()
   const { secret } = generateInvitationSecret()
@@ -92,11 +92,11 @@ describe("sessions", () => {
   /** Credited to whoever wrote them - not to whichever device took a snapshot. */
   it("follows who is writing, one session per turn", async () => {
     const notebook = await aNotebook()
-    const sindre = await writer(notebook, notebook.owner)
+    const maren = await writer(notebook, notebook.owner)
     const ada = await writer(notebook, notebook.ada)
-    await write(sindre, "A. ", ada)
-    await write(ada, "B. ", sindre)
-    await write(sindre, "C.", ada)
+    await write(maren, "A. ", ada)
+    await write(ada, "B. ", maren)
+    await write(maren, "C.", ada)
 
     const sessions = sessionsOf(notebook.relay.stored())
     expect(sessions.map((session) => session.author)).toEqual([notebook.owner.did, notebook.ada.did, notebook.owner.did])
@@ -127,11 +127,11 @@ describe("sessions", () => {
 describe("rebuilding a point", () => {
   it("gives the note exactly as it stood when a session ended", async () => {
     const notebook = await aNotebook()
-    const sindre = await writer(notebook, notebook.owner)
+    const maren = await writer(notebook, notebook.owner)
     const ada = await writer(notebook, notebook.ada)
-    await write(sindre, "A. ", ada)
-    await write(ada, "B. ", sindre)
-    await write(sindre, "C.", ada)
+    await write(maren, "A. ", ada)
+    await write(ada, "B. ", maren)
+    await write(maren, "C.", ada)
 
     const [, adaSession] = sessionsOf(notebook.relay.stored())
     const rebuilt = await stateAt({
@@ -147,8 +147,8 @@ describe("rebuilding a point", () => {
   /** Anchors keep the replay short: only what came after one is applied. */
   it("starts from the newest anchor before the point", async () => {
     const notebook = await aNotebook()
-    const sindre = await writer(notebook, notebook.owner)
-    await write(sindre, "Before the anchor. ")
+    const maren = await writer(notebook, notebook.owner)
+    await write(maren, "Before the anchor. ")
     const keys = await keysOf(notebook, notebook.owner)
     const anchor = await createSnapshot({
       signingKey: notebook.owner.signingKey,
@@ -158,10 +158,10 @@ describe("rebuilding a point", () => {
       kind: "automatic",
       epoch: keys.currentEpoch,
       dek: (await keys.keyFor(keys.currentEpoch))!,
-      state: Y.encodeStateAsUpdate(sindre.doc),
-      covers: sindre.engine.deliveryVector(),
+      state: Y.encodeStateAsUpdate(maren.doc),
+      covers: maren.engine.deliveryVector(),
     })
-    await write(sindre, "After it.")
+    await write(maren, "After it.")
 
     const everything = notebook.relay.stored()
     const [session] = sessionsOf(everything).slice(-1)
@@ -174,9 +174,9 @@ describe("rebuilding a point", () => {
   /** What they wrote was real. Removing them does not rewrite the past. */
   it("still shows what a since-removed member wrote", async () => {
     const notebook = await aNotebook()
-    const sindre = await writer(notebook, notebook.owner)
+    const maren = await writer(notebook, notebook.owner)
     const ada = await writer(notebook, notebook.ada)
-    await write(ada, "Written by Ada before she left.", sindre)
+    await write(ada, "Written by Ada before she left.", maren)
     const [session] = sessionsOf(notebook.relay.stored())
 
     const directory = await readDirectory(notebook.directory, [notebook.owner.did], { workspace: workspaceIdFor(NOTEBOOK) })
@@ -199,7 +199,7 @@ describe("rebuilding a point", () => {
     const keys = await keysOf(notebook, notebook.owner)
     const forged = new Y.Doc()
     forged.clientID = notebook.owner.clientId
-    forged.getText("body").insert(0, "Put in Sindre's name.")
+    forged.getText("body").insert(0, "Put in Maren's name.")
     const envelope = await makeEnvelope({
       signingKey: notebook.ada.signingKey,
       author: notebook.ada.did,
@@ -216,14 +216,14 @@ describe("rebuilding a point", () => {
   })
 
   /**
-   * Without the anchor that holds it, Sindre's writing is simply not there -
+   * Without the anchor that holds it, Maren's writing is simply not there -
    * and Ada's, written after it elsewhere in the note, would look whole alone.
    */
   it("says so when what was let go is in no anchor here", async () => {
     const notebook = await aNotebook()
-    const sindre = await writer(notebook, notebook.owner)
+    const maren = await writer(notebook, notebook.owner)
     const ada = await writer(notebook, notebook.ada)
-    await write(sindre, "Let go. ", ada)
+    await write(maren, "Let go. ", ada)
     ada.engine.transact(() => ada.doc.getMap("meta").set("title", "Kept"))
     await ada.engine.flush()
     const floor = { [notebook.owner.did]: 1 }
@@ -242,8 +242,8 @@ describe("rebuilding a point", () => {
 
   it("says so when part of a point cannot be opened here", async () => {
     const notebook = await aNotebook()
-    const sindre = await writer(notebook, notebook.owner)
-    await write(sindre, "Sealed under a key the reader lacks.")
+    const maren = await writer(notebook, notebook.owner)
+    await write(maren, "Sealed under a key the reader lacks.")
     const [session] = sessionsOf(notebook.relay.stored())
     const lacking: Pick<ReadKeySource, "keyFor" | "readableEpochs"> = {
       keyFor: () => Promise.resolve(undefined),

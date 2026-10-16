@@ -21,7 +21,7 @@ beforeEach(async () => {
   const device = currentDevice()!
   const { doc, idb } = createNotebookIndexDoc(NOTEBOOK)
   await idb.whenSynced
-  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: device.identity, label: "Sindre" })
+  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: device.identity, label: "Maren" })
   await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: device.identity })
 })
 

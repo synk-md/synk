@@ -19,7 +19,7 @@ async function aDevice(): Promise<DeviceIdentity> {
 async function withRival() {
   const doc = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   const read = () => readNotebookWorkspace({ doc, notebookId: NOTEBOOK })
   return { doc, owner, read, rival: async () => foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: await aDevice(), label: "Mallory" }) }
 }

@@ -40,7 +40,7 @@ async function admit(doc: Y.Doc, owner: DeviceIdentity, device: DeviceIdentity, 
 async function aNotebook() {
   const doc = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: owner })
   const ada = await aDevice()
   const grace = await aDevice()

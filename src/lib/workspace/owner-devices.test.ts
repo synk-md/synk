@@ -41,11 +41,11 @@ async function aDevice(): Promise<DeviceIdentity> {
   return { did: didFromSigningKey(signingKey.publicKey), clientId: record.clientId, signingKey, sealingKey, record }
 }
 
-/** Sindre's laptop founded the notebook; his phone is linked to it. */
+/** Maren's laptop founded the notebook; Maren's phone is linked to it. */
 async function aNotebook() {
   const directory = new Y.Doc()
   const laptop = await aDevice()
-  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: laptop, label: "Sindre" })
+  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: laptop, label: "Maren" })
   await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: laptop })
   const phone = await aDevice()
   await linkIntoNotebook({ doc: directory, notebookId: NOTEBOOK, parent: laptop, record: phone.record })
@@ -54,7 +54,7 @@ async function aNotebook() {
 
 type Notebook = Awaited<ReturnType<typeof aNotebook>>
 
-/** Invited and admitted by `admin` - the laptop, or the phone acting as Sindre. */
+/** Invited and admitted by `admin` - the laptop, or the phone acting as Maren. */
 async function admit(notebook: Notebook, admin: DeviceIdentity, label: string) {
   const device = await aDevice()
   const { secret } = generateInvitationSecret()
@@ -83,7 +83,7 @@ async function keysOf(notebook: Notebook, device: DeviceIdentity) {
   return readNotebookKeys({ doc: notebook.directory, notebookId: NOTEBOOK, device, owner: notebook.owner })
 }
 
-/** Whether what `writer` writes reaches Sindre's laptop, which checks it like any peer. */
+/** Whether what `writer` writes reaches Maren's laptop, which checks it like any peer. */
 async function writingArrives(notebook: Notebook, writer: DeviceIdentity): Promise<boolean> {
   const relay = new MemoryRelay()
   const open = async (device: DeviceIdentity) => {

@@ -18,7 +18,7 @@ async function memberWithPhone(): Promise<{
   phone: MemberDevice
 }> {
   const admin = await newAdmin()
-  const laptop = await admitDevice(admin, { member: "member:sindre", label: "Sindre" })
+  const laptop = await admitDevice(admin, { member: "member:maren", label: "Maren" })
   const phone = await linkDevice(laptop)
   return {
     user: createUser("u1", [asAdmitted(laptop), asLinked(phone)]),
@@ -61,8 +61,8 @@ describe("DeviceList", () => {
       <DeviceList devices={user.devices} currentDid={laptop.record.did} onRevoke={onRevoke} />,
     )
 
-    expect(screen.queryByRole("button", { name: /Remove Sindre/ })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole("button", { name: /Remove member:sindre/ }))
+    expect(screen.queryByRole("button", { name: /Remove Maren/ })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", { name: /Remove member:maren/ }))
     expect(onRevoke).toHaveBeenCalledTimes(1)
   })
 
@@ -207,9 +207,9 @@ describe("ApproveDeviceDialog", () => {
 
   // The new device chose its own name, so it is shown as a claim.
   it("presents the claimed name as unverified", async () => {
-    setup({ pending: { ...pending, claimedName: "Sindre's iPhone" } })
+    setup({ pending: { ...pending, claimedName: "Maren's iPhone" } })
     await waitFor(() => {
-      expect(screen.getByText("Sindre's iPhone")).toBeInTheDocument()
+      expect(screen.getByText("Maren's iPhone")).toBeInTheDocument()
     })
     expect(screen.getByText(/not one we can verify/)).toBeInTheDocument()
   })
@@ -300,7 +300,7 @@ describe("DeviceManagerDialog", () => {
     const onRevoke = vi.fn()
     render(<DeviceManagerDialog open onClose={vi.fn()} user={user} onRevoke={onRevoke} />)
 
-    fireEvent.click(screen.getByRole("button", { name: /Remove Sindre/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Remove Maren/ }))
 
     const confirm = screen.getByRole("alertdialog", { name: "Confirm removal" })
     expect(confirm).toHaveTextContent("lock you out of adding devices")
@@ -317,7 +317,7 @@ describe("DeviceManagerDialog", () => {
     const onRevoke = vi.fn()
     render(<DeviceManagerDialog open onClose={vi.fn()} user={user} onRevoke={onRevoke} />)
 
-    fireEvent.click(screen.getByRole("button", { name: /Remove Sindre/ }))
+    fireEvent.click(screen.getByRole("button", { name: /Remove Maren/ }))
     fireEvent.click(screen.getByRole("button", { name: "Keep it" }))
 
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument()
@@ -329,7 +329,7 @@ describe("DeviceManagerDialog", () => {
   it("shows a conflicted name rather than choosing a winner", async () => {
     const admin = await newAdmin()
     const user = createUser("u1", [
-      asAdmitted(await admitDevice(admin, { member: "m", label: "Sindre" })),
+      asAdmitted(await admitDevice(admin, { member: "m", label: "Maren" })),
       asAdmitted(await admitDevice(admin, { member: "m", label: "Someone Else" })),
     ])
     render(<DeviceManagerDialog open onClose={vi.fn()} user={user} />)
@@ -339,7 +339,7 @@ describe("DeviceManagerDialog", () => {
     // claim about the person.
     const header = screen.getByRole("heading", { name: "Your devices" }).parentElement
     expect(header).toHaveTextContent("Name not agreed")
-    expect(header).not.toHaveTextContent("Sindre")
+    expect(header).not.toHaveTextContent("Maren")
     expect(header).not.toHaveTextContent("Someone Else")
   })
 

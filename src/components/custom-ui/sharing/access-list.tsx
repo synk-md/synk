@@ -17,7 +17,7 @@ import type { Ability, AuthorizationContext, Capability } from "@/lib/authz"
 
 import { ABILITY_COPY, REMOVAL_REALITY } from "./ability-copy"
 import { AccessLevelPicker } from "./access-level-picker"
-import { removalPlan, type AccessEntry, type Person, type RemovalPlan } from "./access-model"
+import { abilityStrength, removalPlan, type AccessEntry, type Person, type RemovalPlan } from "./access-model"
 
 import "./sharing.scss"
 
@@ -34,6 +34,14 @@ export type AccessListProps = {
   people?: readonly Person[]
   onRevoke?: (entry: AccessEntry, plan: RemovalPlan) => Promise<void> | void
   onChangeLevel?: (entry: AccessEntry, ability: Ability) => Promise<void> | void
+  /** Strongest level on offer here, whatever the actor holds, and why. */
+  ceiling?: Ability
+  ceilingReason?: string
+  /** Weakest level that means anything here, and why. */
+  min?: Ability
+  minReason?: string
+  /** How a resource reads in a sentence, for access that comes from elsewhere. */
+  nameOf?: (resource: string) => string
   className?: string
 }
 
@@ -60,10 +68,17 @@ export function AccessList({
   people,
   onRevoke,
   onChangeLevel,
+  ceiling,
+  ceilingReason,
+  min,
+  minReason,
+  nameOf = (resource) => resource,
   className,
 }: AccessListProps) {
   const { entries, loading } = useAccessSummary(capabilities, resource, context)
   const { budget } = useGrantBudget(actor, resource, context)
+  const held = budget?.maxAbility ?? null
+  const capped = held !== null && ceiling !== undefined && abilityStrength(ceiling) < abilityStrength(held)
   const [mode, setMode] = React.useState<Record<string, RowMode>>({})
   const [busy, setBusy] = React.useState<string | null>(null)
   const [error, setError] = React.useState<string | null>(null)
@@ -150,7 +165,7 @@ export function AccessList({
                   <span className="shr-row-route">
                     {inherited ? (
                       <>
-                        Through <strong>{entry.inheritedFrom}</strong> — not granted on{" "}
+                        Through <strong>{nameOf(entry.inheritedFrom ?? "")}</strong> — not granted on{" "}
                         {resourceLabel}
                       </>
                     ) : (
@@ -169,11 +184,11 @@ export function AccessList({
                     <span className="shr-confirm" role="alert">
                       <strong>
                         Remove {person?.label ?? "this device"} from{" "}
-                        {plan.wider.length > 0 ? entry.via.capability.payload.rsc : resourceLabel}?
+                        {plan.wider.length > 0 ? nameOf(entry.via.capability.payload.rsc) : resourceLabel}?
                       </strong>
                       {plan.wider.length > 0 && (
                         <span className="shr-confirm-line is-loud">
-                          Their access comes from {entry.inheritedFrom ?? "a wider grant"}, so
+                          Their access comes from {entry.inheritedFrom ? nameOf(entry.inheritedFrom) : "a wider grant"}, so
                           removing it takes away everything under it, not only {resourceLabel}.
                         </span>
                       )}
@@ -211,8 +226,10 @@ export function AccessList({
                     <span className="shr-inline-editor">
                       <AccessLevelPicker
                         value={rowMode.ability}
-                        max={budget?.maxAbility ?? entry.ability}
-                        ceilingReason={budget?.reason}
+                        max={(capped ? ceiling : held) ?? entry.ability}
+                        ceilingReason={capped ? ceilingReason : budget?.reason}
+                        {...(min ? { min } : {})}
+                        {...(minReason ? { floorReason: minReason } : {})}
                         name={`level-${entry.principal.slice(-8)}`}
                         onChange={(ability) => setRow(entry.principal, { kind: "level", ability })}
                       />

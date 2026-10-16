@@ -119,7 +119,7 @@ function anUnsentFlag(doc: Y.Doc): UnsentFlag & { set: boolean } {
 async function aNotebook() {
   const owner = await aDevice()
   const directory = new Y.Doc()
-  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner })
   return { owner, directory }
 }
@@ -185,7 +185,7 @@ describe("joining through the relay", () => {
     const stored = JSON.stringify(relay.stored())
     expect(relay.size).toBeGreaterThan(0)
     expect(stored).not.toContain("Ada Lovelace")
-    expect(stored).not.toContain("Sindre")
+    expect(stored).not.toContain("Maren")
     // Nor can the relay tell which notebook it is holding.
     expect(channel.resourceId).not.toContain(NOTEBOOK)
   })

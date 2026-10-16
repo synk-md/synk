@@ -48,7 +48,7 @@ async function founded(): Promise<{ doc: Y.Doc; owner: DeviceIdentity }> {
     doc,
     notebookId: NOTEBOOK,
     device: owner,
-    label: "Sindre",
+    label: "Maren",
     createdAt: T0,
   })
   return { doc, owner }
@@ -69,7 +69,7 @@ describe("WorkspacePanel", () => {
     render(<WorkspacePanel workspace={await read(doc, owner.did)} selfDid={owner.did} />)
 
     // The name appears as the owner line and again as the member row.
-    expect(screen.getAllByText("Sindre")).toHaveLength(2)
+    expect(screen.getAllByText("Maren")).toHaveLength(2)
     expect(screen.getByText(/Owned by/)).toBeInTheDocument()
     expect(screen.getByText("1 member")).toBeInTheDocument()
     expect(screen.getByText("This device")).toBeInTheDocument()

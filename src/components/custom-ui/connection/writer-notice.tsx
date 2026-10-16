@@ -1,6 +1,6 @@
 "use client"
 
-import { RiAlertLine, RiFileCopyLine, RiUserUnfollowLine } from "@remixicon/react"
+import { RiAlertLine, RiEyeLine, RiFileCopyLine, RiUserUnfollowLine } from "@remixicon/react"
 
 import type { DocBinding } from "@/lib/doc-binding"
 
@@ -69,6 +69,26 @@ export function RemovedNotice({ className }: { className?: string }) {
           Its owner removed you. What is already on this device stays here to read, but nothing
           written from now on reaches you, and nothing written here would reach anyone.
         </span>
+      </div>
+    </div>
+  )
+}
+
+/**
+ * This person may read the note but not edit it.
+ *
+ * Read-only rather than editable: everyone else refuses edits from someone
+ * without edit access, so typing here would only ever stay here.
+ */
+export function ReadOnlyNotice({ className }: { className?: string }) {
+  return (
+    <div className={["cx-banner", className ?? ""].join(" ")} role="status">
+      <span className="cx-banner-icon" aria-hidden="true">
+        <RiEyeLine />
+      </span>
+      <div className="cx-banner-body">
+        <strong>You can read this note, not edit it</strong>
+        <span>Whoever manages this notebook can give you edit access to it, or to the whole notebook.</span>
       </div>
     </div>
   )

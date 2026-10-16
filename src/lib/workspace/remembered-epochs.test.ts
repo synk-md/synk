@@ -35,11 +35,11 @@ async function admit(doc: Y.Doc, owner: DeviceIdentity, label: string) {
   return { device, member: admitted.member }
 }
 
-/** Sindre removed Bob, so the newest epoch is a key Bob was never given. */
+/** Maren removed Bob, so the newest epoch is a key Bob was never given. */
 async function afterARemoval() {
   const doc = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: owner })
   const ada = await admit(doc, owner, "Ada")
   const bob = await admit(doc, owner, "Bob")

@@ -38,7 +38,7 @@ async function aNotebook() {
     doc: index,
     notebookId: NOTEBOOK,
     device: owner,
-    label: "Sindre",
+    label: "Maren",
     createdAt: T0,
   })
   await foundNotebookKeys({ doc: index, notebookId: NOTEBOOK, device: owner, createdAt: T0 })
@@ -200,7 +200,7 @@ describe("syncing a note between two members", () => {
       doc: index,
       notebookId: NOTEBOOK,
       device: owner,
-      label: "Sindre",
+      label: "Maren",
       createdAt: T0,
     })
     await foundNotebookKeys({ doc: index, notebookId: NOTEBOOK, device: owner, createdAt: T0 })

@@ -43,7 +43,7 @@ async function admit(directory: Y.Doc, owner: DeviceIdentity, device: DeviceIden
 async function aNotebook() {
   const directory = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner })
   const ada = await aDevice()
   const grace = await aDevice()
@@ -220,7 +220,7 @@ describe("what removal does not do", () => {
   it("counts the notebook as unshared once only its founder remains", async () => {
     const directory = new Y.Doc()
     const owner = await aDevice()
-    await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+    await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Maren" })
     await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner })
     const ada = await aDevice()
     await admit(directory, owner, ada, "Ada")

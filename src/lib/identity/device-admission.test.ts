@@ -22,8 +22,8 @@ describe("createDeviceAdmission", () => {
     expect(admission.did).toBe(record.did)
     expect(admission.sealingDid).toBe(record.sealingDid)
     expect(admission.clientId).toBe(record.clientId)
-    expect(admission.member).toBe("member:sindre")
-    expect(admission.label).toBe("Sindre")
+    expect(admission.member).toBe("member:maren")
+    expect(admission.label).toBe("Maren")
     expect(admission.workspace).toBe(WORKSPACE)
     expect(admission.admin).toBe(admin.did)
   })
@@ -56,7 +56,7 @@ describe("createDeviceAdmission", () => {
       createDeviceAdmission({ ...base, member: "member:x", label: "   " }),
     ).rejects.toThrow(/non-empty human label/)
     await expect(
-      createDeviceAdmission({ ...base, member: "  ", label: "Sindre" }),
+      createDeviceAdmission({ ...base, member: "  ", label: "Maren" }),
     ).rejects.toThrow(/must name a member/)
   })
 
@@ -84,8 +84,8 @@ describe("createDeviceAdmission", () => {
         adminSigningKey: admin.key,
         adminDid: other.did,
         record: await newDeviceRecord(),
-        member: "member:sindre",
-        label: "Sindre",
+        member: "member:maren",
+        label: "Maren",
         workspace: WORKSPACE,
       }),
     ).rejects.toThrow(/does not match the supplied admin signing key/)
@@ -223,7 +223,7 @@ describe("verifyAdmittedDevice", () => {
     const admin = await newAdmin()
     const device = await admitDevice(admin)
     expect(await verifyAdmittedDevice(device, [admin.did])).toBe(true)
-    expect(attestedLabel(device)).toBe("Sindre")
+    expect(attestedLabel(device)).toBe("Maren")
   })
 
   // An admin vouching for a sealing key the device does not hold would surface

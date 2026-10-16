@@ -28,7 +28,7 @@ async function aDevice(): Promise<DeviceIdentity> {
 async function aNotebook(ability: "read" | "write" = "write") {
   const directory = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner })
   const laptop = await aDevice()
   const { secret } = generateInvitationSecret()

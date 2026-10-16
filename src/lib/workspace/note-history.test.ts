@@ -38,7 +38,7 @@ function aStore(): IndexeddbPersistence {
 async function anOwner() {
   const directory = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+  await foundNotebookWorkspace({ doc: directory, notebookId: NOTEBOOK, device: owner, label: "Maren" })
   await foundNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner })
   const keys = await readNotebookKeys({ doc: directory, notebookId: NOTEBOOK, device: owner, owner: owner.did })
   return { directory, owner, keyring: keys.keyring! }

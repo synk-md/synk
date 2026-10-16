@@ -10,7 +10,7 @@ import { collectSharedNotes } from "@/components/custom-ui/file-browser/tree"
 import type { Notebook } from "@/components/custom-ui/file-browser/tree"
 import { Button } from "@/components/tiptap-ui-primitive/button"
 import { NotebookRow, type NotebookRowData } from "@/components/custom-ui/notebook-dialogs/notebook-row"
-import { ShareNotebookModal } from "@/components/custom-ui/notebook-dialogs/share-notebook-modal"
+import { ShareAccessDialog } from "@/components/custom-ui/sharing/share-access-dialog"
 import { exportNotebookArchive } from "@/lib/notebook-export"
 import { downloadBlob } from "@/lib/download-file"
 import type { NoteExportFormat } from "@/lib/note-export"
@@ -569,11 +569,12 @@ export function ManageNotebooksDialog({
       </div>
 
       {sharingNotebook && (
-        <ShareNotebookModal
+        <ShareAccessDialog
           notebookId={sharingNotebook.id}
           notebookName={sharingNotebook.name}
           open
           onClose={() => setSharingNotebook(null)}
+          joinLinkFor={(id) => `${window.location.origin}/join/${id}`}
         />
       )}
     </div>

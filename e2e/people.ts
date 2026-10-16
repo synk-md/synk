@@ -75,12 +75,14 @@ export async function createNotebook(owner: Person, title: string): Promise<stri
   return new URL(page.url()).pathname.split("/")[2]
 }
 
-function membersDialog(page: Page): Locator {
-  return page.getByRole("dialog", { name: "Who can see this notebook" })
+/** People, the link and who is looking: one dialog, from the toolbar's Share. */
+export function shareDialog(page: Page): Locator {
+  return page.getByRole("dialog", { name: /^Share / })
 }
+const membersDialog = shareDialog
 
-async function openMembers(page: Page): Promise<Locator> {
-  await page.getByRole("button", { name: "Who can see this notebook" }).first().click()
+export async function openShare(page: Page): Promise<Locator> {
+  await page.getByRole("button", { name: "Share", exact: true }).first().click()
   const dialog = membersDialog(page)
   await expect(dialog).toBeVisible()
   return dialog
@@ -93,7 +95,7 @@ async function closeMembers(page: Page): Promise<void> {
 
 export async function invite(owner: Person, label: string): Promise<{ link: string; code: string }> {
   const { page } = owner
-  const dialog = await openMembers(page)
+  const dialog = await openShare(page)
   await dialog.getByRole("button", { name: /Invite someone/ }).click()
   await page.locator("#invite-label").fill(label)
   await page.getByRole("button", { name: "Create invitation" }).click()
@@ -125,12 +127,12 @@ export async function askToJoin(member: Person, link: string, code: string): Pro
  */
 export async function admit(owner: Person, deviceCode: string): Promise<void> {
   const { page } = owner
-  const dialog = await openMembers(page)
+  const dialog = await openShare(page)
   await dialog.getByRole("button", { name: "Review" }).click({ timeout: 30_000 })
   await page.locator("#approve-redemption-code").fill(deviceCode)
   await page.getByRole("button", { name: "Admit" }).click()
   await expect(dialog.getByText("2 members")).toBeVisible()
-  await expect(dialog.getByText(/notes are readable to them|Nothing needed covering/)).toBeVisible({
+  await expect(dialog.getByText(/notes? (is|are) readable to them|Nothing needed covering/)).toBeVisible({
     timeout: 30_000,
   })
   await closeMembers(page)
@@ -188,11 +190,10 @@ export async function enter(member: Person): Promise<void> {
 
 export async function remove(owner: Person, label: string): Promise<void> {
   const { page } = owner
-  const dialog = await openMembers(page)
+  const dialog = await openShare(page)
   await dialog.getByRole("button", { name: `Remove ${label}` }).click()
-  const confirm = page.getByRole("dialog", { name: `Remove ${label}?` })
-  await confirm.getByRole("button", { name: `Remove ${label}` }).click()
-  await expect(dialog.getByText("1 member")).toBeVisible()
+  await dialog.getByRole("button", { name: "Remove access" }).click()
+  await expect(dialog.getByText("1 member")).toBeVisible({ timeout: 30_000 })
   await closeMembers(page)
 }
 
@@ -226,7 +227,7 @@ export async function linkDevice(from: Person, to: Person): Promise<void> {
 }
 
 export async function memberCount(page: Page): Promise<string> {
-  const dialog = await openMembers(page)
+  const dialog = await openShare(page)
   const heading = (await dialog.getByText(/^\d+ members?$/).textContent()) ?? ""
   await closeMembers(page)
   return heading

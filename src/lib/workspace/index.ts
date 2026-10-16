@@ -41,6 +41,7 @@ export {
   CAPABILITY_MAP,
   issueOwnerRoot,
   OWNER_ROOT_DEPTH,
+  linkedPrincipal,
   OWNER_ROOT_TTL_MS,
   ownerHoldsRoot,
   putCapability,
@@ -132,6 +133,8 @@ export { hasNoOperations } from "./note-snapshots"
 
 export type { NoteEngineOptions } from "./note-relay"
 export type { RelaySettings } from "./note-relay"
+export type { GrantOptions, SharingOptions } from "./sharing"
+export { changeAccess, grantAccess, mayEditNote, withdrawGrants } from "./sharing"
 export type { RememberedEpochs } from "./remembered-epochs"
 export {
   configureRememberedEpochs,

@@ -6,7 +6,7 @@ import { createDeviceLink, DEVICE_LINK_VERSION, LEAF_DEPTH, linkBytes, verifyDev
 describe("createDeviceLink", () => {
   it("inherits member and workspace from the parent's admission", async () => {
     const admin = await newAdmin()
-    const parent = await admitDevice(admin, { member: "member:sindre" })
+    const parent = await admitDevice(admin, { member: "member:maren" })
     const linked = await linkDevice(parent)
 
     expect(linked.link.v).toBe(DEVICE_LINK_VERSION)
@@ -130,7 +130,7 @@ describe("the link is rooted in a real admission", () => {
 describe("the leaf cannot widen its own scope", () => {
   it("rejects a link claiming a different member than its parent", async () => {
     const admin = await newAdmin()
-    const parent = await admitDevice(admin, { member: "member:sindre" })
+    const parent = await admitDevice(admin, { member: "member:maren" })
     const linked = await linkDevice(parent)
 
     expect(

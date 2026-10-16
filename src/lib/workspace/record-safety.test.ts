@@ -23,7 +23,7 @@ async function aDevice(): Promise<DeviceIdentity> {
 async function aNotebook() {
   const doc = new Y.Doc()
   const laptop = await aDevice()
-  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: laptop, label: "Sindre" })
+  await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: laptop, label: "Maren" })
   await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: laptop })
   const phone = await aDevice()
   await linkIntoNotebook({ doc, notebookId: NOTEBOOK, parent: laptop, record: phone.record })

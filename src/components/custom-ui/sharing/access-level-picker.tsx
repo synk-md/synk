@@ -16,6 +16,10 @@ export type AccessLevelPickerProps = {
   max?: Ability
   /** Shown once, beside the first locked level. */
   ceilingReason?: string
+  /** Weakest on offer: below this means nothing here. Renders locked too. */
+  min?: Ability
+  /** Shown once, beside the levels below `min`. */
+  floorReason?: string
   /** Distinguishes several pickers on one screen. */
   name?: string
   disabled?: boolean
@@ -34,17 +38,21 @@ export function AccessLevelPicker({
   onChange,
   max = "admin",
   ceilingReason,
+  min = "read",
+  floorReason,
   name = "access-level",
   disabled,
   className,
 }: AccessLevelPickerProps) {
   const ceiling = abilityStrength(max)
+  const floor = abilityStrength(min)
   const firstLockedIndex = ABILITIES.findIndex((ability) => abilityStrength(ability) > ceiling)
+  const lastFloorIndex = ABILITIES.filter((ability) => abilityStrength(ability) < floor).length - 1
 
   return (
     <div className={["shr-levels", className ?? ""].join(" ")} role="radiogroup" aria-label="Access level">
       {ABILITIES.map((ability, index) => {
-        const locked = abilityStrength(ability) > ceiling
+        const locked = abilityStrength(ability) > ceiling || abilityStrength(ability) < floor
         const copy = ABILITY_COPY[ability]
         const id = `${name}-${ability}`
 
@@ -82,6 +90,11 @@ export function AccessLevelPicker({
                 <span className="shr-level-consequence">{copy.consequence}</span>
               </span>
             </label>
+            {index === lastFloorIndex && floorReason && (
+              <p className="shr-ceiling" role="note">
+                {floorReason}
+              </p>
+            )}
             {locked && index === firstLockedIndex && ceilingReason && (
               <p className="shr-ceiling" role="note">
                 {ceilingReason}

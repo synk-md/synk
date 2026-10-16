@@ -550,3 +550,110 @@
 .shr-danger-btn {
   color: #c53030;
 }
+
+/* ---- one dialog for all of it: people, link, viewing now ------------------- */
+
+.shr-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tt-card-border-color);
+
+  &:first-of-type {
+    margin-top: 0;
+    border-top: none;
+    padding-top: 0;
+  }
+}
+
+.shr-section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 10px;
+  font-family: var(--tt-font-mono, monospace);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--tt-color-text-gray);
+}
+
+.shr-section-count {
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  text-transform: none;
+  font-size: 11px;
+}
+
+.shr-link-row {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0;
+
+  input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--tt-card-border-color);
+    background: transparent;
+    font-size: 12px;
+    color: inherit;
+  }
+}
+
+.shr-viewers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.shr-viewer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shr-viewer-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tt-color-text-gray);
+}
+
+/* One size whatever it holds: the header and the switch stay put, and only the
+   sections beneath scroll. The gutter is kept so a scrollbar appearing does not
+   narrow the content. */
+.shr-dialog.shr-share {
+  display: flex;
+  flex-direction: column;
+  width: 680px;
+  height: min(960px, calc(100vh - 80px));
+  overflow: hidden;
+}
+
+.shr-share-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  margin: 0 -22px;
+  padding: 0 22px 16px;
+}
+
+/* The same gutter above, so the switch lines up with what scrolls beneath it. */
+.shr-share-top {
+  flex: none;
+  overflow: hidden;
+  scrollbar-gutter: stable;
+  margin: 0 -22px;
+  padding: 0 22px;
+}
+
+.shr-share-top {
+  padding-bottom: 16px;
+}

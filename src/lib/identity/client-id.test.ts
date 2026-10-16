@@ -128,7 +128,7 @@ describe("53-bit ids through the Yjs wire format", () => {
     const mine = new Y.Doc()
     mine.clientID = id
     const awarenessA = new Awareness(mine)
-    awarenessA.setLocalState({ user: { name: "Sindre" } })
+    awarenessA.setLocalState({ user: { name: "Maren" } })
 
     const theirs = new Y.Doc()
     theirs.clientID = 12345
@@ -137,7 +137,7 @@ describe("53-bit ids through the Yjs wire format", () => {
 
     const states = awarenessB.getStates()
     expect([...states.keys()]).toContain(id)
-    expect(states.get(id)).toEqual({ user: { name: "Sindre" } })
+    expect(states.get(id)).toEqual({ user: { name: "Maren" } })
   })
 })
 

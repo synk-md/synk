@@ -103,7 +103,7 @@ async function anInvitation() {
     doc,
     notebookId: NOTEBOOK,
     device: owner.identity,
-    label: "Sindre",
+    label: "Maren",
   })
   await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: owner.identity })
 
@@ -317,7 +317,7 @@ describe("being let in", () => {
     const handle = createNotebookIndexDoc(NOTEBOOK)
     const { doc } = handle
     await handle.idb.whenSynced
-    await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+    await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Maren" })
     await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: owner })
 
     const { secret } = generateInvitationSecret()
@@ -382,7 +382,7 @@ describe("coming back to the link", () => {
     const handle = createNotebookIndexDoc(NOTEBOOK)
     await handle.idb.whenSynced
     const { doc } = handle
-    await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Sindre" })
+    await foundNotebookWorkspace({ doc, notebookId: NOTEBOOK, device: owner, label: "Maren" })
     await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: owner })
     const { secret } = generateInvitationSecret()
     const invitation = await inviteToNotebook({

@@ -141,7 +141,7 @@ describe("founding a notebook workspace", () => {
       doc,
       notebookId: NOTEBOOK,
       device: owner,
-      label: "Sindre",
+      label: "Maren",
       createdAt: T0,
     })
 
@@ -170,14 +170,14 @@ describe("founding a notebook workspace", () => {
       doc,
       notebookId: NOTEBOOK,
       device: owner,
-      label: "Sindre",
+      label: "Maren",
       createdAt: T0,
     })
     const second = await foundNotebookWorkspace({
       doc,
       notebookId: NOTEBOOK,
       device: owner,
-      label: "Sindre",
+      label: "Maren",
       createdAt: T0 + 5000,
     })
 
@@ -192,7 +192,7 @@ describe("founding a notebook workspace", () => {
       doc,
       notebookId: NOTEBOOK,
       device: owner,
-      label: "Sindre",
+      label: "Maren",
       createdAt: T0,
     })
 
@@ -200,7 +200,7 @@ describe("founding a notebook workspace", () => {
     const device = workspace.directory?.devices[0]
 
     expect(device?.kind).toBe("admitted")
-    expect(device?.kind === "admitted" && device.admission.label).toBe("Sindre")
+    expect(device?.kind === "admitted" && device.admission.label).toBe("Maren")
   })
 })
 
@@ -231,7 +231,7 @@ describe("reading a notebook workspace", () => {
       doc,
       notebookId: NOTEBOOK,
       device: owner,
-      label: "Sindre",
+      label: "Maren",
       createdAt: T0,
     })
 
@@ -268,7 +268,7 @@ describe("reading a notebook workspace", () => {
       doc,
       notebookId: NOTEBOOK,
       device: owner,
-      label: "Sindre",
+      label: "Maren",
       createdAt: T0,
     })
 
@@ -302,7 +302,7 @@ describe("reading a notebook workspace", () => {
       doc,
       notebookId: NOTEBOOK,
       device: owner,
-      label: "Sindre",
+      label: "Maren",
       createdAt: T0,
     })
     putGenesis(

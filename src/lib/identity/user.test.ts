@@ -38,11 +38,11 @@ describe("createUser", () => {
 
   it("resolves the member identity by either path", async () => {
     const admin = await newAdmin()
-    const laptop = await admitDevice(admin, { member: "member:sindre" })
+    const laptop = await admitDevice(admin, { member: "member:maren" })
     const phone = await linkDevice(laptop)
 
-    expect(memberOf(asAdmitted(laptop))).toBe("member:sindre")
-    expect(memberOf(asLinked(phone))).toBe("member:sindre")
+    expect(memberOf(asAdmitted(laptop))).toBe("member:maren")
+    expect(memberOf(asLinked(phone))).toBe("member:maren")
   })
 
   it("rejects colliding client ids up front", async () => {
@@ -105,7 +105,7 @@ describe("lookup", () => {
 
   it("finds the user owning a device", async () => {
     const admin = await newAdmin()
-    const mine = await admitDevice(admin, { member: "member:sindre" })
+    const mine = await admitDevice(admin, { member: "member:maren" })
     const theirs = await admitDevice(admin, { member: "member:ada", label: "Ada" })
     const users = [createUser("me", [asAdmitted(mine)]), createUser("them", [asAdmitted(theirs)])]
 
@@ -144,11 +144,11 @@ describe("userLabel", () => {
   // Admin-attested, never self-chosen and never restated by a link.
   it("reads the admin attestation and ignores linked devices", async () => {
     const admin = await newAdmin()
-    const laptop = await admitDevice(admin, { label: "Sindre" })
+    const laptop = await admitDevice(admin, { label: "Maren" })
     const phone = await linkDevice(laptop)
     expect(userLabel(createUser("u1", [asAdmitted(laptop), asLinked(phone)]))).toEqual({
       status: "attested",
-      label: "Sindre",
+      label: "Maren",
     })
   })
 
@@ -165,14 +165,14 @@ describe("userLabel", () => {
   it("reports a conflict as a value rather than throwing", async () => {
     const admin = await newAdmin()
     const user = createUser("u1", [
-      asAdmitted(await admitDevice(admin, { label: "Sindre" })),
+      asAdmitted(await admitDevice(admin, { label: "Maren" })),
       asAdmitted(await admitDevice(admin, { label: "Someone Else" })),
     ])
 
     expect(() => userLabel(user)).not.toThrow()
     expect(userLabel(user)).toEqual({
       status: "conflicted",
-      labels: ["Sindre", "Someone Else"].sort(),
+      labels: ["Maren", "Someone Else"].sort(),
     })
   })
 
@@ -190,12 +190,12 @@ describe("userLabel", () => {
   // Never render this one, but an import or operator tool should stop.
   it("userLabelOrThrow is the strict variant for non-render paths", async () => {
     const admin = await newAdmin()
-    const ok = createUser("u1", [asAdmitted(await admitDevice(admin, { label: "Sindre" }))])
-    expect(userLabelOrThrow(ok)).toBe("Sindre")
+    const ok = createUser("u1", [asAdmitted(await admitDevice(admin, { label: "Maren" }))])
+    expect(userLabelOrThrow(ok)).toBe("Maren")
     expect(userLabelOrThrow(createUser("u2"))).toBeUndefined()
 
     const conflicted = createUser("u3", [
-      asAdmitted(await admitDevice(admin, { label: "Sindre" })),
+      asAdmitted(await admitDevice(admin, { label: "Maren" })),
       asAdmitted(await admitDevice(admin, { label: "Someone Else" })),
     ])
     expect(() => userLabelOrThrow(conflicted)).toThrow(/conflicting admin-attested labels/)
@@ -231,11 +231,11 @@ describe("verifyUser", () => {
   // another member's device set.
   it("rejects a linked device replayed into another member's set", async () => {
     const admin = await newAdmin()
-    const sindreLaptop = await admitDevice(admin, { member: "member:sindre" })
+    const marenLaptop = await admitDevice(admin, { member: "member:maren" })
     const adaLaptop = await admitDevice(admin, { member: "member:ada", label: "Ada" })
-    const sindrePhone = await linkDevice(sindreLaptop)
+    const marenPhone = await linkDevice(marenLaptop)
 
-    const adaWithStolenLink = createUser("ada", [asAdmitted(adaLaptop), asLinked(sindrePhone)])
+    const adaWithStolenLink = createUser("ada", [asAdmitted(adaLaptop), asLinked(marenPhone)])
     expect(await verifyUser(adaWithStolenLink, [admin.did])).toBe(false)
   })
 

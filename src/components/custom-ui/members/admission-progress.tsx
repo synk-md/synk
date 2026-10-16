@@ -52,7 +52,9 @@ export function AdmissionProgress({ run, onCancel, className }: AdmissionProgres
           <strong>
             {total === 0
               ? "Nothing needed covering."
-              : `All ${String(total)} notes are readable to them.`}
+              : total === 1
+                ? "The note is readable to them."
+                : `All ${String(total)} notes are readable to them.`}
           </strong>
         ) : (
           <>

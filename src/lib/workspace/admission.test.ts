@@ -54,7 +54,7 @@ async function aNotebook(): Promise<{ doc: Y.Doc; owner: DeviceIdentity }> {
     doc,
     notebookId: NOTEBOOK,
     device: owner,
-    label: "Sindre",
+    label: "Maren",
     createdAt: T0,
   })
   await foundNotebookKeys({ doc, notebookId: NOTEBOOK, device: owner, createdAt: T0 })

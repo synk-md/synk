@@ -23,7 +23,7 @@ const PRUNING_AT_ONCE = process.env.RELAY_PRUNE_AFTER_MS === "0"
  */
 test("a device linked after the relay let go of a note's start still gets all of it", async ({ browser }) => {
   test.skip(!PRUNING_AT_ONCE, "needs a relay that prunes at once")
-  const laptop = await person(browser, "Sindre")
+  const laptop = await person(browser, "Maren")
   const ada = await person(browser, "Ada")
 
   await createNotebook(laptop, "Travel")
@@ -45,13 +45,13 @@ test("a device linked after the relay let go of a note's start still gets all of
   await history.getByRole("button", { name: "Close" }).first().click()
   await expect.poll(envelopesPruned, { timeout: 30_000 }).toBeGreaterThan(before)
 
-  await type(laptop, " Then Sindre.")
-  await expect(editor(ada.page)).toContainText("Then Sindre.")
+  await type(laptop, " Then Maren.")
+  await expect(editor(ada.page)).toContainText("Then Maren.")
 
-  const phone = await person(browser, "Sindre's phone")
+  const phone = await person(browser, "Maren's phone")
   await linkDevice(laptop, phone)
   await expect(editor(phone.page)).toContainText("Ada wrote this first.")
-  await expect(editor(phone.page)).toContainText("Then Sindre.")
+  await expect(editor(phone.page)).toContainText("Then Maren.")
 
   await type(phone, " And the phone.")
   await expect(editor(ada.page)).toContainText("And the phone.")

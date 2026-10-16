@@ -46,7 +46,7 @@ async function keyringFor(index: Y.Doc, device: DeviceIdentity, owner: string) {
 async function aSharedNotebook() {
   const index = new Y.Doc()
   const owner = await aDevice()
-  await foundNotebookWorkspace({ doc: index, notebookId: NOTEBOOK, device: owner, label: "Sindre", createdAt: T0 })
+  await foundNotebookWorkspace({ doc: index, notebookId: NOTEBOOK, device: owner, label: "Maren", createdAt: T0 })
   await foundNotebookKeys({ doc: index, notebookId: NOTEBOOK, device: owner, createdAt: T0 })
 
   const member = await aDevice()
