@@ -111,8 +111,9 @@ export async function verifyChain(
     chain.push(current)
 
     if (current.payload.prf === null) {
-      // A root is only a root if the owner issued it.
-      if (current.payload.iss !== context.owner) {
+      // A root is only a root if the owner issued it - or an owner before them,
+      // whose root the owner now kept on taking over.
+      if (current.payload.iss !== context.owner && !context.kept?.has(current.cid)) {
         return deny(
           "root-not-owner",
           `root was issued by ${current.payload.iss}, not the owner ${context.owner}`,
@@ -125,11 +126,12 @@ export async function verifyChain(
     if (!parent) {
       return deny("broken-proof", `proof ${current.payload.prf} is not available`)
     }
-    // A deputy issues as the principal it acts for, so its grants rest on that principal's.
-    const failure = checkAttenuation(
-      { ...current.payload, iss: issuerPrincipal(current, context) },
-      parent.payload,
-    )
+    // A deputy issues as the principal it acts for, so its grants rest on that
+    // principal's. Only when the issuer is not itself the proof's audience: a
+    // former owner's kept grant rests on that owner's own kept root.
+    const issuer =
+      current.payload.iss === parent.payload.aud ? current.payload.iss : issuerPrincipal(current, context)
+    const failure = checkAttenuation({ ...current.payload, iss: issuer }, parent.payload)
     if (failure) return deny("attenuation", `${failure.rule}: ${failure.detail}`)
     current = parent
   }

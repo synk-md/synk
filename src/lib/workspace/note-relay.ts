@@ -17,8 +17,8 @@ import type { ReadKeySource } from "@/lib/keys"
 import { RelayConnection, WebSocketLink, type RelayConnectionState } from "@/lib/relay"
 import type { SyncCursor, SyncCursorStore, SyncEngine } from "@/lib/sync"
 
-import { resolveOwnership } from "./genesis"
-import { genesisClaims, workspaceIdFor } from "./notebook-workspace"
+import { resolveNotebookOwnership, resourceIdFor, workspaceIdFor } from "./notebook-workspace"
+import { standbysIn, successionsIn } from "./succession"
 import type { BaselineMemo, RelayWatch } from "./sync-session"
 import { createNoteSyncEngine, noteResourceId } from "./note-sync"
 
@@ -109,15 +109,21 @@ export async function claimOwnershipAtRelay(options: {
   const connection = relayConnection()
   if (!connection) return false
   // Expecting itself, so a rival claim in the document cannot stop the real one.
-  const ownership = await resolveOwnership(genesisClaims(options.doc), {
+  const ownership = await resolveNotebookOwnership(options.doc, {
+    notebookId: options.notebookId,
     workspace: workspaceIdFor(options.notebookId),
+    resource: resourceIdFor(options.notebookId),
     expectedOwner: options.device.did,
   })
   if (ownership.owner !== options.device.did || !ownership.genesis) return false
   const directory = await readDirectory(options.doc, [ownership.owner], {
     workspace: workspaceIdFor(options.notebookId),
   })
-  return connection.claimOwnership(ownership.genesis, [...directory.deputies.keys()])
+  // The hand-overs too, so an owner who took over can show the relay they are one.
+  return connection.claimOwnership(ownership.genesis, [...directory.deputies.keys()], {
+    standbys: standbysIn(options.doc),
+    successions: successionsIn(options.doc),
+  })
 }
 
 export function closeRelayConnection(): void {

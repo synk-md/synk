@@ -41,6 +41,12 @@ export interface AuthorResolver {
 /** Whether an author may write here. Implemented by the capability chain. */
 export interface WritePolicy {
   canWrite(resourceId: string, authorDid: string): Promise<boolean> | boolean
+  /**
+   * Asked only where `canWrite` said no, with the update opened: whether this
+   * update itself is what authorises its author - a recovery that makes them
+   * the owner. Optional; without it, no means no.
+   */
+  canWriteWith?(resourceId: string, authorDid: string, update: Bytes): Promise<boolean> | boolean
 }
 
 /** Supplies content keys. */
@@ -475,8 +481,8 @@ export class SyncEngine {
     if (!(await verifyEnvelopeSignature(envelope, author.publicKey)))
       return this.reject("bad-signature")
 
-    if (!(await this.options.policy.canWrite(envelope.resourceId, envelope.author)))
-      return this.reject("unauthorized")
+    const authorised = await this.options.policy.canWrite(envelope.resourceId, envelope.author)
+    if (!authorised && !this.options.policy.canWriteWith) return this.reject("unauthorized")
 
     // Idempotent replay: already held, nothing to do.
     if (this.log.has(envelope.author, envelope.seq)) {
@@ -485,13 +491,16 @@ export class SyncEngine {
     }
 
     const dek = await this.options.keys.forEpoch(envelope.epoch)
-    if (!dek) return this.reject("unknown-epoch")
+    if (!dek) return this.reject(authorised ? "unknown-epoch" : "unauthorized")
 
     let update: Bytes
     try {
       update = await openEnvelope(envelope, dek)
     } catch {
-      return this.reject("undecryptable")
+      return this.reject(authorised ? "undecryptable" : "unauthorized")
+    }
+    if (!authorised && !(await this.options.policy.canWriteWith?.(envelope.resourceId, envelope.author, update))) {
+      return this.reject("unauthorized")
     }
 
     // Attribution integrity: operations claiming another author's client id.

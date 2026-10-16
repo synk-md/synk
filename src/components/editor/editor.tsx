@@ -67,6 +67,8 @@ import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 import { CollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
 import { ReadOnlyNotice, RemovedNotice, WriterNotice } from "@/components/custom-ui/connection/writer-notice"
 import { ShareAccessDialog } from "@/components/custom-ui/sharing/share-access-dialog"
+import { RecoveryCodeDialog } from "@/components/custom-ui/recovery/recovery-code-dialog"
+import { useRecoveryCodeToShow } from "@/hooks/use-recovery-code-to-show"
 import { useMayEditNote, useMayEditTree } from "@/hooks/use-may-edit-note"
 import { LinkDeviceDialog } from "@/components/custom-ui/device-manager/link-device-dialog"
 import { HistoryButton, NoteHistoryDialog } from "@/components/custom-ui/history/note-history-dialog"
@@ -137,6 +139,7 @@ import { P2PImageAssetTransfer } from "@/lib/p2p-image-assets"
 // By path, not through the barrel: it reaches IndexedDB, and the barrel is
 // imported by the test setup before any test can mock that.
 import { fetchRelayImage, publishHeldImage } from "@/lib/workspace/note-images"
+import { recoveryCodeShown } from "@/lib/workspace"
 
 /** How often typing may update a note's modified time in the shared tree. */
 const MODIFIED_AT_EVERY_MS = 5_000
@@ -713,6 +716,7 @@ export function SimpleEditor({
   // one of them may author. Blocked here rather than letting its edits be
   // rejected later, which would look like typing vanishing.
   const [sharingOpen, setSharingOpen] = React.useState(false)
+  const recoveryCode = useRecoveryCodeToShow(isSharedView ? null : (notebookId ?? null))
   const [linkingDevice, setLinkingDevice] = React.useState(false)
   const [managingDevices, setManagingDevices] = React.useState(false)
   // Only where these are this device's own notebooks, not a link guest's view.
@@ -1833,6 +1837,9 @@ export function SimpleEditor({
         </div>
       )}
       <LinkDeviceDialog open={linkingDevice} onClose={() => setLinkingDevice(false)} />
+      {recoveryCode && notebookId && (
+        <RecoveryCodeDialog code={recoveryCode} reason="new" onDone={() => recoveryCodeShown(notebookId)} />
+      )}
       {!isSharedView && notebookId && (
         <ShareAccessDialog
           open={sharingOpen}

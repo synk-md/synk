@@ -219,9 +219,17 @@ export async function readDirectory(
 ): Promise<VerifiedDirectory> {
   const base = adminDidsOf(trustedAdminDids)
   const kept = new Set(keptOf(trustedAdminDids))
-  for (const ratification of map<Ratification>(doc, DIRECTORY_MAPS.ratifications).values()) {
-    if (await verifyRatification(ratification, base, options)) {
+  // A ratification by an admin counts, and so does one an admin kept - an owner
+  // who took over keeps the ratifications the owner before them signed.
+  const pending = new Set(valuesIn<Ratification>(doc, DIRECTORY_MAPS.ratifications))
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const ratification of pending) {
+      const by = kept.has(ratification.sig) ? [ratification.admin] : base
+      if (!(await verifyRatification(ratification, by, options))) continue
       for (const signature of ratification.kept) kept.add(signature)
+      pending.delete(ratification)
+      grew = true
     }
   }
 

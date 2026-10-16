@@ -21,7 +21,7 @@ import { assertKeyringCurrent, signEpochRecord } from "@/lib/membership"
 
 import { putRevocation, readCapabilities } from "./capabilities"
 import { putEpochRecord, putSealedKeys, readNotebookKeys, restoreDomainAdmin } from "./notebook-keys"
-import { readNotebookWorkspace } from "./notebook-workspace"
+import { readNotebookWorkspace, recoveryRecipients } from "./notebook-workspace"
 
 export interface RemoveFromNotebookOptions {
   doc: Y.Doc
@@ -92,9 +92,10 @@ export async function removeFromNotebook(options: RemoveFromNotebookOptions): Pr
   // Sealing from a stale view would leave out whoever joined since.
   assertKeyringCurrent(keys.keyring, domain.timeline)
 
-  const recipients: KeyRecipient[] = remaining.map((device) => ({
-    sealingDid: device.record.sealingDid,
-  }))
+  const recipients: KeyRecipient[] = [
+    ...remaining.map((device) => ({ sealingDid: device.record.sealingDid })),
+    ...(await recoveryRecipients(options.doc, options.notebookId)),
+  ]
   const cut = await domain.removeMember(recipients, { createdAt: now })
   const signedEpoch = await signEpochRecord(cut.record, admin.signingKey, admin.did)
 

@@ -36,7 +36,7 @@ import {
 } from "@/lib/membership"
 
 import { authorizationContext, issueOwnerRoot, ownerHoldsRoot, putCapability } from "./capabilities"
-import { resourceIdFor } from "./notebook-workspace"
+import { recoveryRecipients, resourceIdFor } from "./notebook-workspace"
 import { rememberedEpoch, rememberEpoch } from "./remembered-epochs"
 
 export const EPOCH_MAP = "workspace:epochs"
@@ -154,7 +154,7 @@ export async function foundNotebookKeys(options: FoundKeysOptions): Promise<Foun
 
   const { admin, sealed } = await KeyDomainAdmin.create(
     domain,
-    [{ sealingDid: options.device.record.sealingDid }],
+    [{ sealingDid: options.device.record.sealingDid }, ...(await recoveryRecipients(options.doc, options.notebookId))],
     { createdAt: now },
   )
   const signed = await signEpochRecord(

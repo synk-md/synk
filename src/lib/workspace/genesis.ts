@@ -23,6 +23,8 @@ import {
 } from "@/lib/crypto"
 import { publicKeyFromDid } from "@/lib/identity"
 
+import type { Lineage } from "./succession"
+
 export const GENESIS_VERSION = 1
 
 export interface WorkspaceGenesisBody {
@@ -33,6 +35,13 @@ export interface WorkspaceGenesisBody {
   resource: string
   /** `did:key` of the founding device. The owner every chain must reach. */
   owner: string
+  /**
+   * The recovery code's signing key, and the sealing key every key segment is
+   * also sealed to. Fixed here, at founding, so a stolen owner device cannot
+   * swap in a code of its own.
+   */
+  recovery?: string
+  recoverySealing?: string
   createdAt: number
 }
 
@@ -49,6 +58,8 @@ export function genesisBytes(body: WorkspaceGenesisBody): Bytes {
       body.resource,
       body.owner,
       String(body.createdAt),
+      // Only when present, so a genesis from before verifies unchanged.
+      ...(body.recovery === undefined ? [] : [body.recovery, body.recoverySealing ?? ""]),
     ].join("\n"),
   )
 }
@@ -58,6 +69,7 @@ export async function createGenesis(options: {
   owner: string
   workspace: string
   resource: string
+  recovery?: { did: string; sealingDid: string }
   createdAt?: number
 }): Promise<WorkspaceGenesis> {
   const ownerKey = publicKeyFromDid(options.owner, "ed25519")
@@ -69,6 +81,7 @@ export async function createGenesis(options: {
     workspace: options.workspace,
     resource: options.resource,
     owner: options.owner,
+    ...(options.recovery ? { recovery: options.recovery.did, recoverySealing: options.recovery.sealingDid } : {}),
     createdAt: options.createdAt ?? Date.now(),
   }
   return { ...body, sig: toBase64Url(await options.signingKey.sign(genesisBytes(body))) }
@@ -115,10 +128,13 @@ export type OwnershipStatus =
 
 export interface Ownership {
   status: OwnershipStatus
+  /** The owner now: the genesis owner, or whoever took over since. */
   owner: string | null
   genesis: WorkspaceGenesis | null
   /** Every verified claim, when they disagree. Surfaced, never resolved here. */
   claims: WorkspaceGenesis[]
+  /** Every owner from the genesis on, and the recovery code that stands now. */
+  lineage?: Lineage
 }
 
 /**

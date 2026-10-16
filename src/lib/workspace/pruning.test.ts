@@ -17,7 +17,10 @@ import { foundNotebookWorkspace, genesisClaims } from "./notebook-workspace"
 import { NoteHistory } from "./note-history"
 import { liveKeys } from "./note-relay"
 import { createNoteSyncEngine, noteResourceId } from "./note-sync"
+import { linkIntoNotebook } from "./linking"
+import { standbysIn, successionsIn } from "./succession"
 import { openSyncSession } from "./sync-session"
+import { nameStandbyDevice, takeOverAsStandby } from "./takeover"
 
 const RELAY_ID = "did:relay:test"
 const NOTEBOOK = "travel"
@@ -296,6 +299,28 @@ describe("letting envelopes go behind the owner's anchor", () => {
     await maren.anchor(phone)
     notebook.clock.now += 31 * DAY
     expect(notebook.server.sweep()).toBe(0)
+  })
+
+  /** The owner who took over shows the relay the hand-over, and their anchors count from then on. */
+  it("lets go behind the anchor of an owner who took over", async () => {
+    const notebook = await aNotebook()
+    const sindrePhone = await aDevice()
+    const sindre = await theOwner(notebook)
+    await sindre.claim()
+    await linkIntoNotebook({ doc: notebook.directory, notebookId: NOTEBOOK, parent: notebook.owner, record: sindrePhone.record })
+    await nameStandbyDevice({ doc: notebook.directory, notebookId: NOTEBOOK, owner: notebook.owner, device: sindrePhone.did })
+    await takeOverAsStandby({ doc: notebook.directory, notebookId: NOTEBOOK, device: sindrePhone })
+    const ownership = await resolveOwnership(genesisClaims(notebook.directory))
+    const phoneClaim = await connect(notebook, sindrePhone).claimOwnership(ownership.genesis!, [], {
+      standbys: standbysIn(notebook.directory),
+      successions: successionsIn(notebook.directory),
+    })
+    expect(phoneClaim).toBe(true)
+
+    await sindre.writes("Flights booked.")
+    await sindre.anchor(sindrePhone)
+    notebook.clock.now += 31 * DAY
+    expect(notebook.server.sweep()).toBe(1)
   })
 
   it("refuses a claim made for someone else", async () => {

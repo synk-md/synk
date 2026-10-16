@@ -7,6 +7,7 @@ import { SharedNotePage } from "@/routes/shared-note-page"
 import { SharedNotebookPage } from "@/routes/shared-notebook-page"
 import { JoinNotebookPage } from "@/routes/join-notebook-page"
 import { LinkDevicePage } from "@/routes/link-device-page"
+import { RecoverNotebookPage } from "@/routes/recover-notebook-page"
 import { NotebooksProvider } from "@/hooks/use-notebooks"
 
 function WorkspaceLayout() {
@@ -33,6 +34,9 @@ export function AppRoutes() {
 
         {/* Another of your own devices, collecting the notebooks it was linked into. */}
         <Route path="/link" element={<LinkDevicePage />} />
+
+        {/* Taking a notebook back with its recovery code, on any device. */}
+        <Route path="/recover" element={<RecoverNotebookPage />} />
       </Route>
 
       <Route path="/s/:notebookId/:noteId" element={<SharedNotePage />} />

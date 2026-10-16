@@ -15,6 +15,7 @@ import { publicKeyFromDid } from "@/lib/identity"
 import { verifySnapshot, type Snapshot } from "@/lib/snapshots"
 import type { Envelope } from "@/lib/sync"
 import { verifyGenesis, type WorkspaceGenesis } from "@/lib/workspace/genesis"
+import { resolveLineage, type Standby, type Succession } from "@/lib/workspace/succession"
 import { newChallenge, verifyChallenge } from "./auth"
 import type { Link } from "./link"
 import {
@@ -238,7 +239,7 @@ export class RelayServer {
         })
 
       case "claim-owner":
-        return this.claimOwner(session, message.id, message.genesis, message.deputies ?? [])
+        return this.claimOwner(session, message.id, message.genesis, message.deputies ?? [], message.standbys ?? [], message.successions ?? [])
 
       case "deposit-snapshot":
         return this.deposit(session, message.id, message.snapshot)
@@ -347,14 +348,17 @@ export class RelayServer {
     id: string,
     genesis: WorkspaceGenesis,
     deputies: readonly string[],
+    standbys: readonly Standby[],
+    successions: readonly Succession[],
   ): Promise<void> {
-    if (!genesis || genesis.owner !== session.did || !(await verifyGenesis(genesis))) {
+    if (!genesis || !(await verifyGenesis(genesis))) return this.refuse(session, id, "malformed")
+    if (![deputies, standbys, successions].every(Array.isArray) || deputies.some((did) => typeof did !== "string")) {
       return this.refuse(session, id, "malformed")
     }
-    if (!Array.isArray(deputies) || deputies.some((did) => typeof did !== "string")) {
-      return this.refuse(session, id, "malformed")
-    }
-    this.store.claimOwnership(genesis, deputies)
+    // The same rules the devices follow: only the owner now may claim.
+    const lineage = await resolveLineage(genesis, standbys, successions)
+    if (lineage.status !== "established" || lineage.owner !== session.did) return this.refuse(session, id, "malformed")
+    this.store.claimOwnership(genesis, deputies, lineage.owners)
     this.send(session, { id, ok: true, re: "claim-owner" })
   }
 

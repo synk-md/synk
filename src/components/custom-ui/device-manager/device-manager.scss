@@ -445,3 +445,41 @@
   gap: 8px;
   margin-top: 12px;
 }
+
+/* What happens if a device is lost: who may take over, and taking over. */
+.dm-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--tt-card-border-color);
+}
+
+.dm-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+
+  svg {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+.dm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dm-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}

@@ -18,7 +18,7 @@
  * by publishing its whole state.
  */
 
-import type * as Y from "yjs"
+import * as Y from "yjs"
 
 import { CapabilityWritePolicy } from "@/lib/authz"
 import { deriveKey, toBase64Url, utf8, type Bytes, type SigningKey } from "@/lib/crypto"
@@ -89,6 +89,18 @@ export const anyone: WritePolicy = { canWrite: () => true }
  */
 export function directoryWriters(doc: Y.Doc, notebookId: string): WritePolicy {
   return {
+    /**
+     * Someone this directory does not know yet may be taking over: a recovery
+     * names a device nobody has met. Their update is tried on a copy, and
+     * taken only if, with it, they are the owner.
+     */
+    async canWriteWith(_resourceId, author, update) {
+      const scratch = new Y.Doc()
+      Y.applyUpdate(scratch, Y.encodeStateAsUpdate(doc))
+      Y.applyUpdate(scratch, update)
+      const workspace = await readNotebookWorkspace({ doc: scratch, notebookId })
+      return workspace.ownership.owner === laneOwner(author)
+    },
     async canWrite(_resourceId, author) {
       const workspace = await readNotebookWorkspace({ doc, notebookId })
       // Remembered before the directory itself has arrived - a new device, or

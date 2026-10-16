@@ -34,12 +34,8 @@ import {
 } from "@/lib/identity"
 
 import { pinnedOwner, pinOwner } from "./owner-pins"
-import {
-  createGenesis,
-  resolveOwnership,
-  type Ownership,
-  type WorkspaceGenesis,
-} from "./genesis"
+import { resolveLineage, standbysIn, successionsIn } from "./succession"
+import { createGenesis, verifyGenesis, type Ownership, type WorkspaceGenesis } from "./genesis"
 
 /** Where genesis claims live, keyed by claimant so a rival cannot overwrite. */
 export const GENESIS_MAP = "workspace:genesis"
@@ -76,6 +72,8 @@ export interface FoundOptions {
   device: DeviceIdentity
   /** What the owner is called. Admin-attested, because they are the admin. */
   label: string
+  /** The recovery code's public keys, fixed in the genesis. */
+  recovery?: { did: string; sealingDid: string }
   createdAt?: number
 }
 
@@ -108,6 +106,7 @@ export async function foundNotebookWorkspace(
     owner: options.device.did,
     workspace,
     resource,
+    ...(options.recovery ? { recovery: options.recovery } : {}),
     ...(options.createdAt === undefined ? {} : { createdAt: options.createdAt }),
   })
 
@@ -169,14 +168,12 @@ export async function readNotebookWorkspace(
   const workspace = workspaceIdFor(options.notebookId)
   const resource = resourceIdFor(options.notebookId)
 
-  // An owner this device established before outranks whatever claims arrive since.
-  const expectedOwner = options.expectedOwner ?? pinnedOwner(options.notebookId) ?? undefined
-  const ownership = await resolveOwnership(genesisClaims(options.doc), {
+  const ownership = await resolveNotebookOwnership(options.doc, {
+    notebookId: options.notebookId,
     workspace,
     resource,
-    ...(expectedOwner === undefined ? {} : { expectedOwner }),
+    ...(options.expectedOwner === undefined ? {} : { expectedOwner: options.expectedOwner }),
   })
-  if (ownership.status === "established" && ownership.owner) pinOwner(options.notebookId, ownership.owner)
 
   const base: NotebookWorkspace = {
     notebookId: options.notebookId,
@@ -209,6 +206,56 @@ export async function readNotebookWorkspace(
     self:
       directory.devices.find((device) => device.record.did === options.selfDid) ?? null,
   }
+}
+
+/**
+ * Who owns the notebook now. The genesis says who founded it; its lineage
+ * says who has taken over since. A device remembers the founder - the root the
+ * lineage is followed from - so a rival genesis fails, and an expected owner,
+ * from an invitation, may be anyone in that lineage.
+ */
+export async function resolveNotebookOwnership(
+  doc: Y.Doc,
+  options: { notebookId: string; workspace: string; resource: string; expectedOwner?: string },
+): Promise<Ownership> {
+  const expected = [options.expectedOwner, pinnedOwner(options.notebookId) ?? undefined].filter(
+    (did): did is string => did !== undefined,
+  )
+  const roots = new Map<string, WorkspaceGenesis>()
+  for (const claim of genesisClaims(doc)) {
+    if (roots.has(claim.owner)) continue
+    if (await verifyGenesis(claim, { workspace: options.workspace, resource: options.resource })) roots.set(claim.owner, claim)
+  }
+  const standbys = standbysIn(doc)
+  const successions = successionsIn(doc)
+  const candidates = []
+  for (const genesis of roots.values()) {
+    const lineage = await resolveLineage(genesis, standbys, successions)
+    if (expected.every((did) => did === genesis.owner || lineage.owners.includes(did))) candidates.push({ genesis, lineage })
+  }
+
+  if (candidates.length === 0) return { status: "none", owner: null, genesis: null, claims: [] }
+  if (candidates.length > 1) {
+    return { status: "disputed", owner: null, genesis: null, claims: candidates.map((each) => each.genesis) }
+  }
+  const [{ genesis, lineage }] = candidates
+  pinOwner(options.notebookId, genesis.owner)
+  if (lineage.status === "disputed") return { status: "disputed", owner: null, genesis, claims: [genesis], lineage }
+  return { status: "established", owner: lineage.owner, genesis, claims: [genesis], lineage }
+}
+
+/**
+ * Where a new key segment is also sealed: the recovery code that stands now,
+ * so whoever holds it can read the notebook when every device is gone.
+ */
+export async function recoveryRecipients(doc: Y.Doc, notebookId: string): Promise<{ sealingDid: string }[]> {
+  const ownership = await resolveNotebookOwnership(doc, {
+    notebookId,
+    workspace: workspaceIdFor(notebookId),
+    resource: resourceIdFor(notebookId),
+  })
+  const recovery = ownership.lineage?.recovery
+  return recovery ? [{ sealingDid: recovery.sealingDid }] : []
 }
 
 /** Admins of this workspace: the owner and the owner's own linked devices. */

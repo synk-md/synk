@@ -14,6 +14,7 @@ import type { SigningKey } from "@/lib/crypto"
 import type { Snapshot } from "@/lib/snapshots"
 import type { DeliveryVector, Envelope, Transport } from "@/lib/sync"
 import type { WorkspaceGenesis } from "@/lib/workspace/genesis"
+import type { Standby, Succession } from "@/lib/workspace/succession"
 
 import { signChallenge } from "./auth"
 import type { Link, LinkState } from "./link"
@@ -283,8 +284,18 @@ export class RelayConnection {
   }
 
   /** As the owner, so the relay may let envelopes go behind this device's anchors. */
-  async claimOwnership(genesis: WorkspaceGenesis, deputies: readonly string[] = []): Promise<boolean> {
-    const reply = await this.call({ op: "claim-owner", genesis, deputies: [...deputies] })
+  async claimOwnership(
+    genesis: WorkspaceGenesis,
+    deputies: readonly string[] = [],
+    lineage: { standbys?: readonly Standby[]; successions?: readonly Succession[] } = {},
+  ): Promise<boolean> {
+    const reply = await this.call({
+      op: "claim-owner",
+      genesis,
+      deputies: [...deputies],
+      standbys: [...(lineage.standbys ?? [])],
+      successions: [...(lineage.successions ?? [])],
+    })
     return reply?.ok === true
   }
 

@@ -8,20 +8,25 @@
 
 import * as Y from "yjs"
 
-import type { TreeNode } from "@/components/custom-ui/file-browser/tree"
+import { collectLeaves, type TreeNode } from "@/components/custom-ui/file-browser/tree"
 import type { Bytes } from "@/lib/crypto"
 import type { DeviceIdentity, DeviceRecord } from "@/lib/identity"
 import type { ReadKeySource } from "@/lib/keys"
 import type { SyncEngine, Transport } from "@/lib/sync"
-import { createNotebookIndexDoc, readNotebookIndexTree, unsentFlag } from "@/lib/yjs-utils"
+import { createSnapshot } from "@/lib/snapshots"
+import { createNotebookIndexDoc, getOrCreateYDoc, readNotebookIndexTree, unsentFlag } from "@/lib/yjs-utils"
 
 import { coverNotes } from "./cover-notes"
 import { linkIntoNotebook } from "./linking"
 import { rotateAway, unlinkDevice } from "./unlinking"
-import { readNotebookKeys } from "./notebook-keys"
+import { keyDomainFor, readNotebookKeys } from "./notebook-keys"
+import { hasNoOperations } from "./note-snapshots"
+import { createNoteSyncEngine, noteResourceId } from "./note-sync"
 import { readNotebookWorkspace } from "./notebook-workspace"
 import { claimOwnershipAtRelay, liveKeys, relayConnection, relayWatch } from "./note-relay"
 import { pinOwner } from "./owner-pins"
+import type { RecoveryCode } from "./recovery-code"
+import { isStandby, nameStandbyDevice, recoverWithCode, takeOverAsStandby } from "./takeover"
 import { pairingChannel, type PairedNotebook } from "./pairing"
 import {
   createDirectoryReplica,
@@ -289,4 +294,166 @@ export async function fetchNotebook(
   const arrived = () => readNotebookIndexTree(handle).root !== undefined
   await syncTree(notebookId, device, established, keyring, arrived)
   return readNotebookIndexTree(handle).root ?? null
+}
+
+/**
+ * Name one of this owner's devices as able to take over, in every notebook
+ * this device owns. Returns the notebooks it was named in.
+ */
+export async function nameStandbyEverywhere(options: {
+  device: DeviceIdentity
+  standby: string
+  notebooks: readonly PairedNotebook[]
+}): Promise<PairedNotebook[]> {
+  const named: PairedNotebook[] = []
+  for (const notebook of options.notebooks) {
+    const handle = createNotebookIndexDoc(notebook.id)
+    await handle.idb.whenSynced
+    if ((await ownerOf(notebook.id, options.device)) !== options.device.did) continue
+    await nameStandbyDevice({ doc: handle.doc, notebookId: notebook.id, owner: options.device, device: options.standby })
+    named.push(notebook)
+    if (relayConnection()) await syncDirectory(notebook.id, options.device)
+  }
+  return named
+}
+
+/** Take over every notebook whose owner named this device. Returns those taken over, and why any failed. */
+export async function takeOverEverywhere(options: { device: DeviceIdentity; notebooks: readonly PairedNotebook[] }) {
+  const taken: PairedNotebook[] = []
+  const failed: (PairedNotebook & { reason: string })[] = []
+  for (const notebook of options.notebooks) {
+    try {
+      const handle = createNotebookIndexDoc(notebook.id)
+      await handle.idb.whenSynced
+      if (relayConnection()) await syncDirectory(notebook.id, options.device)
+      const owner = await ownerOf(notebook.id, options.device)
+      if (!owner || owner === options.device.did || !isStandby(handle.doc, owner, options.device.did)) continue
+      await takeOverAsStandby({
+        doc: handle.doc,
+        notebookId: notebook.id,
+        device: options.device,
+        ...(relayConnection() ? { beforeRemoval: () => anchorEveryNote(notebook.id, options.device) } : {}),
+      })
+      taken.push(notebook)
+      if (relayConnection()) {
+        await syncDirectory(notebook.id, options.device)
+        await claimOwnershipAtRelay({ doc: handle.doc, notebookId: notebook.id, device: options.device })
+      }
+    } catch (error) {
+      failed.push({ ...notebook, reason: error instanceof Error ? error.message : "could not be taken over" })
+    }
+  }
+  return { taken, failed }
+}
+
+/**
+ * Recover a notebook onto this device from its code, with nothing of it here
+ * yet: its directory from the relay, ownership through the code, every key
+ * through the copies sealed to it, then its tree. Returns the tree, and the
+ * code that replaces the one used.
+ */
+export async function recoverNotebook(options: { code: RecoveryCode; device: DeviceIdentity }) {
+  const { notebookId } = options.code
+  const handle = createNotebookIndexDoc(notebookId)
+  await handle.idb.whenSynced
+  const arrived = await syncDirectory(notebookId, options.device, async () => (await ownerOf(notebookId, options.device)) !== null)
+  if (!arrived) throw new Error("That notebook could not be found on the relay. Check the code, and that sync is on.")
+
+  const next = await recoverWithCode({
+    doc: handle.doc,
+    notebookId,
+    device: options.device,
+    code: options.code,
+    // The tree first, so there is a list of notes to gather.
+    beforeRemoval: async () => {
+      if (!(await syncDirectory(notebookId, options.device))) throw new Error("Could not reach the relay to recover.")
+      const keyring = await readableKeys(notebookId, options.device, options.device.did)
+      if (keyring) {
+        await syncTree(notebookId, options.device, options.device.did, keyring, () => readNotebookIndexTree(handle).root !== undefined)
+      }
+      await anchorEveryNote(notebookId, options.device)
+    },
+  })
+  if (!(await syncDirectory(notebookId, options.device))) throw new Error("Recovered, but could not reach the relay to say so.")
+  await claimOwnershipAtRelay({ doc: handle.doc, notebookId, device: options.device })
+
+  const keyring = await readableKeys(notebookId, options.device, options.device.did)
+  if (!keyring) throw new Error("Recovered, but this device cannot open the notebook's keys.")
+  const arrivedTree = () => readNotebookIndexTree(handle).root !== undefined
+  await syncTree(notebookId, options.device, options.device.did, keyring, arrivedTree)
+  return { root: readNotebookIndexTree(handle).root ?? null, next }
+}
+
+/**
+ * Every note, gathered from the relay and kept in a snapshot this device
+ * signs. Run while the old owner is still a member: once it is taken out,
+ * everything it wrote is refused by any device that did not already hold it,
+ * and these are what new devices start from instead.
+ */
+async function anchorEveryNote(notebookId: string, device: DeviceIdentity): Promise<void> {
+  const handle = createNotebookIndexDoc(notebookId)
+  const keyring = await readableKeys(notebookId, device, device.did)
+  if (!keyring) throw new Error("This device cannot open the notebook's keys, so it cannot keep its notes.")
+  const shared = connection()
+  for (const noteId of collectLeaves(readNotebookIndexTree(handle).root).noteIds) {
+    const { doc, idb } = getOrCreateYDoc(notebookId, noteId)
+    await idb.whenSynced
+    const resourceId = noteResourceId(notebookId, noteId)
+    const transport = shared.transportFor(resourceId)
+    const engine = createNoteSyncEngine({
+      doc,
+      notebookId,
+      noteId,
+      index: handle.doc,
+      owner: device.did,
+      author: device.did,
+      signingKey: device.signingKey,
+      clientId: device.clientId,
+      keys: liveKeys(() => keyring),
+      transport,
+    })
+    // Only gathering: nothing of this device's own goes out from here.
+    let caughtUp: () => void = () => undefined
+    const live = new Promise<void>((resolve) => {
+      caughtUp = resolve
+      setTimeout(resolve, 20_000)
+    })
+    const session = openSyncSession({
+      engine,
+      doc,
+      transport,
+      resourceId,
+      readableEpochs: () => keyring.readableEpochs(),
+      relay: relayWatch,
+      baseline: { applied: () => null, record: () => undefined },
+      canAuthor: false,
+      onStatus: (status) => {
+        if (status === "live") caughtUp()
+      },
+    })
+    try {
+      await live
+      await session.settled()
+      if (hasNoOperations(doc)) continue
+      const epoch = keyring.currentEpoch
+      const dek = await keyring.keyFor(epoch)
+      if (!dek) continue
+      await transport.depositSnapshot(
+        await createSnapshot({
+          signingKey: device.signingKey,
+          author: device.did,
+          domain: keyDomainFor(notebookId),
+          resourceId,
+          kind: "automatic",
+          epoch,
+          dek,
+          state: Y.encodeStateAsUpdate(doc),
+          covers: engine.deliveryVector(),
+        }),
+      )
+    } finally {
+      session.close()
+      engine.close()
+    }
+  }
 }

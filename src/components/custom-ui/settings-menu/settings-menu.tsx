@@ -81,6 +81,8 @@ export function SettingsMenu({
       ? [{ id: "your-devices", category: "general" as const, label: "Your devices", description: "See the devices that are you, and take a lost one out.", keywords: "phone lost unlink remove device",
           control: <button type="button" onClick={() => { setOpen(false); onManageDevices() }}>Manage devices</button> }]
       : []),
+    { id: "recover", category: "general", label: "Recover a notebook", description: "Take back a notebook whose devices are lost, with its recovery code.", keywords: "recovery code lost owner restore",
+      control: <a className="settings-link-button" href="/recover">Recover a notebook</a> },
     { id: "theme", category: "appearance", label: "Color mode", description: "Use a light, dark, or system-matched workspace.", keywords: "color mode",
       control: <select id="theme" value={theme} onChange={event => setTheme(event.target.value as Theme)}><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select> },
     { id: "color-theme", category: "appearance", label: "Color theme", description: "", keywords: "palette style classic sandstone forest rose ocean",

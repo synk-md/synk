@@ -32,6 +32,8 @@ export {
   memberIdFor,
   putGenesis,
   readNotebookWorkspace,
+  recoveryRecipients,
+  resolveNotebookOwnership,
   resourceIdFor,
   workspaceIdFor,
 } from "./notebook-workspace"
@@ -133,6 +135,13 @@ export { hasNoOperations } from "./note-snapshots"
 
 export type { NoteEngineOptions } from "./note-relay"
 export type { RelaySettings } from "./note-relay"
+export { onRecoveryCodes, recoveryCodeShown, recoveryCodeToShow, showRecoveryCode } from "./new-recovery-codes"
+export type { RecoveryCode, RecoveryKey } from "./recovery-code"
+export { generateRecoveryCode, parseRecoveryCode, recoveryIdentity, recoveryKeyOf } from "./recovery-code"
+export type { Lineage, Standby, Succession } from "./succession"
+export { resolveLineage, standbysIn, successionsIn } from "./succession"
+export type { TakeoverOptions } from "./takeover"
+export { isStandby, nameStandbyDevice, recoverWithCode, takeOverAsStandby } from "./takeover"
 export type { GrantOptions, SharingOptions } from "./sharing"
 export { changeAccess, grantAccess, mayEditNote, mayEditTree, mayWrite, withdrawGrants } from "./sharing"
 export type { RememberedEpochs } from "./remembered-epochs"

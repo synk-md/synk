@@ -16,7 +16,6 @@
 
 import type * as Y from "yjs"
 
-import type { Revocation } from "@/lib/authz"
 import {
   DIRECTORY_MAPS,
   putLinkRevocation,
@@ -29,17 +28,16 @@ import type { DeviceIdentity } from "@/lib/identity"
 import { segmentStart, type KeyRecipient } from "@/lib/keys"
 import { revokeLink, signEpochRecord } from "@/lib/membership"
 
-import { readCapabilities, REVOCATION_MAP } from "./capabilities"
+import { signedBy } from "./kept-records"
 import {
   keyDomainFor,
   putEpochRecord,
   putSealedKeys,
   readNotebookKeys,
   restoreDomainAdmin,
-  storedEpochRecords,
   storedSealedKeys,
 } from "./notebook-keys"
-import { readNotebookWorkspace, workspaceIdFor } from "./notebook-workspace"
+import { readNotebookWorkspace, recoveryRecipients, workspaceIdFor } from "./notebook-workspace"
 
 export interface UnlinkOptions {
   doc: Y.Doc
@@ -86,7 +84,7 @@ export async function unlinkDevice(options: UnlinkOptions): Promise<"unlinked" |
         admin: options.actor.did,
         workspace: workspaceIdFor(options.notebookId),
         device: target.record.did,
-        kept: await signedBy(options.doc, options.notebookId, target.record.did),
+        kept: await signedBy(options.doc, options.notebookId, [target.record.did]),
         at: now,
       })
     : null
@@ -96,26 +94,6 @@ export async function unlinkDevice(options: UnlinkOptions): Promise<"unlinked" |
     if (ratification) putRatification(options.doc, ratification)
   })
   return "unlinked"
-}
-
-/** Everything a device signed as an admin that this document holds, by signature or cid. */
-async function signedBy(doc: Y.Doc, notebookId: string, did: string): Promise<string[]> {
-  const out: string[] = []
-  for (const name of ["directory:admissions", "directory:removals", "directory:invitations", "directory:invitation-revocations"]) {
-    for (const record of doc.getMap<{ admin?: string; sig?: string }>(name).values()) {
-      if (record?.admin === did && typeof record.sig === "string") out.push(record.sig)
-    }
-  }
-  for (const signed of storedEpochRecords(doc, keyDomainFor(notebookId))) {
-    if (signed.asserter === did) out.push(signed.sig)
-  }
-  for (const capability of await readCapabilities(doc)) {
-    if (capability.payload.iss === did) out.push(capability.cid)
-  }
-  for (const revocation of doc.getMap<Revocation>(REVOCATION_MAP).values()) {
-    if (revocation?.iss === did && typeof revocation.sig === "string") out.push(revocation.sig)
-  }
-  return out
 }
 
 export interface RotateAwayOptions {
@@ -156,7 +134,10 @@ export async function rotateAway(options: RotateAwayOptions): Promise<boolean> {
 
   const domain = await restoreDomainAdmin(keys)
   if (!domain) return false
-  const remaining: KeyRecipient[] = directory.devices.map((device) => ({ sealingDid: device.record.sealingDid }))
+  const remaining: KeyRecipient[] = [
+    ...directory.devices.map((device) => ({ sealingDid: device.record.sealingDid })),
+    ...(await recoveryRecipients(options.doc, options.notebookId)),
+  ]
   const cut = await domain.rotate(remaining, {
     reason: "device-unlinked",
     ...(options.now === undefined ? {} : { createdAt: options.now }),

@@ -10,6 +10,7 @@ import type { Envelope } from "@/lib/sync"
 import type { DeliveryVector } from "@/lib/sync"
 import type { Snapshot } from "@/lib/snapshots"
 import type { WorkspaceGenesis } from "@/lib/workspace/genesis"
+import type { Standby, Succession } from "@/lib/workspace/succession"
 
 export const RELAY_PROTOCOL_VERSION = 1
 
@@ -69,7 +70,15 @@ export type ClientMessage =
    * Sent by the owner's device, so the list is the owner's word; each claim
    * replaces the last.
    */
-  | { op: "claim-owner"; id: string; genesis: WorkspaceGenesis; deputies?: string[] }
+  | {
+      op: "claim-owner"
+      id: string
+      genesis: WorkspaceGenesis
+      deputies?: string[]
+      /** The hand-overs since the genesis, when the claimant took over. */
+      standbys?: Standby[]
+      successions?: Succession[]
+    }
   | { op: "deposit-snapshot"; id: string; snapshot: Snapshot }
   | { op: "snapshots"; id: string; resourceId: string }
   | { op: "slice"; id: string; request: SliceRequest }

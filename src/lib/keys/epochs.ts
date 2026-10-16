@@ -29,6 +29,8 @@ export type EpochReason =
   | "key-commitment"
   /** A rotation away from a device its own member unlinked. */
   | "device-unlinked"
+  /** A rotation away from an owner's lost device, by whoever took over. */
+  | "owner-succeeded"
 
 export interface EpochRecord {
   v: typeof EPOCH_RECORD_VERSION

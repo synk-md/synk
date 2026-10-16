@@ -174,7 +174,7 @@ export class KeyDomainAdmin {
   /** Rotate without a membership change - after a suspected compromise, or a lost device. */
   async rotate(
     members: readonly KeyRecipient[],
-    options: { createdAt?: number; reason?: "manual-rotation" | "device-unlinked" } = {},
+    options: { createdAt?: number; reason?: "manual-rotation" | "device-unlinked" | "owner-succeeded" } = {},
   ): Promise<CutEpochResult> {
     const key = generateEpochSeed()
     const record = this.push(

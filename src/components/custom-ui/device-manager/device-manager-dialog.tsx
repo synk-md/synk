@@ -23,6 +23,8 @@ export type DeviceManagerDialogProps = {
   /** What removing actually does here, which depends on who can replace the key. */
   removalNote?: string
   onRequestReAdmission?: () => void
+  /** More about these devices, below the list. */
+  children?: React.ReactNode
   className?: string
 }
 
@@ -42,6 +44,7 @@ export function DeviceManagerDialog({
   canRevoke,
   removalNote,
   onRequestReAdmission,
+  children,
   className,
 }: DeviceManagerDialogProps) {
   const { identity, fingerprint } = useDeviceIdentity()
@@ -117,6 +120,8 @@ export function DeviceManagerDialog({
           {...(onRevoke ? { onRevoke: setPendingRemoval } : {})}
           {...(canRevoke ? { canRevoke } : {})}
         />
+
+        {children}
 
         {pendingRemoval && (
           <div className="dm-confirm" role="alertdialog" aria-label="Confirm removal">

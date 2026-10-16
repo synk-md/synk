@@ -8,6 +8,7 @@ import { currentDevice, type MemberDevice } from "@/lib/identity"
 import { unlinkEverywhere } from "@/lib/workspace/device-pairing"
 
 import { DeviceManagerDialog } from "./device-manager-dialog"
+import { SuccessionSection } from "./succession-section"
 
 export type YourDevicesDialogProps = {
   open: boolean
@@ -58,7 +59,17 @@ export function YourDevicesDialog({ open, onClose, notebookId }: YourDevicesDial
           ? "Remove this device from every notebook? Its edits stop being accepted at once, and the key is replaced now, so it can read nothing written from here on."
           : "Remove this device from every notebook? Its edits stop being accepted at once. It can still read new writing until each notebook's owner next opens it, which replaces the key."
       }
-    />
+    >
+      {notebookId && device && (
+        <SuccessionSection
+          notebookId={notebookId}
+          owner={workspace?.ownership.owner ?? null}
+          device={device.identity}
+          user={me}
+          notebooks={notebooks.map((notebook) => ({ id: notebook.id, name: notebook.name }))}
+        />
+      )}
+    </DeviceManagerDialog>
   )
 }
 

@@ -14,8 +14,10 @@
 import { currentDevice } from "@/lib/identity"
 import { createNotebookIndexDoc } from "@/lib/yjs-utils"
 
+import { showRecoveryCode } from "./new-recovery-codes"
 import { foundNotebookKeys } from "./notebook-keys"
 import { foundNotebookWorkspace } from "./notebook-workspace"
+import { generateRecoveryCode, recoveryKeyOf } from "./recovery-code"
 
 export async function claimNewNotebook(
   notebookId: string,
@@ -28,14 +30,19 @@ export async function claimNewNotebook(
   // The genesis has to land in the same stored document the tree lives in, so
   // wait for the store rather than racing it.
   await idb.whenSynced
+  // The way back if every device is lost. Its key goes in the genesis; the
+  // code itself is shown once and kept nowhere.
+  const code = generateRecoveryCode(notebookId)
   await foundNotebookWorkspace({
     doc,
     notebookId,
     device: device.identity,
     label,
+    recovery: await recoveryKeyOf(code.secret),
   })
   // The key domain comes with the workspace: a notebook whose owner is
   // established but which has no genesis epoch has nothing to seal content
   // under, and every later membership change would have no timeline to cut.
   await foundNotebookKeys({ doc, notebookId, device: device.identity })
+  showRecoveryCode(notebookId, code.text)
 }

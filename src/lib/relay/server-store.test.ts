@@ -31,3 +31,22 @@ describe("the relay's snapshot archive", () => {
     expect(store.archived("notebook:a/note:b").map((snapshot) => snapshot.id)).toEqual(["two", "three"])
   })
 })
+
+describe("who the relay takes to own a notebook", () => {
+  const genesis = (owner: string) =>
+    ({ owner, resource: "notebook:a", workspace: "workspace:a" }) as unknown as Parameters<RelayStore["claimOwnership"]>[0]
+
+  it("moves on to whoever took over, and is not wound back by a claim that stops short", () => {
+    const store = new RelayStore()
+    store.claimOwnership(genesis("did:key:zLaptop"))
+    expect(store.claimOwnership(genesis("did:key:zLaptop"), [], ["did:key:zLaptop", "did:key:zPhone"]).owner).toBe("did:key:zPhone")
+    // The lost laptop, claiming with the bare genesis.
+    expect(store.claimOwnership(genesis("did:key:zLaptop")).owner).toBe("did:key:zPhone")
+  })
+
+  it("is disputed by a claim from a different founder", () => {
+    const store = new RelayStore()
+    store.claimOwnership(genesis("did:key:zLaptop"))
+    expect(store.claimOwnership(genesis("did:key:zRival")).disputed).toBe(true)
+  })
+})

@@ -12,6 +12,8 @@ export interface Person {
   name: string
   context: BrowserContext
   page: Page
+  /** The recovery code of the notebook they last created, as they saved it. */
+  recoveryCode?: string
 }
 
 /** Envelopes the test relay has accepted so far. */
@@ -72,6 +74,13 @@ export async function createNotebook(owner: Person, title: string): Promise<stri
   await page.getByRole("button", { name: /Open notebook/ }).click()
   await page.waitForURL(/\/nb\/[^/]+/)
   await expect(editor(page)).toBeVisible()
+  // Shown once, on creating it: saved, as a careful person would.
+  const recovery = page.getByRole("dialog", { name: "Save this notebook's recovery code" })
+  await expect(recovery).toBeVisible()
+  owner.recoveryCode = (await recovery.getByLabel("Recovery code").inputValue()).trim()
+  await recovery.getByLabel("I have saved it somewhere safe").check()
+  await recovery.getByRole("button", { name: "Done" }).click()
+  await expect(recovery).toBeHidden()
   return new URL(page.url()).pathname.split("/")[2]
 }
 

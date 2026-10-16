@@ -42,7 +42,12 @@ export const DEFAULT_PRUNE: PrunePolicy = {
  * anyone else knows its id. A rival can only dispute it, never take it over.
  */
 interface OwnerClaim {
+  /** Who founded it, which the claims must agree on. */
+  root: string
+  /** Who owns it now: the founder, or whoever took over since. */
   owner: string
+  /** Everyone who has owned it, founder first. */
+  owners: string[]
   /** The owner's own linked devices, as the owner last said. */
   deputies: Set<string>
   /** Two different owners claimed it. Never pruned again. */
@@ -94,15 +99,30 @@ export class RelayStore {
   }
 
   /** A verified genesis. A second, different owner disputes it for good. */
-  claimOwnership(genesis: WorkspaceGenesis, deputies: readonly string[] = []): OwnerClaim {
+  /**
+   * A verified genesis and the owners it has passed through. A different
+   * founder disputes it for good. The same founder moves the owner on only
+   * when the claim's lineage reaches the owner known here, or further: a
+   * claim that stops short - a lost device claiming with the bare genesis -
+   * does not wind it back.
+   */
+  claimOwnership(genesis: WorkspaceGenesis, deputies: readonly string[] = [], owners: readonly string[] = [genesis.owner]): OwnerClaim {
+    const owner = owners[owners.length - 1] ?? genesis.owner
     const existing = this.owners.get(genesis.resource)
     if (!existing) {
-      const claim = { owner: genesis.owner, deputies: new Set(deputies), disputed: false }
+      const claim = { root: genesis.owner, owner, owners: [...owners], deputies: new Set(deputies), disputed: false }
       this.owners.set(genesis.resource, claim)
       return claim
     }
-    if (existing.owner !== genesis.owner) existing.disputed = true
-    else existing.deputies = new Set(deputies)
+    if (existing.root !== genesis.owner) {
+      existing.disputed = true
+      return existing
+    }
+    const known = owners.indexOf(existing.owner)
+    if (known < 0) return existing
+    existing.owner = owner
+    existing.owners = [...owners]
+    existing.deputies = new Set(deputies)
     return existing
   }
 

@@ -9,7 +9,9 @@ import { laneOwner, MemoryRelay, type SyncEngine, type Transport } from "@/lib/s
 import { admitFromRedemption, inviteToNotebook, pendingRedemptions, redeemIntoNotebook } from "./admission"
 import { joinChannel, requestToJoin, watchJoinRequests, type JoinChannelAccess } from "./join-requests"
 import { foundNotebookKeys } from "./notebook-keys"
-import { foundNotebookWorkspace, genesisClaims, workspaceIdFor } from "./notebook-workspace"
+import { foundNotebookWorkspace, genesisClaims, readNotebookWorkspace, workspaceIdFor } from "./notebook-workspace"
+import { generateRecoveryCode, recoveryKeyOf } from "./recovery-code"
+import { recoverWithCode } from "./takeover"
 import { configureOwnerPins, memoryOwnerPins, pinOwner } from "./owner-pins"
 import { removeFromNotebook } from "./removal"
 import { createDirectoryReplica, directoryChannel, directoryWriters } from "./replicas"
@@ -266,3 +268,34 @@ describe("asking to join on the invitation's own channel", () => {
     stop()
   })
 })
+
+/** A recovery names a device nobody has met; its own update is what makes it the owner. */
+describe("a recovery reaching everyone", () => {
+  it("is taken from a device the directory did not know, because it makes that device the owner", async () => {
+    configureOwnerPins(memoryOwnerPins())
+    const relay = aRelay()
+    const owner = await aDevice()
+    pinOwner(NOTEBOOK, owner.did)
+    const code = generateRecoveryCode(NOTEBOOK)
+    const maren = await directoryOn(relay, owner)
+    await foundNotebookWorkspace({ doc: maren.doc, notebookId: NOTEBOOK, device: owner, label: "Maren", recovery: await recoveryKeyOf(code.secret) })
+    await foundNotebookKeys({ doc: maren.doc, notebookId: NOTEBOOK, device: owner })
+    await maren.sync()
+    const notebook = { relay, owner, maren }
+    const ada = await admitAda(notebook)
+
+    const fresh = await aDevice()
+    const theirs = await directoryOn(relay, fresh)
+    await theirs.sync()
+    await recoverWithCode({ doc: theirs.doc, notebookId: NOTEBOOK, device: fresh, code })
+    // As the app's recovery does: the whole directory in one update, which
+    // stands on its own where each step alone would wait on the one before.
+    await theirs.engine.publishState()
+    await theirs.sync()
+    await ada.copy.sync()
+
+    const seen = await readNotebookWorkspace({ doc: ada.copy.doc, notebookId: NOTEBOOK })
+    expect(seen.ownership.owner).toBe(fresh.did)
+  })
+})
+
