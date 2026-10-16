@@ -134,7 +134,7 @@ export { hasNoOperations } from "./note-snapshots"
 export type { NoteEngineOptions } from "./note-relay"
 export type { RelaySettings } from "./note-relay"
 export type { GrantOptions, SharingOptions } from "./sharing"
-export { changeAccess, grantAccess, mayEditNote, withdrawGrants } from "./sharing"
+export { changeAccess, grantAccess, mayEditNote, mayEditTree, mayWrite, withdrawGrants } from "./sharing"
 export type { RememberedEpochs } from "./remembered-epochs"
 export {
   configureRememberedEpochs,

@@ -67,7 +67,7 @@ import { UndoRedoButton } from "@/components/tiptap-ui/undo-redo-button"
 import { CollaborationStatusMenu, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
 import { ReadOnlyNotice, RemovedNotice, WriterNotice } from "@/components/custom-ui/connection/writer-notice"
 import { ShareAccessDialog } from "@/components/custom-ui/sharing/share-access-dialog"
-import { useMayEditNote } from "@/hooks/use-may-edit-note"
+import { useMayEditNote, useMayEditTree } from "@/hooks/use-may-edit-note"
 import { LinkDeviceDialog } from "@/components/custom-ui/device-manager/link-device-dialog"
 import { HistoryButton, NoteHistoryDialog } from "@/components/custom-ui/history/note-history-dialog"
 import { useNoteHistory } from "@/hooks/use-note-history"
@@ -546,9 +546,12 @@ export function SimpleEditor({
   // unread badges and sorting need nothing finer than a few seconds. The
   // trailing touch keeps the recorded time that of the last edit.
   const touchTimerRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // Set once the tree's access is known, below: a write nobody would accept is not made.
+  const treeWritableRef = React.useRef(true)
   const lastTouchRef = React.useRef<{ noteId: string; at: number } | null>(null)
   const touchModifiedAt = React.useCallback(
     (id: string) => {
+      if (!treeWritableRef.current) return
       const now = Date.now()
       const last = lastTouchRef.current
       if (!last || last.noteId !== id || now - last.at >= MODIFIED_AT_EVERY_MS) {
@@ -759,6 +762,12 @@ export function SimpleEditor({
   const editGated = !isSharedView && (fs.sharedWithMembers ?? false)
   const mayEdit = useMayEditNote(editGated ? (notebookId ?? null) : null, noteId ?? null)
   const readOnlyHere = editGated && mayEdit === false
+  // The notes and folders themselves - names, places, which exist - are the
+  // tree's, and a grant on one note does not reach them.
+  const mayEditTreeHere = useMayEditTree(editGated ? (notebookId ?? null) : null)
+  const treeReadOnly = editGated && mayEditTreeHere === false
+  const treeAccessKnown = !editGated || mayEditTreeHere !== null
+  treeWritableRef.current = !treeReadOnly
   const editAccessKnown = !editGated || mayEdit !== null
   const isEditable =
     sharedPermission === "edit" &&
@@ -1015,7 +1024,7 @@ export function SimpleEditor({
     refs.destroy()
   }, [imagesViaRelay, note?.doc, notebookId, noteContentSynced])
 
-  const canCreateNodes = allowFileCreation && Boolean(rootId)
+  const canCreateNodes = allowFileCreation && Boolean(rootId) && treeAccessKnown && !treeReadOnly
 
   const handleTreeCreate = React.useCallback((parentId: NodeId, isFolder: boolean) => {
     if (!canCreateNodes) return null
@@ -1887,6 +1896,11 @@ export function SimpleEditor({
                   disabled={!canCreateNodes}
                 />
               </div>
+              {treeReadOnly && (
+                <p className="side-panel-readonly-hint" role="status">
+                  You can read this notebook but not add, rename, move or delete its notes.
+                </p>
+              )}
               <div className="side-panel-container">
                 <FileTreeHost
                   ref={fileTreeRef}
@@ -2097,7 +2111,8 @@ export function SimpleEditor({
                         placeholder="Untitled"
                         aria-label="Note title"
                         spellCheck={false}
-                        readOnly={!isEditorEditable}
+                        // A title is the note's name in the tree as well as in the note.
+                        readOnly={!isEditorEditable || !canCreateNodes}
                         onChange={(event) => setTitleDraft(event.target.value.replace(/[\r\n]+/g, " "))}
                         onBlur={commitTitle}
                         onKeyDown={(event) => {

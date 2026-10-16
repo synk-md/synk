@@ -328,6 +328,14 @@ body,
   border-bottom: 1px solid var(--tt-toolbar-border-color);
 }
 
+/* Shown to someone who may read the notebook but not change its notes and folders. */
+.side-panel-readonly-hint {
+  margin: 4px 12px 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--tt-color-text-gray);
+}
+
 .side-panel-container {
   display: flex;
   flex-direction: column;

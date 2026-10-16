@@ -24,6 +24,7 @@ import { findOwnerRoot } from "./admission"
 import { authorizationContext, linkedPrincipal, putCapability, putRevocation } from "./capabilities"
 import { resourceIdFor, workspaceIdFor } from "./notebook-workspace"
 import { noteResourceId } from "./note-sync"
+import { treeResourceId } from "./replicas"
 
 export interface SharingOptions {
   doc: Y.Doc
@@ -106,22 +107,33 @@ export async function changeAccess(
   return capability
 }
 
-/**
- * Whether this device may edit a note: under its own grant, or - for a device
- * a member linked - under that member's. What peers check; the editor agrees.
- */
-export async function mayEditNote(options: {
+interface WriteCheck {
   doc: Y.Doc
   notebookId: string
-  noteId: string
   owner: string
   did: string
   now?: number
-}): Promise<boolean> {
+}
+
+/**
+ * Whether this device may write a resource: under its own grant, or - for a
+ * device a member linked - under that member's. What peers check; the
+ * interface agrees.
+ */
+export async function mayWrite(options: WriteCheck & { resource: string }): Promise<boolean> {
   const context = await authorizationContext(options.doc, options.owner, options.now)
   const principal = await linkedPrincipal(options.doc, options.owner, workspaceIdFor(options.notebookId))(options.did)
-  return isAuthorized(
-    { principal, resource: noteResourceId(options.notebookId, options.noteId), ability: "write" },
-    context,
-  )
+  return isAuthorized({ principal, resource: options.resource, ability: "write" }, context)
+}
+
+export function mayEditNote(options: WriteCheck & { noteId: string }): Promise<boolean> {
+  return mayWrite({ ...options, resource: noteResourceId(options.notebookId, options.noteId) })
+}
+
+/**
+ * Whether this device may change the notebook's notes and folders - names,
+ * places, which exist. A grant on one note does not reach them.
+ */
+export function mayEditTree(options: WriteCheck): Promise<boolean> {
+  return mayWrite({ ...options, resource: treeResourceId(options.notebookId) })
 }

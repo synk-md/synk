@@ -11,7 +11,7 @@ import { linkIntoNotebook } from "./linking"
 import { foundNotebookKeys } from "./notebook-keys"
 import { foundNotebookWorkspace, resourceIdFor } from "./notebook-workspace"
 import { noteResourceId } from "./note-sync"
-import { changeAccess, grantAccess, mayEditNote, withdrawGrants } from "./sharing"
+import { changeAccess, grantAccess, mayEditNote, mayEditTree, withdrawGrants } from "./sharing"
 
 const NOTEBOOK = "travel"
 const YEAR = 365 * 24 * 60 * 60 * 1000
@@ -37,9 +37,10 @@ async function aNotebook() {
   const base = { doc, notebookId: NOTEBOOK, owner: owner.did, device: owner }
   const may = (device: DeviceIdentity, noteId: string) =>
     mayEditNote({ doc, notebookId: NOTEBOOK, noteId, owner: owner.did, did: device.did })
+  const mayTree = (device: DeviceIdentity) => mayEditTree({ doc, notebookId: NOTEBOOK, owner: owner.did, did: device.did })
   const grantsTo = async (did: string, resource: string) =>
     (await readCapabilities(doc)).filter((capability) => capability.payload.aud === did && capability.payload.rsc === resource)
-  return { doc, owner, ada, base, may, grantsTo }
+  return { doc, owner, ada, base, may, mayTree, grantsTo }
 }
 
 describe("who may edit a note", () => {
@@ -101,3 +102,36 @@ describe("who may edit a note", () => {
     ).rejects.toThrow(/owner/)
   })
 })
+
+/** Names, places and which notes exist are the notebook's, not any one note's. */
+describe("who may change the notes and folders", () => {
+  it("is the owner and whoever may edit the whole notebook", async () => {
+    const notebook = await aNotebook()
+    expect(await notebook.mayTree(notebook.owner)).toBe(true)
+    expect(await notebook.mayTree(notebook.ada)).toBe(false)
+
+    const whole = resourceIdFor(NOTEBOOK)
+    await changeAccess({ ...notebook.base, audience: notebook.ada.did, resource: whole, ability: "write", expiresAt: Date.now() + YEAR, replacing: await notebook.grantsTo(notebook.ada.did, whole) })
+    expect(await notebook.mayTree(notebook.ada)).toBe(true)
+  })
+
+  /** Editing one note is not renaming, moving or deleting it. */
+  it("is not reached by a grant on one note", async () => {
+    const notebook = await aNotebook()
+    await grantAccess({ ...notebook.base, audience: notebook.ada.did, resource: noteResourceId(NOTEBOOK, "kyoto"), ability: "write", expiresAt: Date.now() + YEAR })
+
+    expect(await notebook.may(notebook.ada, "kyoto")).toBe(true)
+    expect(await notebook.mayTree(notebook.ada)).toBe(false)
+  })
+
+  it("holds a member's linked phone to the member's", async () => {
+    const notebook = await aNotebook()
+    const phone = await aDevice()
+    await linkIntoNotebook({ doc: notebook.doc, notebookId: NOTEBOOK, parent: notebook.ada, record: phone.record })
+    const whole = resourceIdFor(NOTEBOOK)
+    await changeAccess({ ...notebook.base, audience: notebook.ada.did, resource: whole, ability: "write", expiresAt: Date.now() + YEAR, replacing: await notebook.grantsTo(notebook.ada.did, whole) })
+
+    expect(await notebook.mayTree(phone)).toBe(true)
+  })
+})
+

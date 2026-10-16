@@ -6,7 +6,7 @@ import { admit, askToJoin, createNotebook, editor, enter, invite, openShare, per
  * What the owner sets is what the other person's editor allows: read-only for
  * the notebook, and then editing for one note.
  */
-test("the owner makes someone read-only, then lets them edit one note", async ({ browser }) => {
+test("the owner makes someone read-only, then lets them edit one note but not rename it", async ({ browser }) => {
   const maren = await person(browser, "Maren")
   const ada = await person(browser, "Ada")
 
@@ -25,6 +25,10 @@ test("the owner makes someone read-only, then lets them edit one note", async ({
 
   await expect(ada.page.getByText("You can read this note, not edit it")).toBeVisible({ timeout: 30_000 })
   await expect(editor(ada.page)).toHaveAttribute("contenteditable", "false")
+  // Nor its notes and folders: adding, renaming, moving and deleting are the notebook's.
+  const treeHint = ada.page.getByText("You can read this notebook but not add, rename, move or delete its notes.")
+  await expect(treeHint).toBeVisible()
+  await expect(ada.page.getByLabel("Note title")).toHaveAttribute("readonly", "")
 
   await access.getByRole("tab", { name: "This note" }).click()
   await access.getByRole("button", { name: "Give access to this note" }).click()
@@ -34,6 +38,9 @@ test("the owner makes someone read-only, then lets them edit one note", async ({
   await expect(share).toBeHidden()
 
   await expect(ada.page.getByText("You can read this note, not edit it")).toBeHidden({ timeout: 30_000 })
+  // Editing one note is not renaming it: its title is its name in the notebook.
+  await expect(treeHint).toBeVisible()
+  await expect(ada.page.getByLabel("Note title")).toHaveAttribute("readonly", "")
   await type(ada, " Ada, editing this note again.")
   await expect(editor(maren.page)).toContainText("Ada, editing this note again.")
 })
