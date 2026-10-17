@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest"
 
-import { BlobStore, handleBlobRequest, type BlobQuota } from "@/lib/relay"
+import { BlobStore, handleBlobRequest, MAX_RENEW, type BlobQuota } from "@/lib/relay"
 
-import { fetchImage, httpBlobClient, imageChannel, openImage, publishImage, sealImage } from "./images"
+import { fetchImage, httpBlobClient, imageChannel, openImage, publishImage, renewImages, sealImage } from "./images"
 
 /** The relay's own handler behind `fetch`, so client and server are tested together. */
 function relayFetch(store: BlobStore): typeof fetch {
   return ((input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(input instanceof Request ? input.url : input)
-    const body = init?.body ? new Uint8Array(init.body as Uint8Array) : undefined
+    const body =
+      typeof init?.body === "string"
+        ? new TextEncoder().encode(init.body)
+        : init?.body
+          ? new Uint8Array(init.body as Uint8Array)
+          : undefined
     const response = handleBlobRequest(store, {
       method: init?.method ?? "GET",
       url: url.pathname + url.search,
@@ -26,8 +31,9 @@ function relayFetch(store: BlobStore): typeof fetch {
 const decoded = (bytes: Uint8Array | undefined) => (bytes ? new TextDecoder().decode(bytes) : bytes)
 
 function aRelay(quota?: Partial<BlobQuota>) {
-  const store = new BlobStore(quota ? { ...new BlobStore().quota, ...quota } : undefined)
-  return { store, client: httpBlobClient("ws://relay.test:4455", relayFetch(store)) }
+  const clock = { now: 0 }
+  const store = new BlobStore(quota ? { ...new BlobStore().quota, ...quota } : undefined, () => clock.now)
+  return { store, clock, client: httpBlobClient("ws://relay.test:4455", relayFetch(store)) }
 }
 
 async function anImage(text = "a picture of Kyoto") {
@@ -153,5 +159,74 @@ describe("the relay's blob endpoints", () => {
     expect(call(store, "PUT", `/blobs/${locator}`, new Uint8Array([2]))!.status).toBe(201)
     expect(call(store, "PUT", `/blobs/${locator}`, new Uint8Array([3]))!.status).toBe(507)
     expect(call(store, "HEAD", `/blobs/${locator}`)!.headers["x-synk-candidates"]).toBe("2")
+  })
+})
+
+describe("images nobody renews", () => {
+  const DAY = 24 * 60 * 60 * 1000
+  const TTL = 90 * DAY
+
+  it("age out at the relay, while one a member renews stays", async () => {
+    const { store, clock, client } = aRelay()
+    const kept = await anImage("a picture of Kyoto")
+    const dropped = await anImage("a picture of Osaka")
+    await publishImage(client, "travel", kept.assetId, kept.bytes)
+    await publishImage(client, "travel", dropped.assetId, dropped.bytes)
+
+    clock.now = 60 * DAY
+    expect(await renewImages(client, "travel", [kept.assetId])).toEqual([])
+    clock.now = 120 * DAY
+    expect(store.sweep(TTL)).toBe(1)
+
+    expect(decoded(await fetchImage(client, "travel", kept.assetId))).toBe(decoded(kept.bytes))
+    expect(await fetchImage(client, "travel", dropped.assetId)).toBeUndefined()
+    expect(store.bytesHeld).toBe((await sealImage(kept.bytes, await imageChannel("travel", kept.assetId))).length)
+  })
+
+  it("stay while members keep fetching them", async () => {
+    const { store, clock, client } = aRelay()
+    const { bytes, assetId } = await anImage()
+    await publishImage(client, "travel", assetId, bytes)
+
+    clock.now = 60 * DAY
+    await fetchImage(client, "travel", assetId)
+    clock.now = 120 * DAY
+    expect(store.sweep(TTL)).toBe(0)
+  })
+
+  it("are named back when lost, so a device holding them can put them back", async () => {
+    const { store, clock, client } = aRelay()
+    const { bytes, assetId } = await anImage()
+    await publishImage(client, "travel", assetId, bytes)
+    clock.now = 120 * DAY
+    store.sweep(TTL)
+
+    expect(await renewImages(client, "travel", [assetId])).toEqual([assetId])
+    expect(await publishImage(client, "travel", assetId, bytes)).toBe("stored")
+    expect(await renewImages(client, "travel", [assetId])).toEqual([])
+  })
+
+  it("cannot be deleted by anyone, a removed member included", () => {
+    const store = new BlobStore()
+    const locator = "A".repeat(43)
+    handleBlobRequest(store, { method: "PUT", url: `/blobs/${locator}`, body: new Uint8Array([1]) })
+    expect(handleBlobRequest(store, { method: "DELETE", url: `/blobs/${locator}` })!.status).toBe(405)
+    expect(store.count(locator)).toBe(1)
+  })
+
+  it("refuses a renewal that is not a list of locators, or too long a one", () => {
+    const store = new BlobStore()
+    const renew = (body: unknown, method = "POST") =>
+      handleBlobRequest(store, {
+        method,
+        url: "/blobs/renew",
+        body: new TextEncoder().encode(typeof body === "string" ? body : JSON.stringify(body)),
+      })!.status
+    expect(renew({ locators: ["A".repeat(43)] })).toBe(200)
+    expect(renew({ locators: ["A".repeat(43)] }, "GET")).toBe(405)
+    expect(renew("not json")).toBe(400)
+    expect(renew({ locators: "A".repeat(43) })).toBe(400)
+    expect(renew({ locators: ["../etc"] })).toBe(400)
+    expect(renew({ locators: Array.from({ length: MAX_RENEW + 1 }, () => "A".repeat(43)) })).toBe(400)
   })
 })

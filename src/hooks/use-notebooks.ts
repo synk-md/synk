@@ -16,7 +16,7 @@ import {
 import { collectLeaves, type TreeNode, type Notebook, type NotebooksState } from "@/components/custom-ui/file-browser/tree"
 import { seedWelcomeNote } from "@/lib/seed-welcome-note"
 import { forgetLastOpenedNoteId, setLastOpenedNoteId } from "@/lib/notebook-settings"
-import { deleteImageAsset } from "@/lib/image-assets"
+import { imagesShownBy, releaseImages, startImageUpkeep } from "@/lib/workspace/image-upkeep"
 import { importNotebookArchive } from "@/lib/notebook-import"
 import { claimNewNotebook } from "@/lib/workspace/claim"
 
@@ -197,6 +197,8 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
     })
 
     const { noteIds, assetIds } = collectLeaves(target.root)
+    // Read before the notes go, so images no other notebook uses go with them.
+    const shown = await imagesShownBy(id, noteIds).catch(() => [])
     evictNotebookIndexDoc(id)
     forgetLastOpenedNoteId(id)
 
@@ -206,16 +208,17 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
           console.error("Error deleting note from IndexedDB:", err)
         )
       ),
-      ...assetIds.map(assetId =>
-        deleteImageAsset(assetId).catch(err =>
-          console.error("Error deleting image asset:", err)
-        )
-      ),
       deleteNotebookMetaFromIndexedDB(id).catch(err =>
         console.error("Error deleting notebook meta from IndexedDB:", err)
       ),
     ])
+    await releaseImages([...assetIds, ...shown]).catch(err =>
+      console.error("Error deleting unused images:", err)
+    )
   }, [state.notebooks, persist])
+
+  // Images nobody uses any more, once a day.
+  React.useEffect(() => startImageUpkeep(), [])
 
   const currentNotebook = state.notebooks.find(n => n.id === state.currentId) || null
 

@@ -18,6 +18,11 @@ function collectAssetIds(fragment: Y.XmlFragment): Set<string> {
   return assetIds
 }
 
+/** Every image a note shows. */
+export function imageIdsIn(doc: Y.Doc, field: string = COLLABORATION_FIELD): string[] {
+  return [...collectAssetIds(doc.getXmlFragment(field))]
+}
+
 /**
  * Tracks which image assetIds a note's Y.Doc embeds, so P2P asset requests
  * can be scoped to "is this actually part of the note" without re-walking

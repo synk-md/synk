@@ -133,6 +133,44 @@ export async function ensureNoteLinks(notebookId: string, noteIds: string[], sig
   try { await task } finally { if (linkBackfills.get(notebookId) === task) linkBackfills.delete(notebookId) }
 }
 
+/**
+ * Every notebook tree and note this browser holds, by database - including
+ * notes no tree lists any more. Null where the browser cannot list them.
+ */
+export async function storedDocuments(): Promise<{
+  notebooks: string[]
+  notes: { notebookId: string; noteId: string }[]
+} | null> {
+  if (typeof indexedDB.databases !== "function") return null
+  const notebooks = []
+  const notes = []
+  for (const { name } of await indexedDB.databases()) {
+    const note = name ? /^nb:(.+):n:([^:]+)$/.exec(name) : null
+    const index = name ? /^nb:(.+):index$/.exec(name) : null
+    if (note) notes.push({ notebookId: note[1], noteId: note[2] })
+    else if (index) notebooks.push(index[1])
+  }
+  return { notebooks, notes }
+}
+
+/** Read a note as stored: through the open copy if there is one, else one opened and closed again. */
+export async function readStoredNote<T>(notebookId: string, noteId: string, read: (doc: Y.Doc) => T): Promise<T> {
+  const cached = docs.get(keyFor(notebookId, noteId))
+  if (cached) {
+    await cached.idb.whenSynced
+    return read(cached.doc)
+  }
+  const doc = new Y.Doc()
+  const idb = new IndexeddbPersistence(keyFor(notebookId, noteId), doc)
+  try {
+    await idb.whenSynced
+    return read(doc)
+  } finally {
+    await idb.destroy()
+    doc.destroy()
+  }
+}
+
 // Waits for everything y-indexeddb has already queued for one doc to actually
 // hit disk. IndexedDB runs transactions with overlapping scope in the order
 // they were created, so a fresh transaction on the `updates` store can only

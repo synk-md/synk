@@ -1,7 +1,7 @@
 // use-file-commands.ts
 import * as React from "react"
 import * as Y from "yjs"
-import { collectLeaves, ensureAssetNode, findNode, isNoteNode, setNodeLinkAccess as setTreeNodeLinkAccess, type NodeId, type TreeNode } from "./tree"
+import { assetsFolderIdFor, collectLeaves, ensureAssetNode, findNode, isNoteNode, setNodeLinkAccess as setTreeNodeLinkAccess, type NodeId, type TreeNode } from "./tree"
 import { deleteNoteFromIndexedDB, newNoteId as generateNodeId } from "@/lib/yjs-utils"
 import {
   setNoteCreatedAt,
@@ -10,7 +10,7 @@ import {
   setNoteLinkAccessInherited,
   type LinkAccess,
 } from "@/lib/note-meta"
-import { deleteImageAsset } from "@/lib/image-assets"
+import { imagesShownBy, releaseImages } from "@/lib/workspace/image-upkeep"
 
 type FSApi = {
   tree: TreeNode
@@ -142,17 +142,20 @@ export function useFileCommands(fs: FSApi, opts: UseFileCommandsOptions): FileCo
     const notebookId = getNotebookId()
     const { noteIds, assetIds } = collectLeaves(node)
 
-    for (const noteId of noteIds) {
-      void deleteNoteFromIndexedDB(notebookId, noteId).catch((err) => {
-        console.error("Error deleting note from IndexedDB:", err)
-      })
-    }
-
-    for (const assetId of assetIds) {
-      void deleteImageAsset(assetId).catch((err) => {
-        console.error("Error deleting image asset:", err)
-      })
-    }
+    void (async () => {
+      // What the notes showed, read before they go, so images nothing else uses go with them.
+      const shown = await imagesShownBy(notebookId, noteIds)
+      await Promise.all(
+        noteIds.map((noteId) =>
+          deleteNoteFromIndexedDB(notebookId, noteId).catch((err) => {
+            console.error("Error deleting note from IndexedDB:", err)
+          }),
+        ),
+      )
+      await releaseImages([...assetIds, ...shown], notebookId)
+    })().catch((err) => {
+      console.error("Error deleting unused images:", err)
+    })
 
 }, [tree, remove, collectLeaves, getNotebookId])
 
@@ -198,7 +201,7 @@ export function useFileCommands(fs: FSApi, opts: UseFileCommandsOptions): FileCo
     if (!getNotebookId) return
     if (!fallbackParentId) return
     const notebookId = getNotebookId()
-    const assetsFolderId = `assets_${notebookId}`
+    const assetsFolderId = assetsFolderIdFor(notebookId)
     const now = Date.now()
 
     setTree((t) => ensureAssetNode(t, fallbackParentId, assetsFolderId, {
@@ -206,6 +209,7 @@ export function useFileCommands(fs: FSApi, opts: UseFileCommandsOptions): FileCo
       name: filename,
       isFolder: false,
       assetId,
+      listed: true,
       createdAt: now,
       modifiedAt: now,
     }))

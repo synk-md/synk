@@ -14,6 +14,7 @@
  */
 
 import { aeadDecrypt, aeadEncrypt, deriveKey, toBase64Url, utf8, type Bytes } from "@/lib/crypto"
+import { MAX_RENEW } from "@/lib/relay"
 
 export interface ImageChannel {
   /** Where the relay files it. Neither the notebook nor the hash can be read off it. */
@@ -61,6 +62,8 @@ export interface BlobClient {
   /** False when the relay refused it. */
   put(locator: string, bytes: Bytes): Promise<boolean>
   get(locator: string, candidate: number): Promise<{ bytes: Bytes; count: number } | undefined>
+  /** Keeps these from ageing out. The ones the relay does not hold, or undefined when it refused. */
+  renew(locators: readonly string[]): Promise<string[] | undefined>
 }
 
 /** The relay's blob endpoints, from its socket address. */
@@ -86,7 +89,42 @@ export function httpBlobClient(relayUrl: string, fetchImpl: typeof fetch = fetch
       if (!response.ok) return undefined
       return { bytes: new Uint8Array(await response.arrayBuffer()), count }
     },
+    renew: async (locators) => {
+      const response = await fetchImpl(`${base}/blobs/renew`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ locators }),
+      })
+      if (!response.ok) return undefined
+      const { missing } = (await response.json()) as { missing?: unknown }
+      return Array.isArray(missing) ? missing.filter((locator): locator is string => typeof locator === "string") : undefined
+    },
   }
+}
+
+/**
+ * Tell the relay these images are still shown, so it keeps them. Returns the
+ * ones it no longer holds - lost or aged out - for a device holding them to
+ * put back.
+ */
+export async function renewImages(
+  client: BlobClient,
+  notebookId: string,
+  assetIds: readonly string[],
+): Promise<string[]> {
+  const byLocator = new Map<string, string>()
+  for (const assetId of assetIds) byLocator.set((await imageChannel(notebookId, assetId)).locator, assetId)
+  const locators = [...byLocator.keys()]
+  const missing: string[] = []
+  for (let start = 0; start < locators.length; start += MAX_RENEW) {
+    const absent = await client.renew(locators.slice(start, start + MAX_RENEW))
+    if (!absent) throw new Error("The relay refused to renew images.")
+    for (const locator of absent) {
+      const assetId = byLocator.get(locator)
+      if (assetId) missing.push(assetId)
+    }
+  }
+  return missing
 }
 
 /** Put an image this device holds where members can reach it. Skips one already there. */

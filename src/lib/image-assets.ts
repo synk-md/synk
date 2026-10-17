@@ -1,6 +1,11 @@
 const IMAGE_ASSET_DB = "synk-image-assets"
 const IMAGE_ASSET_DB_VERSION = 1
 const IMAGE_ASSET_STORE = "assets"
+// When each stored image was first seen unused, so it is only deleted once it
+// has stayed that way for a while. A database of its own, so adding it did not
+// mean upgrading one an open tab holds.
+const UNUSED_DB = "synk-image-unused"
+const UNUSED_STORE = "unused"
 
 export type ImageAssetReference = {
   assetId: string
@@ -15,6 +20,22 @@ export type StoredImageAsset = {
 }
 
 let databasePromise: Promise<IDBDatabase> | null = null
+let unusedPromise: Promise<IDBDatabase> | null = null
+
+function openUnusedDatabase(): Promise<IDBDatabase> {
+  unusedPromise ??= new Promise((resolve, reject) => {
+    const request = indexedDB.open(UNUSED_DB, 1)
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore(UNUSED_STORE, { keyPath: "id" })
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => {
+      unusedPromise = null
+      reject(request.error ?? new Error("Failed to open the unused image database"))
+    }
+  })
+  return unusedPromise
+}
 
 function openImageAssetDatabase(): Promise<IDBDatabase> {
   if (databasePromise) return databasePromise
@@ -102,15 +123,15 @@ async function writeImageAsset(asset: StoredImageAsset): Promise<void> {
 export async function storeImageAsset(blob: Blob): Promise<ImageAssetReference> {
   const assetId = await createImageAssetId(blob)
 
-  if (!(await hasImageAsset(assetId))) {
-    await writeImageAsset({
-      id: assetId,
-      blob,
-      mimeType: blob.type || "application/octet-stream",
-      size: blob.size,
-      createdAt: Date.now(),
-    })
-  }
+  // Written even when already held: the fresh time tells a cleanup running
+  // now that it is in use again.
+  await writeImageAsset({
+    id: assetId,
+    blob,
+    mimeType: blob.type || "application/octet-stream",
+    size: blob.size,
+    createdAt: Date.now(),
+  })
 
   return { assetId }
 }
@@ -149,6 +170,62 @@ export async function deleteImageAsset(assetId: string): Promise<void> {
     }
     transaction.onabort = () => {
       reject(transaction.error ?? new Error(`Deleting image asset ${assetId} was aborted`))
+    }
+  })
+}
+
+/** Every stored image's id and when it was stored, without reading the images. */
+export async function listImageAssets(): Promise<{ id: string; createdAt: number }[]> {
+  const database = await openImageAssetDatabase()
+
+  return await new Promise((resolve, reject) => {
+    const listed: { id: string; createdAt: number }[] = []
+    const transaction = database.transaction(IMAGE_ASSET_STORE, "readonly")
+    const request = transaction.objectStore(IMAGE_ASSET_STORE).openCursor()
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) return resolve(listed)
+      const asset = cursor.value as StoredImageAsset
+      listed.push({ id: asset.id, createdAt: asset.createdAt })
+      cursor.continue()
+    }
+    request.onerror = () => {
+      reject(request.error ?? new Error("Failed to list image assets"))
+    }
+  })
+}
+
+/** When each image seen unused was first seen so. */
+export async function readUnusedSince(): Promise<Map<string, number>> {
+  const database = await openUnusedDatabase()
+
+  return await new Promise((resolve, reject) => {
+    const transaction = database.transaction(UNUSED_STORE, "readonly")
+    const request = transaction.objectStore(UNUSED_STORE).getAll()
+    request.onsuccess = () => {
+      const records = request.result as { id: string; since: number }[]
+      resolve(new Map(records.map((record) => [record.id, record.since])))
+    }
+    request.onerror = () => {
+      reject(request.error ?? new Error("Failed to read unused image marks"))
+    }
+  })
+}
+
+/** Records images first seen unused at `since`, and forgets the ones in use again. */
+export async function writeUnusedSince(mark: readonly string[], since: number, unmark: readonly string[]): Promise<void> {
+  if (mark.length === 0 && unmark.length === 0) return
+  const database = await openUnusedDatabase()
+
+  await new Promise<void>((resolve, reject) => {
+    const transaction = database.transaction(UNUSED_STORE, "readwrite")
+    const store = transaction.objectStore(UNUSED_STORE)
+    for (const id of mark) store.put({ id, since })
+    for (const id of unmark) store.delete(id)
+
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => {
+      reject(transaction.error ?? new Error("Failed to record unused images"))
     }
   })
 }

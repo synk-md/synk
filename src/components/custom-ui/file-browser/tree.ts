@@ -19,6 +19,9 @@ export type TreeNode = {
   // Present on leaf nodes that represent an uploaded image rather than a note,
   // pointing at the content-hash key used in the image asset store.
   assetId?: string
+  // Filed in the Assets folder because a note shows the image, not put there
+  // by hand: it goes once no note does.
+  listed?: boolean
   linkAccess?: LinkAccess
   isShared?: boolean
   createdAt?: number
@@ -344,6 +347,10 @@ function isGeneratedAssetName(name: string, assetId: string): boolean {
   return name === shortHash || name === `Image ${shortHash}`
 }
 
+export function assetsFolderIdFor(notebookId: string): string {
+  return `assets_${notebookId}`
+}
+
 // Finds the existing tree entry for `newAssetNode.assetId` (same image
 // already uploaded elsewhere in this notebook), or inserts it into the
 // notebook's Assets folder, creating that folder under `rootId` if needed.
@@ -400,6 +407,7 @@ export type FlatNodeRecord = {
   expanded?: boolean
   isUserFolder?: boolean
   assetId?: string
+  listed?: boolean
   linkAccess?: LinkAccess
   isShared?: boolean
   createdAt?: number
@@ -418,6 +426,7 @@ export function flattenTree(root: TreeNode): Map<string, FlatNodeRecord> {
     if (node.expanded !== undefined) record.expanded = node.expanded
     if (node.isUserFolder !== undefined) record.isUserFolder = node.isUserFolder
     if (node.assetId !== undefined) record.assetId = node.assetId
+    if (node.listed !== undefined) record.listed = node.listed
     if (node.linkAccess !== undefined) record.linkAccess = node.linkAccess
     if (node.isShared !== undefined) record.isShared = node.isShared
     if (node.createdAt !== undefined) record.createdAt = node.createdAt
@@ -460,6 +469,7 @@ export function buildTreeFromFlat(flat: Map<string, FlatNodeRecord>): TreeNode |
     if (record.expanded !== undefined) node.expanded = record.expanded
     if (record.isUserFolder !== undefined) node.isUserFolder = record.isUserFolder
     if (record.assetId !== undefined) node.assetId = record.assetId
+    if (record.listed !== undefined) node.listed = record.listed
     if (record.linkAccess !== undefined) node.linkAccess = record.linkAccess
     if (record.isShared !== undefined) node.isShared = record.isShared
     if (record.createdAt !== undefined) node.createdAt = record.createdAt
@@ -484,6 +494,7 @@ function flatRecordsEqual(a: FlatNodeRecord, b: FlatNodeRecord): boolean {
     a.expanded === b.expanded &&
     a.isUserFolder === b.isUserFolder &&
     a.assetId === b.assetId &&
+    a.listed === b.listed &&
     a.linkAccess === b.linkAccess &&
     a.isShared === b.isShared &&
     a.createdAt === b.createdAt &&

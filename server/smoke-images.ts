@@ -6,7 +6,7 @@
  * the relay holds nothing readable.
  */
 
-import { fetchImage, httpBlobClient, imageChannel, publishImage } from "../src/lib/workspace/index.ts"
+import { fetchImage, httpBlobClient, imageChannel, publishImage, renewImages } from "../src/lib/workspace/index.ts"
 
 const URL = process.env.RELAY_URL ?? "ws://localhost:4455"
 const NOTEBOOK = `images-${String(Date.now())}`
@@ -43,6 +43,12 @@ console.log(`readable at the relay: ${String(readable)}`)
 const elsewhere = await fetchImage(relay, `${NOTEBOOK}-other`, assetId)
 console.log(`reachable through another notebook: ${String(!!elsewhere)}`)
 
-const ok = outcome === "stored" && intact && !readable && !elsewhere
+// Renewed, it stays; one the relay never had is named back, for whoever holds it to put back.
+const unknown = `sha256:${"0".repeat(64)}`
+const missing = await renewImages(relay, NOTEBOOK, [assetId, unknown])
+const renewed = missing.length === 1 && missing[0] === unknown
+console.log(`renewed, and told what it lacks: ${String(renewed)}`)
+
+const ok = outcome === "stored" && intact && !readable && !elsewhere && renewed
 console.log(ok ? "OK" : "FAILED")
 process.exit(ok ? 0 : 1)

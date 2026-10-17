@@ -182,7 +182,7 @@ export type {
 export { openSyncSession } from "./sync-session"
 
 export type { BlobClient, ImageChannel } from "./images"
-export { fetchImage, httpBlobClient, imageChannel, openImage, publishImage, sealImage } from "./images"
+export { fetchImage, httpBlobClient, imageChannel, openImage, publishImage, renewImages, sealImage } from "./images"
 
 export type { PresenceRoom } from "./presence"
 export { indexPresenceScope, notePresenceScope, presenceRoom } from "./presence"
