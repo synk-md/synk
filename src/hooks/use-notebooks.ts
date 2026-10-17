@@ -19,6 +19,7 @@ import { forgetLastOpenedNoteId, setLastOpenedNoteId } from "@/lib/notebook-sett
 import { imagesShownBy, releaseImages, startImageUpkeep } from "@/lib/workspace/image-upkeep"
 import { importNotebookArchive } from "@/lib/notebook-import"
 import { claimNewNotebook } from "@/lib/workspace/claim"
+import { useDeviceFollowing } from "@/hooks/use-device-following"
 
 const LS_KEY = "notebooks:v1"
 
@@ -65,7 +66,8 @@ export type NotebooksCtx = {
   currentId: string | null
   createNotebook: (name: string) => Promise<CreateNotebookResult>
   importNotebook: (file: File) => Promise<Notebook>
-  adoptNotebook: (id: string, root: TreeNode) => void
+  /** Adds a notebook this device was given. Opens it unless told not to. */
+  adoptNotebook: (id: string, root: TreeNode, options?: { open?: boolean }) => void
   setCurrent: (id: string | null) => void,
   updateNotebookRoot: (id: string, root: TreeNode) => void
   renameNotebook: (id: string, name: string) => void
@@ -147,12 +149,14 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
   // taken as it arrived rather than seeded, since the owner's is the real one.
   // Only the local display name is de-duplicated; renaming `root` would write
   // that rename into the shared tree for everybody.
-  const adoptNotebook = React.useCallback((id: string, root: TreeNode) => {
+  const adoptNotebook = React.useCallback((id: string, root: TreeNode, options?: { open?: boolean }) => {
+    const open = options?.open ?? true
     persist(s => {
-      if (s.notebooks.some(nb => nb.id === id)) return { ...s, currentId: id }
+      const currentId = open ? id : (s.currentId ?? id)
+      if (s.notebooks.some(nb => nb.id === id)) return { ...s, currentId }
       const name = uniqueName(s.notebooks, root.name)
       const nb: Notebook = { id, name, root, createdAt: Date.now() }
-      return { notebooks: [nb, ...s.notebooks], currentId: id }
+      return { notebooks: [nb, ...s.notebooks], currentId }
     })
   }, [persist])
 
@@ -219,6 +223,9 @@ export function NotebooksProvider({ children }: { children: React.ReactNode }) {
 
   // Images nobody uses any more, once a day.
   React.useEffect(() => startImageUpkeep(), [])
+
+  // This person's other devices, into what this one creates or joins.
+  useDeviceFollowing(state.notebooks, adoptNotebook)
 
   const currentNotebook = state.notebooks.find(n => n.id === state.currentId) || null
 

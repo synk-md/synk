@@ -16,6 +16,15 @@ import type { SyncEngine, Transport } from "@/lib/sync"
 import { createSnapshot } from "@/lib/snapshots"
 import { createNotebookIndexDoc, getOrCreateYDoc, readNotebookIndexTree, unsentFlag } from "@/lib/yjs-utils"
 
+import {
+  announcementSlot,
+  hasAnnouncement,
+  inboxChannel,
+  openAnnouncements,
+  putAnnouncement,
+  signAnnouncement,
+  type Announcement,
+} from "./announcements"
 import { coverNotes } from "./cover-notes"
 import { linkIntoNotebook } from "./linking"
 import { rotateAway, unlinkDevice } from "./unlinking"
@@ -24,6 +33,7 @@ import { hasNoOperations } from "./note-snapshots"
 import { createNoteSyncEngine, noteResourceId } from "./note-sync"
 import { readNotebookWorkspace } from "./notebook-workspace"
 import { claimOwnershipAtRelay, liveKeys, relayConnection, relayWatch } from "./note-relay"
+import { ownDevicesIn } from "./own-devices"
 import { pinOwner } from "./owner-pins"
 import type { RecoveryCode } from "./recovery-code"
 import {
@@ -206,6 +216,23 @@ export interface LinkEverywhereOptions {
   onProgress?: (done: number, total: number, current: PairedNotebook) => void
 }
 
+/** Link a device into one notebook and put everything it needs at the relay. Returns the owner. */
+async function linkAndPublish(notebookId: string, device: DeviceIdentity, record: DeviceRecord): Promise<string> {
+  const handle = createNotebookIndexDoc(notebookId)
+  await handle.idb.whenSynced
+  await linkIntoNotebook({ doc: handle.doc, notebookId, parent: device, record })
+  const owner = await ownerOf(notebookId, device)
+  const keyring = owner ? await readableKeys(notebookId, device, owner) : null
+  if (!owner || !keyring) throw new Error("this device cannot open the notebook's keys")
+
+  if (!(await syncDirectory(notebookId, device))) throw new Error("could not reach the relay")
+  await syncTree(notebookId, device, owner, keyring)
+  await coverNotes({ notebookId, device, owner, recipient: record.did, epoch: keyring.currentEpoch })
+  // As the owner, the new device's anchors now count at the relay too.
+  await claimOwnershipAtRelay({ doc: handle.doc, notebookId, device })
+  return owner
+}
+
 /**
  * Link the new device into each notebook, then put everything it needs at the
  * relay: the directory with its link and keys, the tree, and a baseline of
@@ -219,24 +246,7 @@ export async function linkEverywhere(options: LinkEverywhereOptions) {
   for (const notebook of options.notebooks) {
     options.onProgress?.(done, options.notebooks.length, notebook)
     try {
-      const handle = createNotebookIndexDoc(notebook.id)
-      await handle.idb.whenSynced
-      await linkIntoNotebook({ doc: handle.doc, notebookId: notebook.id, parent: options.device, record: options.record })
-      const owner = await ownerOf(notebook.id, options.device)
-      const keyring = owner ? await readableKeys(notebook.id, options.device, owner) : null
-      if (!owner || !keyring) throw new Error("this device cannot open the notebook's keys")
-
-      if (!(await syncDirectory(notebook.id, options.device))) throw new Error("could not reach the relay")
-      await syncTree(notebook.id, options.device, owner, keyring)
-      await coverNotes({
-        notebookId: notebook.id,
-        device: options.device,
-        owner,
-        recipient: options.record.did,
-        epoch: keyring.currentEpoch,
-      })
-      // As the owner, the new device's anchors now count at the relay too.
-      await claimOwnershipAtRelay({ doc: handle.doc, notebookId: notebook.id, device: options.device })
+      const owner = await linkAndPublish(notebook.id, options.device, options.record)
       linked.push({ ...notebook, owner })
     } catch (error) {
       skipped.push({ ...notebook, reason: error instanceof Error ? error.message : "could not be linked" })
@@ -498,4 +508,191 @@ export async function acceptOwnershipEverywhere(options: { device: DeviceIdentit
     }
   }
   return { accepted, failed }
+}
+
+/** This device's own other devices, across the notebooks it holds. */
+export async function ownDevices(device: DeviceIdentity, notebookIds: readonly string[]): Promise<Map<string, DeviceRecord>> {
+  const notebooks = []
+  for (const notebookId of notebookIds) {
+    const handle = createNotebookIndexDoc(notebookId)
+    await handle.idb.whenSynced
+    notebooks.push({ doc: handle.doc, notebookId })
+  }
+  return ownDevicesIn(device, notebooks)
+}
+
+/** Post what a device has been linked into to its inbox, where not already there. Returns how many were added. */
+async function announceTo(
+  device: DeviceIdentity,
+  record: DeviceRecord,
+  notebooks: readonly (PairedNotebook & { owner: string })[],
+): Promise<number> {
+  const channel = await inboxChannel(record.sealingDid)
+  const transport = connection().transportFor(channel.resourceId)
+  const doc = new Y.Doc()
+  let added = 0
+  let filed = false
+  try {
+    await once({
+      engine: createDirectoryReplica({ doc, channel, device, transport }),
+      doc,
+      transport,
+      resourceId: channel.resourceId,
+      // Once caught up, so a slot already there is seen and left alone.
+      done: async () => {
+        if (filed) return true
+        filed = true
+        for (const notebook of notebooks) {
+          const slot = await announcementSlot(device.signingKey, notebook.id, record.did)
+          if (hasAnnouncement(doc, slot)) continue
+          const announcement = await signAnnouncement(device.signingKey, {
+            notebookId: notebook.id,
+            name: notebook.name,
+            owner: notebook.owner,
+            by: device.did,
+            to: record.did,
+          })
+          await putAnnouncement(doc, slot, record.sealingDid, announcement)
+          added += 1
+        }
+        return true
+      },
+    })
+  } finally {
+    doc.destroy()
+  }
+  return added
+}
+
+export interface FollowResult {
+  linked: { notebookId: string; did: string }[]
+  failed: { notebookId: string; did: string; reason: string }[]
+  announced: number
+}
+
+let following: Promise<unknown> = Promise.resolve()
+
+/**
+ * Bring this person's other devices into every notebook this device is in on
+ * its own approval - one created or joined since they were linked - and tell
+ * each where to find them. A notebook this device is only linked into is the
+ * device that linked it's to share.
+ */
+export function followEverywhere(options: { device: DeviceIdentity; notebooks: readonly PairedNotebook[] }): Promise<FollowResult> {
+  const run = following.then(async () => {
+    const result: FollowResult = { linked: [], failed: [], announced: 0 }
+    if (!relayConnection()) return result
+    const own = await ownDevices(options.device, options.notebooks.map((notebook) => notebook.id))
+    if (own.size === 0) return result
+
+    const toAnnounce = new Map<string, (PairedNotebook & { owner: string })[]>()
+    for (const notebook of options.notebooks) {
+      const handle = createNotebookIndexDoc(notebook.id)
+      await handle.idb.whenSynced
+      const workspace = await readNotebookWorkspace({ doc: handle.doc, notebookId: notebook.id, selfDid: options.device.did })
+      const owner = workspace.ownership.owner
+      if (workspace.self?.kind !== "admitted" || !owner) continue
+      const present = new Set(workspace.directory?.devices.map((entry) => entry.record.did))
+      for (const [did, record] of own) {
+        if (!present.has(did)) {
+          try {
+            await linkAndPublish(notebook.id, options.device, record)
+            result.linked.push({ notebookId: notebook.id, did })
+          } catch (error) {
+            result.failed.push({ notebookId: notebook.id, did, reason: error instanceof Error ? error.message : "could not be linked" })
+            continue
+          }
+        }
+        toAnnounce.set(did, [...(toAnnounce.get(did) ?? []), { ...notebook, owner }])
+      }
+    }
+
+    for (const [did, notebooks] of toAnnounce) {
+      const record = own.get(did)
+      if (record) result.announced += await announceTo(options.device, record, notebooks)
+    }
+    return result
+  })
+  following = run.catch(() => undefined)
+  return run
+}
+
+export interface InboxWatch {
+  /** Read the inbox again, for a retry. */
+  check(): void
+  close(): void
+}
+
+/**
+ * This device's inbox, held open. Calls back with every announcement from one
+ * of its own devices, and again whenever the inbox changes.
+ */
+export function watchInbox(options: {
+  device: DeviceIdentity
+  notebookIds: () => readonly string[]
+  onAnnouncements: (announcements: Announcement[]) => void | Promise<void>
+}): InboxWatch {
+  const doc = new Y.Doc()
+  let closed = false
+  let close = () => {}
+  let running = false
+  let again = false
+
+  const check = () => {
+    if (closed) return
+    if (running) {
+      again = true
+      return
+    }
+    running = true
+    void (async () => {
+      try {
+        do {
+          again = false
+          if (!hasAnnouncement(doc)) continue
+          const own = await ownDevices(options.device, options.notebookIds())
+          const believed = await openAnnouncements(doc, options.device.sealingKey, options.device.did, (sender) => own.has(sender))
+          if (believed.length > 0 && !closed) await options.onAnnouncements(believed)
+        } while (again && !closed)
+      } catch (error) {
+        console.warn("Could not read this device's inbox", error)
+      } finally {
+        running = false
+      }
+    })()
+  }
+
+  void (async () => {
+    const shared = relayConnection()
+    if (!shared) return
+    const channel = await inboxChannel(options.device.record.sealingDid)
+    if (closed) return
+    const transport = shared.transportFor(channel.resourceId)
+    const engine = createDirectoryReplica({ doc, channel, device: options.device, transport })
+    const session = openSyncSession({
+      engine,
+      doc,
+      transport,
+      resourceId: channel.resourceId,
+      readableEpochs: () => [],
+      relay: relayWatch,
+      canAuthor: true,
+      recover: "publish-state",
+    })
+    doc.on("update", check)
+    close = () => {
+      doc.off("update", check)
+      session.close()
+      engine.close()
+    }
+  })()
+
+  return {
+    check,
+    close: () => {
+      closed = true
+      close()
+      doc.destroy()
+    },
+  }
 }
