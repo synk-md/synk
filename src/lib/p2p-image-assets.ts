@@ -364,6 +364,14 @@ export class P2PImageAssetTransfer {
     if (!asset || asset.size > MAX_ASSET_SIZE || this.destroyed) return
 
     const transferId = crypto.randomUUID()
+    try {
+      await this.sendAssetChunks(request, asset, transferId)
+    } finally {
+      this.clearSent((message) => "transferId" in message && message.transferId === transferId)
+    }
+  }
+
+  private async sendAssetChunks(request: AssetRequestMessage, asset: StoredImageAsset, transferId: string) {
     const bytes = new Uint8Array(await asset.blob.arrayBuffer())
     const chunkCount = Math.max(1, Math.ceil(bytes.length / CHUNK_SIZE))
 
@@ -495,7 +503,11 @@ export class P2PImageAssetTransfer {
       const blob = new Blob(chunks, { type: sniffedMimeType })
       const asset = await storeReceivedImageAsset(transfer.assetId, blob)
       this.completedTransfers.add(message.transferId)
-      setTimeout(() => this.completedTransfers.delete(message.transferId), ACK_TIMEOUT_MS * 2)
+      // Re-acks are answered until then, so the final ack only needs to linger as long.
+      setTimeout(() => {
+        this.completedTransfers.delete(message.transferId)
+        this.clearSent((sent) => sent.kind === "ack" && sent.transferId === message.transferId)
+      }, ACK_TIMEOUT_MS * 2)
       this.incomingTransfers.delete(message.transferId)
       this.sendAck(message.transferId, message.from, message.index)
       this.resolvePendingRequest(asset)
@@ -541,6 +553,9 @@ export class P2PImageAssetTransfer {
     if (pending.transferId) {
       this.incomingTransfers.delete(pending.transferId)
     }
+    this.clearSent((sent) =>
+      (sent.kind === "request" && sent.assetId === assetId) ||
+      (sent.kind === "ack" && sent.transferId === pending.transferId))
     pending.resolves.forEach((resolve) => resolve(undefined))
   }
 
@@ -589,6 +604,16 @@ export class P2PImageAssetTransfer {
   private send(message: AssetTransferMessage) {
     if (this.destroyed) return
     this.awareness.setLocalStateField(AWARENESS_FIELD, message)
+  }
+
+  // Awareness re-sends the whole local state on every cursor move and heartbeat,
+  // so a finished exchange must not leave its message (up to a 16 KB chunk) behind.
+  private clearSent(isFinished: (message: AssetTransferMessage) => boolean) {
+    if (this.destroyed) return
+    const current: unknown = this.awareness.getLocalState()?.[AWARENESS_FIELD]
+    if (isTransferMessage(current) && current.from === this.clientId && isFinished(current)) {
+      this.awareness.setLocalStateField(AWARENESS_FIELD, null)
+    }
   }
 
   private ackKey(transferId: string, index: number): string {

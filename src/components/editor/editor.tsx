@@ -119,7 +119,7 @@ import { useEditorSettings, lineWidths, editorFonts } from "@/components/custom-
 
 // --- Lib ---
 import { handleImageUpload } from "@/lib/tiptap-utils"
-import { getOrCreateYDoc, SIGNALING_SERVERS } from "@/lib/yjs-utils"
+import { getOrCreateYDoc, PEER_OPTS, SIGNALING_SERVERS } from "@/lib/yjs-utils"
 import { setNoteTitle, getNoteLinkAccess, setNoteLinkAccess, getNoteOwnerName, setNoteOwnerName, isNoteLinkAccessInherited, setNoteLinkAccessInherited, type LinkAccess } from "@/lib/note-meta"
 import { getImageAsset, storeImageAsset } from "@/lib/image-assets"
 import { getOrCreateGuestIdentity, setGuestName } from "@/lib/guest-identity"
@@ -758,7 +758,8 @@ export function SimpleEditor({
       const room = `nb:${notebookId}:n:${noteId}`
       const provider = new WebrtcProvider(room, doc, {
         signaling: SIGNALING_SERVERS,
-        password: room
+        password: room,
+        peerOpts: PEER_OPTS,
       })
       providerRef.current = provider
       setProviderGeneration((g) => g + 1)

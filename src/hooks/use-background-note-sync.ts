@@ -1,6 +1,6 @@
 import * as React from "react"
 import { WebrtcProvider } from "y-webrtc"
-import { getOrCreateYDoc, SIGNALING_SERVERS } from "@/lib/yjs-utils"
+import { getOrCreateYDoc, PEER_OPTS, SIGNALING_SERVERS } from "@/lib/yjs-utils"
 
 type BackgroundSync = {
   provider: WebrtcProvider
@@ -58,6 +58,7 @@ export function useBackgroundNoteSync(
         const room = `nb:${notebookId}:n:${noteId}`
         const provider = new WebrtcProvider(room, doc, {
           signaling: SIGNALING_SERVERS,
+          peerOpts: PEER_OPTS,
           password: room,
         })
         // Content that lands here still counts as a real sync of this note —

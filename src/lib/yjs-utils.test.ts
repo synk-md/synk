@@ -7,6 +7,8 @@ import {
   newNotebookId,
   newNoteId,
   SIGNALING_SERVERS,
+  ICE_SERVERS,
+  parseIceServers,
   getOrCreateYDoc,
   createNotebookIndexDoc,
   evictNotebookIndexDoc,
@@ -46,6 +48,35 @@ describe("newNotebookId / newNoteId", () => {
 describe("SIGNALING_SERVERS", () => {
   it("includes the public fallback signaling servers", () => {
     expect(SIGNALING_SERVERS.every((url) => url.startsWith("ws"))).toBe(true)
+  })
+})
+
+describe("ICE servers", () => {
+  it("keeps STUN when no TURN server is configured", () => {
+    expect(ICE_SERVERS.some(server => [server.urls].flat().some(url => url.startsWith("stun:")))).toBe(true)
+  })
+
+  it("parses a bare iceServers array", () => {
+    const turn = { urls: "turn:turn.example.com:3478", username: "u", credential: "c" }
+    expect(parseIceServers(JSON.stringify([turn]))).toEqual([turn])
+  })
+
+  it("parses an object wrapping iceServers", () => {
+    const turn = { urls: ["turn:a.example.com", "turns:a.example.com:443"], username: "u", credential: "c" }
+    expect(parseIceServers(JSON.stringify({ iceServers: [turn] }))).toEqual([turn])
+  })
+
+  it("drops entries without urls", () => {
+    expect(parseIceServers(JSON.stringify([{ username: "u" }, { urls: "turn:ok" }]))).toEqual([{ urls: "turn:ok" }])
+  })
+
+  it("ignores empty or malformed config", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    expect(parseIceServers(undefined)).toEqual([])
+    expect(parseIceServers("  ")).toEqual([])
+    expect(parseIceServers("not json")).toEqual([])
+    expect(parseIceServers(JSON.stringify({ urls: "turn:x" }))).toEqual([])
+    warn.mockRestore()
   })
 })
 

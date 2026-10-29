@@ -127,8 +127,21 @@ Then open the URL printed in your terminal. To collaborate across different mach
 Synk connects to a signaling server to establish peer connections. More info can be found at [y-webrtc](https://github.com/yjs/y-webrtc). To point Synk at your own server, set an environment variable:
 
 ```bash
-# .env
-VITE_SIGNALING_URL=wss://your-signaling-server.example.com
+# .env.local
+VITE_LOCAL_SIGNALING_URL=ws://localhost:4444
+```
+
+It is tried first, with the public server kept as a fallback. `pnpm signaling` runs one locally.
+
+### Configuring a TURN server
+
+Some networks (mobile hotspots, carrier-grade NAT, many university and office networks) block direct peer-to-peer connections. A TURN server relays traffic for those peers; without one, the sync indicator shows "Can't connect to peers".
+
+Set `VITE_ICE_SERVERS` to the ICE server JSON your TURN provider gives you (e.g. [Metered](https://www.metered.ca/stun-turn), or your own [coturn](https://github.com/coturn/coturn)), either a bare array or an object with an `iceServers` array. Google's and Twilio's STUN servers are always included.
+
+```bash
+# .env.local
+VITE_ICE_SERVERS=[{"urls":["turn:turn.example.com:3478","turns:turn.example.com:443?transport=tcp"],"username":"synk","credential":"secret"}]
 ```
 
 ## Known limitations
@@ -138,7 +151,7 @@ Synk is an alpha. These are the things it does **not** do yet, stated plainly so
 - **No access control.** Anyone with a share link can read and edit the note. There is no authentication, no permissions, and no way to remove a collaborator. Security rests entirely on the share link being secret. **Do not share anything you wouldn't be comfortable making public.**
 - **No backup; data can be lost.** Notes live only in your browser's local storage. Clearing browser data, or uninstalling, deletes them. Export important notes to Markdown to keep them safe.
 - **No single-user cross-device sync.** There's no built-in way to sync your own notes between your laptop and phone. Devices must be online at the same time to sync via collaboration.
-- **Connectivity can fail on restrictive networks.** Peer-to-peer connections may not establish behind strict corporate or university firewalls, because there is no TURN relay fallback yet.
+- **Connectivity can fail on restrictive networks.** Peer-to-peer connections may not establish behind strict corporate or university firewalls unless a TURN server is configured (see above).
 - **Designed for small groups.** The peer-to-peer mesh is intended for small teams (roughly up to 10 collaborators per note). It is not built to scale beyond that.
 
 ## Roadmap

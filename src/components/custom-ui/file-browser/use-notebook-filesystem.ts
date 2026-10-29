@@ -8,6 +8,7 @@ import {
   keyForIndex,
   readNotebookIndexTree,
   writeNotebookIndexTree,
+  PEER_OPTS,
   SIGNALING_SERVERS,
 } from "@/lib/yjs-utils"
 import type { LinkAccess } from "@/lib/note-meta"
@@ -225,6 +226,7 @@ export function useNotebookFileSystem(
     const room = keyForIndex(activeNotebookId)
     const provider = new WebrtcProvider(room, indexHandle.doc, {
       signaling: SIGNALING_SERVERS,
+      peerOpts: PEER_OPTS,
       password: room,
     })
     providerRef.current = provider

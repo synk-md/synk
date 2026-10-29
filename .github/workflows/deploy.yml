@@ -40,6 +40,7 @@ jobs:
       - run: pnpm build
         env:
           NODE_OPTIONS: --max-old-space-size=8192
+          VITE_ICE_SERVERS: ${{ secrets.VITE_ICE_SERVERS }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

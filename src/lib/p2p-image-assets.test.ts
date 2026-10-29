@@ -463,3 +463,103 @@ describe("destroy", () => {
     }).not.toThrow()
   })
 })
+
+// Awareness re-sends the whole local state on every cursor move and heartbeat,
+// so finished transfers must not leave their last message behind.
+describe("clearing finished messages from awareness", () => {
+  const ack = (transferId: string, index: number) => ({
+    version: 1, nonce: crypto.randomUUID(), kind: "ack", transferId, from: 2, to: 1, index,
+  })
+
+  async function serveOneChunk(id: string) {
+    const bytes = pngBytes(100)
+    hasImageAsset.mockResolvedValue(true)
+    getImageAsset.mockResolvedValue({ id, blob: new Blob([bytes]), mimeType: "image/png", size: bytes.length, createdAt: 0 })
+    const awareness = new FakeAwareness(1)
+    const transfer = new P2PImageAssetTransfer(awareness as unknown as Awareness, () => true)
+    awareness.remoteSetState(2, {
+      [FIELD]: {
+        version: 1, nonce: crypto.randomUUID(), kind: "request", requestId: crypto.randomUUID(),
+        from: 2, assetId: id, expiresAt: Date.now() + 120_000,
+      },
+    })
+    await vi.advanceTimersByTimeAsync(300)
+    const { transferId } = awareness.lastLocalMessage()
+    awareness.remoteSetState(2, { [FIELD]: ack(transferId, -1) })
+    await flush()
+    expect(awareness.lastLocalMessage().kind).toBe("chunk")
+    return { awareness, transfer, transferId }
+  }
+
+  it("clears the last chunk once the requester acks it", async () => {
+    const { awareness, transferId } = await serveOneChunk(assetId("20"))
+
+    awareness.remoteSetState(2, { [FIELD]: ack(transferId, 0) })
+    await flush()
+
+    expect(awareness.lastLocalMessage()).toBeUndefined()
+  })
+
+  it("clears the last chunk after giving up on acks", async () => {
+    const { awareness } = await serveOneChunk(assetId("21"))
+
+    await vi.advanceTimersByTimeAsync(ACK_TIMEOUT_MS * 4)
+
+    expect(awareness.lastLocalMessage()).toBeUndefined()
+  })
+
+  it("leaves a newer, unrelated message in place", async () => {
+    const { awareness, transfer, transferId } = await serveOneChunk(assetId("22"))
+    getImageAsset.mockResolvedValue(undefined)
+    void transfer.requestAsset(assetId("23"))
+    await flush()
+
+    awareness.remoteSetState(2, { [FIELD]: ack(transferId, 0) })
+    await flush()
+
+    expect(awareness.lastLocalMessage().kind).toBe("request")
+    transfer.destroy()
+  })
+
+  it("clears the requester's final ack once re-acks are no longer answered", async () => {
+    getImageAsset.mockResolvedValue(undefined)
+    storeReceivedImageAsset.mockResolvedValue({ id: assetId("24"), blob: new Blob(), mimeType: "image/png", size: 10, createdAt: 0 })
+    const awareness = new FakeAwareness(1)
+    const transfer = new P2PImageAssetTransfer(awareness as unknown as Awareness, () => true)
+    void transfer.requestAsset(assetId("24"))
+    await flush()
+
+    const bytes = pngBytes(10)
+    const transferId = crypto.randomUUID()
+    awareness.remoteSetState(2, {
+      [FIELD]: {
+        version: 1, nonce: crypto.randomUUID(), kind: "start", requestId: crypto.randomUUID(),
+        transferId, from: 2, to: 1, assetId: assetId("24"), mimeType: "image/png", size: bytes.length, chunkCount: 1,
+      },
+    })
+    await flush()
+    awareness.remoteSetState(2, {
+      [FIELD]: { version: 1, nonce: crypto.randomUUID(), kind: "chunk", transferId, from: 2, to: 1, assetId: assetId("24"), index: 0, data: toBase64(bytes) },
+    })
+    await flush()
+    expect(awareness.lastLocalMessage().kind).toBe("ack")
+
+    await vi.advanceTimersByTimeAsync(ACK_TIMEOUT_MS * 2)
+
+    expect(awareness.lastLocalMessage()).toBeUndefined()
+  })
+
+  it("clears an unanswered request when it expires", async () => {
+    getImageAsset.mockResolvedValue(undefined)
+    const awareness = new FakeAwareness(1)
+    const transfer = new P2PImageAssetTransfer(awareness as unknown as Awareness, () => true)
+    const pending = transfer.requestAsset(assetId("25"))
+    await flush()
+    expect(awareness.lastLocalMessage().kind).toBe("request")
+
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(await pending).toBeUndefined()
+    expect(awareness.lastLocalMessage()).toBeUndefined()
+  })
+})

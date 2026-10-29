@@ -44,6 +44,7 @@ vi.mock("@/lib/yjs-utils", () => ({
     return { doc }
   },
   SIGNALING_SERVERS: ["wss://fake-signaling.test"],
+  PEER_OPTS: {},
 }))
 
 // Y.Doc's "update" event is typed with its full internal signature

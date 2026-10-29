@@ -36,6 +36,37 @@ export const SIGNALING_SERVERS = [
   'wss://2310.td.org.uit.no:443/ws/',
 ]
 
+// simple-peer's defaults; passing `config` replaces them, so they're kept here.
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+  { urls: ['stun:stun.l.google.com:19302', 'stun:global.stun.twilio.com:3478'] },
+]
+
+// Accepts the JSON a TURN provider hands out: an iceServers array, or an
+// object wrapping one. Anything malformed is dropped so STUN still works.
+export function parseIceServers(raw: string | undefined): RTCIceServer[] {
+  if (!raw?.trim()) return []
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    const list: unknown = Array.isArray(parsed) ? parsed : (parsed as { iceServers?: unknown })?.iceServers
+    if (!Array.isArray(list)) throw new Error('expected an array of ICE servers')
+    return list.filter((server): server is RTCIceServer => {
+      const urls = (server as RTCIceServer | null)?.urls
+      return typeof urls === 'string' || (Array.isArray(urls) && urls.every(url => typeof url === 'string'))
+    })
+  } catch (error) {
+    console.warn('Ignoring invalid VITE_ICE_SERVERS', error)
+    return []
+  }
+}
+
+// TURN relays peers whose NATs block a direct connection. Its credentials
+// ship in the bundle, so use ones scoped to this app.
+export const ICE_SERVERS: RTCIceServer[] = [
+  ...DEFAULT_ICE_SERVERS,
+  ...parseIceServers(import.meta.env.VITE_ICE_SERVERS as string | undefined),
+]
+export const PEER_OPTS = { config: { iceServers: ICE_SERVERS } }
+
 // Creates or loads a Y.Doc for a specific note in a notebook.
 export function getOrCreateYDoc(notebookId: string, noteId: string) {
   const key = keyFor(notebookId, noteId)
