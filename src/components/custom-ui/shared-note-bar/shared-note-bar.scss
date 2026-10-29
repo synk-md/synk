@@ -107,6 +107,16 @@
   }
 }
 
+.shared-note-bar__sync--failed,
+.shared-note-bar__sync--unreachable {
+  color: var(--tt-color-red-base, #dc2626);
+  opacity: 1;
+
+  .presence-dot {
+    background-color: currentColor;
+  }
+}
+
 .shared-note-bar__sync-time {
   opacity: 0.8;
 }

@@ -3,9 +3,11 @@ import { RiEdit2Line, RiEyeLine, RiLock2Line } from "@remixicon/react"
 
 import { Avatar, PresenceDot, type ActiveUser } from "@/components/custom-ui/collaboration-dropdown-menu"
 
+import type { SyncStatus } from "@/lib/sync-status"
+
 import "./shared-note-bar.scss"
 
-export type SyncStatus = "offline" | "connecting" | "live"
+export type { SyncStatus }
 export type SharedPermission = "edit" | "view" | "revoked"
 
 export interface SharedNoteBarProps {
@@ -13,6 +15,7 @@ export interface SharedNoteBarProps {
   users: ActiveUser[]
   syncStatus: SyncStatus
   permission: SharedPermission
+  peerCount?: number
   lastSyncedAt?: Date | null
   /** Renders inline inside a toolbar row (flex:1, no fixed height). */
   embedded?: boolean
@@ -48,12 +51,29 @@ function formatLastSynced(date: Date): string {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric" })
 }
 
+const syncLabel: Record<SyncStatus, string> = {
+  offline: "Offline",
+  connecting: "Connecting…",
+  waiting: "Waiting for others",
+  live: "Synced",
+  failed: "Can't connect to peers",
+  unreachable: "Sync server unreachable",
+}
+
+const syncHint: Partial<Record<SyncStatus, string>> = {
+  waiting: "No one else has this note open on another device right now.",
+  failed: "Someone else has this note open, but your networks blocked a direct connection. Your edits are saved on this device.",
+  unreachable: "Can't reach the sync server, so other devices can't find you. Your edits are saved on this device.",
+}
+
 export interface SyncStatusIndicatorProps {
   syncStatus: SyncStatus
+  /** Peers this note is actively synced with. */
+  peerCount?: number
   lastSyncedAt?: Date | null
 }
 
-export function SyncStatusIndicator({ syncStatus, lastSyncedAt }: SyncStatusIndicatorProps) {
+export function SyncStatusIndicator({ syncStatus, peerCount = 0, lastSyncedAt }: SyncStatusIndicatorProps) {
   const [, setTick] = React.useState(0)
   React.useEffect(() => {
     if (!lastSyncedAt || syncStatus === "live") return
@@ -61,16 +81,23 @@ export function SyncStatusIndicator({ syncStatus, lastSyncedAt }: SyncStatusIndi
     return () => clearInterval(id)
   }, [lastSyncedAt, syncStatus])
 
+  const label = syncStatus === "live"
+    ? `Synced with ${peerCount} ${peerCount === 1 ? "other" : "others"}`
+    : syncLabel[syncStatus]
+  const showLastSynced = (syncStatus === "waiting" || syncStatus === "offline") && lastSyncedAt
+
   return (
     <span
-      className={`shared-note-bar__sync${syncStatus === "live" ? " shared-note-bar__sync--live" : ""}`}
-      aria-label={`Sync status: ${syncStatus === "connecting" ? "Connecting" : "Synced"}`}
+      className={`shared-note-bar__sync shared-note-bar__sync--${syncStatus}`}
+      role="status"
+      aria-label={`Sync status: ${label}`}
+      title={syncHint[syncStatus]}
     >
       <PresenceDot active={syncStatus === "live"} />
-      {syncStatus === "connecting" ? "Connecting…" : "Synced"}
-      {syncStatus !== "connecting" && lastSyncedAt && (
+      {label}
+      {showLastSynced && (
         <span className="shared-note-bar__sync-time">
-          · {formatLastSynced(lastSyncedAt)}
+          · last synced {formatLastSynced(lastSyncedAt)}
         </span>
       )}
     </span>
@@ -82,6 +109,7 @@ export function SharedNoteBar({
   users,
   syncStatus,
   permission,
+  peerCount,
   lastSyncedAt,
   embedded = false,
 }: SharedNoteBarProps) {
@@ -109,7 +137,7 @@ export function SharedNoteBar({
       </div>
 
       <div className="shared-note-bar__right">
-        <SyncStatusIndicator syncStatus={syncStatus} lastSyncedAt={lastSyncedAt} />
+        <SyncStatusIndicator syncStatus={syncStatus} peerCount={peerCount} lastSyncedAt={lastSyncedAt} />
 
         {visibleUsers.length > 0 && (
           <div className="shared-note-bar__avatars" aria-label="Active collaborators">

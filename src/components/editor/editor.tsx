@@ -81,7 +81,7 @@ import {
 import { NewTabView } from "@/components/custom-ui/new-tab-view/new-tab-view"
 import { NoteQuickSwitcher } from "@/components/custom-ui/note-quick-switcher/note-quick-switcher"
 import { MoveToPicker } from "@/components/custom-ui/move-to-picker/move-to-picker"
-import { SharedNoteBar, SyncStatusIndicator, ViewOnlyBanner, EditingIdentityBubble, type SyncStatus, type SharedPermission } from "@/components/custom-ui/shared-note-bar"
+import { SharedNoteBar, SyncStatusIndicator, ViewOnlyBanner, EditingIdentityBubble, type SharedPermission } from "@/components/custom-ui/shared-note-bar"
 
 // -- Context Menu ---
 import { ContextMenu } from "@/components/custom-ui/context-menu"
@@ -104,6 +104,7 @@ import { NoteGraph } from "@/components/custom-ui/note-graph/note-graph"
 // --- Hooks ---
 import { useIsMobile } from "@/hooks/use-mobile"
 import { useNotePresence } from "@/hooks/use-note-presence"
+import { useSyncStatus } from "@/hooks/use-sync-status"
 import { useUnreadNoteIds, markNoteViewed } from "@/hooks/use-unread-notes"
 import { useWindowSize } from "@/hooks/use-window-size"
 import { useCursorVisibility } from "@/hooks/use-cursor-visibility"
@@ -382,8 +383,15 @@ export function SimpleEditor({
   const toolbarRef = React.useRef<HTMLDivElement>(null)
   const [currentUser, setCurrentUser] = React.useState(getOrCreateGuestIdentity)
   const [ownerName, setOwnerNameState] = React.useState<string | undefined>(undefined)
-  const [syncStatus, setSyncStatus] = React.useState<SyncStatus>("offline")
   const [lastSyncedAt, setLastSyncedAt] = React.useState<Date | null>(null)
+  const noteIdRef = React.useRef(noteId)
+  noteIdRef.current = noteId
+  // Only the open note's stamp is shown; stamps for a note being left still persist.
+  const stampSyncedAt = React.useCallback((stampNoteId: string | null | undefined, date: Date) => {
+    if (!stampNoteId) return
+    localStorage.setItem(`lastSyncedAt:${stampNoteId}`, String(date.getTime()))
+    if (stampNoteId === noteIdRef.current) setLastSyncedAt(date)
+  }, [])
   const providerRef = React.useRef<WebrtcProvider | null>(null)
   const imageTransferRef = React.useRef<P2PImageAssetTransfer | null>(null)
   const imageRefIndexRef = React.useRef<NoteImageRefIndex | null>(null)
@@ -620,7 +628,7 @@ export function SimpleEditor({
     }
     setOwnerNameState(getNoteOwnerName(meta))
     const storedTs = localStorage.getItem(`lastSyncedAt:${noteId}`)
-    if (storedTs) setLastSyncedAt(new Date(Number(storedTs)))
+    setLastSyncedAt(storedTs ? new Date(Number(storedTs)) : null)
 
     const observer = (event: any) => {
       if (event.keysChanged.has("ownerName")) {
@@ -735,7 +743,6 @@ export function SimpleEditor({
       providerRef.current?.destroy()
       providerRef.current = null
       setProviderReady(false)
-      setSyncStatus("offline")
       return
     }
 
@@ -763,52 +770,14 @@ export function SimpleEditor({
       )
       setProviderReady(true)
 
-      let connected = provider.connected
-      let synced = provider.room?.synced ?? true
-      // In shared view, "live" requires at least one other peer in awareness —
-      // room.synced stays true after peers disconnect so we can't rely on it alone.
-      let hasPeers = provider.awareness.getStates().size > 1
-      const stampSyncedAt = (date: Date) => {
-        setLastSyncedAt(date)
-        if (noteId) localStorage.setItem(`lastSyncedAt:${noteId}`, String(date.getTime()))
-      }
-      const updateSyncStatus = () => {
-        const isLive = connected && synced && (!isSharedView || hasPeers)
-        if (isLive) {
-          setSyncStatus("live")
-          stampSyncedAt(new Date())
-        } else if (isSharedView && !hasPeers) {
-          setSyncStatus("offline")
-          setLastSyncedAt(prev => {
-            if (prev) return prev
-            const now = new Date()
-            if (noteId) localStorage.setItem(`lastSyncedAt:${noteId}`, String(now.getTime()))
-            return now
-          })
-        } else {
-          setSyncStatus("connecting")
-        }
-      }
-      const handleStatus = (e: { connected: boolean }) => { connected = e.connected; updateSyncStatus() }
-      const handleSynced = (e: { synced: boolean }) => { synced = e.synced; updateSyncStatus() }
-      const handleAwareness = () => { hasPeers = provider.awareness.getStates().size > 1; updateSyncStatus() }
       // y-webrtc applies updates it receives from peers with the Room instance
       // as the transaction origin, so this only fires for content that actually
       // came in over the wire — local edits keep their own (different) origin.
       const handleDocUpdate = (_update: Uint8Array, origin: unknown) => {
-        if (origin === provider.room) stampSyncedAt(new Date())
+        if (origin === provider.room) stampSyncedAt(noteId, new Date())
       }
-      provider.on("status", handleStatus)
-      provider.on("synced", handleSynced)
-      provider.awareness.on("change", handleAwareness)
       doc.on("update", handleDocUpdate)
-      setSyncStatus("connecting")
-      unsubscribeSyncStatus = () => {
-        provider.off("status", handleStatus)
-        provider.off("synced", handleSynced)
-        provider.awareness.off("change", handleAwareness)
-        doc.off("update", handleDocUpdate)
-      }
+      unsubscribeSyncStatus = () => doc.off("update", handleDocUpdate)
     }
     return () => {
       unsubscribeSyncStatus?.()
@@ -828,10 +797,23 @@ export function SimpleEditor({
       providerRef.current?.destroy()
       providerRef.current = null
       setProviderReady(false)
-      setSyncStatus("offline")
     }
     // only when the doc/ids truly change
   }, [note?.doc, notebookId, noteId, collaborationActive, reconnectNonce])
+
+  const collaborationScopeKey = collaborationActive && noteId
+    ? `${notebookId}:${noteId}`
+    : null
+  const users = useAwarenessUsers(providerRef, providerReady, providerGeneration, collaborationScopeKey)
+  const { status: syncStatus, peerCount } = useSyncStatus(providerRef, providerReady, providerGeneration, collaborationScopeKey)
+
+  // Stamp when a live session starts and when it ends, so the indicator can
+  // say how long ago this device last exchanged edits with someone.
+  React.useEffect(() => {
+    if (syncStatus !== "live") return
+    stampSyncedAt(noteId, new Date())
+    return () => stampSyncedAt(noteId, new Date())
+  }, [syncStatus, noteId, stampSyncedAt])
 
   // The public signaling servers (and the WebRTC handshake itself) are flaky
   // enough that the initial connection sometimes never completes — it sits
@@ -841,7 +823,7 @@ export function SimpleEditor({
   // automatically instead: if we're still not live after a while, tear down
   // and recreate the provider to give the handshake a fresh attempt.
   React.useEffect(() => {
-    if (!collaborationActive || syncStatus !== "connecting") return
+    if (!collaborationActive || (syncStatus !== "connecting" && syncStatus !== "failed")) return
 
     const timeout = setTimeout(() => {
       forceReconnectRef.current = true
@@ -854,11 +836,6 @@ export function SimpleEditor({
     // commit as a reconnect, landing back on "connecting" without this effect
     // ever seeing it change.
   }, [collaborationActive, syncStatus, noteId, reconnectNonce])
-
-  const collaborationScopeKey = collaborationActive && noteId
-    ? `${notebookId}:${noteId}`
-    : null
-  const users = useAwarenessUsers(providerRef, providerReady, providerGeneration, collaborationScopeKey)
 
   // Stores the blob (handleImageUpload) and also files it into this notebook's
   // Assets folder, so the upload is visible/manageable from the file explorer.
@@ -1756,6 +1733,7 @@ export function SimpleEditor({
                         users={users}
                         syncStatus={syncStatus}
                         permission={sharedPermission}
+                        peerCount={peerCount}
                         lastSyncedAt={lastSyncedAt}
                       />
                     ) : (isSharedView || (showNoteTabs && !!onCloseLastNote)) ? (
@@ -1816,6 +1794,7 @@ export function SimpleEditor({
                               users={users}
                               syncStatus={syncStatus}
                               permission={sharedPermission}
+                              peerCount={peerCount}
                               lastSyncedAt={lastSyncedAt}
                               embedded
                             />
@@ -1830,7 +1809,7 @@ export function SimpleEditor({
                       {!isSharedView && (
                         <ToolbarGroup>
                           {collaborationActive && (
-                            <SyncStatusIndicator syncStatus={syncStatus} lastSyncedAt={lastSyncedAt} />
+                            <SyncStatusIndicator syncStatus={syncStatus} peerCount={peerCount} lastSyncedAt={lastSyncedAt} />
                           )}
                           <CollaborationStatusMenu
                             users={users}
